@@ -1,0 +1,98 @@
+# Test Environment Configuration
+
+spring:
+  # Database Configuration for Testing
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: password
+    driver-class-name: org.h2.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 10000
+      idle-timeout: 60000
+      max-lifetime: 300000
+
+  # JPA Configuration for Testing
+  jpa:
+    hibernate:
+      ddl-auto: create-drop # Recreate schema for each test
+    show-sql: false # Usually disabled in tests
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: false
+
+  # H2 Console for Testing
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  # Test Configuration
+  test:
+    database:
+      replace: none # Don't replace DataSource for tests
+
+# Server Configuration for Testing
+server:
+  port: 0 # Use random port for testing
+
+# Logging Configuration for Testing
+logging:
+  level:
+    root: WARN
+    com.carselling.oldcar: INFO
+    org.springframework.security: INFO
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN
+    org.springframework.test: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# Management Configuration for Testing
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+# Application Specific Configuration for Testing
+app:
+  # JWT Configuration (short expiration for tests)
+  jwt:
+    secret: testSecretKey1234567890123456789012345678901234567890
+    access-token-expiration: 300000 # 5 minutes for tests
+    refresh-token-expiration: 600000 # 10 minutes for tests
+    
+  # File Upload Configuration
+  upload:
+    path: ./test-uploads
+    
+  # Email Configuration (disabled for tests)
+  email:
+    enabled: false
+    
+  # Rate Limiting (disabled for most tests)
+  rate-limit:
+    login-attempts: 1000 # Very high to avoid interference
+    lockout-duration: 1000 # Very short
+    otp-requests: 1000
+
+# Test Data Configuration
+test:
+  data:
+    # Test user credentials
+    admin:
+      username: admin@test.com
+      password: AdminTest123!
+    seller:
+      username: seller@test.com
+      password: SellerTest123!
+    buyer:
+      username: buyer@test.com
+      password: BuyerTest123!

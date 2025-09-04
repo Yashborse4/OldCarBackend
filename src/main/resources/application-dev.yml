@@ -1,0 +1,87 @@
+# Development Environment Configuration
+
+spring:
+  # Database Configuration for Development
+  datasource:
+    url: jdbc:mysql://localhost:3306/car_selling_dev?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:car_user}
+    password: ${DB_PASSWORD:car_password}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000
+      leak-detection-threshold: 30000
+
+  # JPA Configuration for Development
+  jpa:
+    hibernate:
+      ddl-auto: create-drop # Recreate schema on startup for development
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+
+  # H2 Console (if using H2 for development)
+  h2:
+    console:
+      enabled: false # Enable if using H2
+      path: /h2-console
+
+  # DevTools Configuration
+  devtools:
+    restart:
+      enabled: true
+    livereload:
+      enabled: true
+
+# Server Configuration for Development
+server:
+  port: 8080
+  error:
+    include-stacktrace: always
+
+# Logging Configuration for Development
+logging:
+  level:
+    root: INFO
+    com.carselling.oldcar: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.messaging: DEBUG # For WebSocket debugging
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# Management Configuration for Development
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*" # Expose all actuator endpoints in dev
+  endpoint:
+    health:
+      show-details: always
+
+# Application Specific Configuration for Development
+app:
+  # JWT Configuration (shorter expiration for development)
+  jwt:
+    secret: myDevSecretKey123456789012345678901234567890
+    access-token-expiration: 3600000 # 1 hour for development
+    refresh-token-expiration: 86400000 # 1 day for development
+    
+  # File Upload Configuration
+  upload:
+    path: ./uploads/dev
+    
+  # Email Configuration (disable in development)
+  email:
+    enabled: false # Disable email sending in development
+    
+  # Rate Limiting (relaxed for development)
+  rate-limit:
+    login-attempts: 10 # More lenient for development
+    lockout-duration: 60000 # 1 minute
+    otp-requests: 10
