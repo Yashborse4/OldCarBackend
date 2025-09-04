@@ -8,20 +8,26 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * Comprehensive JWT Authentication Response DTO
- * Contains both access and refresh tokens with user details
+ * JWT Authentication Response
  */
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class JwtAuthResponse {
-
     private String accessToken;
     private String refreshToken;
-    private String tokenType;
+    private String tokenType = "Bearer";
     private Long userId;
     private String username;
+    private String email;
+    private String role;
+    private String location;
+    private LocalDateTime expiresAt;
+    private LocalDateTime refreshExpiresAt;
+    private Long expiresIn;        // in seconds
+    private Long refreshExpiresIn; // in seconds
+}
     private String email;
     private String role;
     private String location;
