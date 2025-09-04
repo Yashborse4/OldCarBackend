@@ -1,0 +1,181 @@
+# Compiled files
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Build directories
+.gradle/
+build/
+target/
+out/
+bin/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# IDE files
+.idea/
+*.iws
+*.iml
+*.ipr
+.classpath
+.project
+.settings/
+.springBeans
+.sts4-cache
+.vscode/
+.cursor/
+.windsurf/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment and Security
+.env
+.env.local
+.env.*.local
+application-local.yml
+application-local.properties
+application-prod.yml
+application-prod.properties
+*.p12
+*.jks
+*.key
+*.pem
+*.crt
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+backup*/
+tmp/
+temp/
+
+# Test coverage
+*.exec
+*.coverage
+.nyc_output/
+coverage/
+
+# Documentation
+HELP.md
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# Node modules (if any frontend is integrated)
+node_modules/
+
+# Package files
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Python files (from migration scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# SECURITY - NEVER commit these files!
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.p12
+*.jks
+*.key
+*.pem
+*.crt
+secrets/
+private/
+credentials/
+
+# Application logs
+*.log
+application-*.log
+spring.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.mv.db
+*.trace.db
+
+# Uploads and user data
+uploads/
+data/
+cache/
+
+# Maven specific
+target/
+dependency-reduced-pom.xml
+
+# Temporary and backup files
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+*.orig
+*.rej
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Test coverage
+coverage/
+*.coverage
+.nyc_output/
+jacoco.exec
+jacoco-resources/
+
+# Local configuration files
+application-dev.properties
+application-prod.properties
+application-local.properties
