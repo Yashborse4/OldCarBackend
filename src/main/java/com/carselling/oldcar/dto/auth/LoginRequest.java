@@ -23,4 +23,6 @@ public class LoginRequest {
     @NotBlank(message = "Password is required")
     @Size(min = 1, max = 255, message = "Password must be between 1 and 255 characters")
     private String password;
+    
+    private DeviceInfo deviceInfo;
 }
