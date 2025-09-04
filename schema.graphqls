@@ -1,0 +1,109 @@
+scalar DateTime
+
+type Query {
+    # Authentication
+    loginUser(input: LoginInput!): AuthPayload!
+    
+    # Profile Management
+    getUserProfile(id: ID!): User!
+    listMyCars: [Car!]!  # For SELLER/DEALER
+    
+    # Admin Endpoints
+    listAllUsers(page: Int, size: Int, sortBy: String, sortDir: String): UserPage!
+}
+
+type Mutation {
+    # Authentication
+    registerUser(input: RegisterInput!): User!
+    
+    # Profile Management
+    updateUserProfile(id: ID!, input: UpdateUserInput!): User!
+    deleteAccount(id: ID!): Boolean
+    
+    # Car Management
+    uploadCar(input: CarInput!): Car!
+    updateCar(id: ID!, input: UpdateCarInput!): Car!
+    deleteCar(id: ID!): Boolean
+    
+    # Admin Management
+    updateUserRole(id: ID!, newRole: String!): User!
+    banUser(id: ID!): Boolean
+}
+
+# Input Types
+input LoginInput {
+    email: String!
+    password: String!
+}
+
+input RegisterInput {
+    username: String!
+    email: String!
+    password: String!
+    role: String
+}
+
+input UpdateUserInput {
+    email: String
+    firstName: String
+    lastName: String
+}
+
+input CarInput {
+    make: String!
+    model: String!
+    year: Int!
+    price: Float!
+    description: String
+    imageUrl: String
+}
+
+input UpdateCarInput {
+    make: String
+    model: String
+    year: Int
+    price: Float
+    description: String
+    imageUrl: String
+}
+
+# Output Types
+type AuthPayload {
+    token: String!
+    type: String!
+    id: ID!
+    email: String!
+    role: String!
+}
+
+type User {
+    id: ID!
+    username: String!
+    email: String!
+    firstName: String
+    lastName: String
+    role: String!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+type Car {
+    id: ID!
+    make: String!
+    model: String!
+    year: Int!
+    price: Float!
+    description: String
+    imageUrl: String
+    owner: User!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+type UserPage {
+    content: [User!]!
+    totalPages: Int!
+    totalElements: Int!
+    pageNumber: Int!
+    pageSize: Int!
+}
