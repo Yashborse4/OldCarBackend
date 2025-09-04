@@ -1,0 +1,96 @@
+spring:
+  application:
+    name: Sell-the-old-Car
+  
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/carselling}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 600000
+      connection-timeout: 30000
+  
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:validate}
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 25
+        order_inserts: true
+        order_updates: true
+    open-in-view: false
+  
+  security:
+    jwt:
+      secret: ${JWT_SECRET:}
+      expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+      refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+  
+  websocket:
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
+    broker:
+      host: ${WEBSOCKET_BROKER_HOST:localhost}
+      port: ${WEBSOCKET_BROKER_PORT:61613}
+
+server:
+  port: ${SERVER_PORT:9000}
+  address: ${SERVER_ADDRESS:0.0.0.0}
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+    refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+  
+  chat:
+    max-message-length: 1000
+    max-messages-per-minute: 30
+    typing-timeout: 10000
+    online-timeout: 300000
+  
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
+    allowed-methods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
+    max-age: 3600
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: ${HEALTH_SHOW_DETAILS:when-authorized}
+  metrics:
+    export:
+      simple:
+        enabled: true
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.carselling.oldcar: ${LOG_LEVEL_APP:DEBUG}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:INFO}
+    org.springframework.web: ${LOG_LEVEL_WEB:INFO}
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/application.log
+    max-size: 10MB
+    max-history: 30
