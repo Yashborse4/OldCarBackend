@@ -124,6 +124,40 @@ public class SecurityConfig {
             // Enable CORS
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             
+            // Configure security headers
+            .headers(headers -> headers
+                .frameOptions().deny() // Prevent clickjacking
+                .contentTypeOptions().and() // Prevent MIME sniffing
+                .httpStrictTransportSecurity(hsts -> hsts
+                    .maxAgeInSeconds(31536000) // 1 year
+                    .includeSubDomains(true)
+                    .preload(true)
+                )
+                .and().addHeaderWriter((request, response) -> {
+                    // Custom security headers
+                    response.setHeader("X-Content-Type-Options", "nosniff");
+                    response.setHeader("X-Frame-Options", "DENY");
+                    response.setHeader("X-XSS-Protection", "1; mode=block");
+                    response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+                    response.setHeader("Permissions-Policy", 
+                        "camera=(), microphone=(), geolocation=(), payment=()");
+                    response.setHeader("Content-Security-Policy", 
+                        "default-src 'self'; " +
+                        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+                        "style-src 'self' 'unsafe-inline'; " +
+                        "img-src 'self' data: https: blob:; " +
+                        "font-src 'self' https:; " +
+                        "connect-src 'self' https: wss:; " +
+                        "media-src 'self' https:; " +
+                        "object-src 'none'; " +
+                        "base-uri 'self'; " +
+                        "frame-ancestors 'none'; " +
+                        "form-action 'self'; " +
+                        "upgrade-insecure-requests"
+                    );
+                })
+            )
+            
             // Configure session management to be stateless
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
