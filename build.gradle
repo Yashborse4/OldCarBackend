@@ -36,6 +36,10 @@ dependencies {
 	runtimeOnly 'org.postgresql:postgresql'
 	// Rate limiting for chat
 	implementation 'io.github.bucket4j:bucket4j-core:7.6.0'
+	// Elasticsearch dependencies
+	implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+	implementation 'org.elasticsearch.client:elasticsearch-rest-high-level-client:7.17.9'
+	implementation 'co.elastic.clients:elasticsearch-java:7.17.9'
 	// JSON processing
 	implementation 'com.fasterxml.jackson.core:jackson-core'
 	implementation 'com.fasterxml.jackson.core:jackson-databind'
