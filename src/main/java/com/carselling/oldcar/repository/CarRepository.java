@@ -249,4 +249,67 @@ public interface CarRepository extends JpaRepository<Car, Long> {
     // Most viewed cars
     @Query("SELECT c FROM Car c WHERE c.isActive = true ORDER BY c.viewCount DESC")
     Page<Car> findMostViewedCars(Pageable pageable);
+    
+    // ML-specific methods for recommendation engine
+    
+    // Find by isActive = true (alias for ML service)
+    @Query("SELECT c FROM Car c WHERE c.isActive = true")
+    List<Car> findByIsActiveTrue();
+    
+    // Find by make and model (for ML)
+    List<Car> findByMakeAndModel(String make, String model);
+    
+    // Find by make, model and price range for content-based filtering
+    @Query("SELECT c FROM Car c WHERE c.make IN :makes AND c.price BETWEEN :minPrice AND :maxPrice AND c.year >= :minYear AND c.isActive = true")
+    List<Car> findByMakeInAndPriceBetweenAndYearGreaterThanEqual(@Param("makes") List<String> makes, 
+                                                                @Param("minPrice") BigDecimal minPrice, 
+                                                                @Param("maxPrice") BigDecimal maxPrice, 
+                                                                @Param("minYear") Integer minYear);
+    
+    // Find most popular vehicles (for trending)
+    @Query("SELECT c FROM Car c WHERE c.isActive = true ORDER BY c.viewCount DESC")
+    List<Car> findMostPopularVehicles(int limit);
+    
+    // Find vehicles by date range (for trending analysis)
+    List<Car> findByCreatedAtAfterOrUpdatedAtAfter(LocalDateTime createdAfter, LocalDateTime updatedAfter);
+    
+    List<Car> findByCreatedAtAfterAndYearGreaterThan(LocalDateTime createdAfter, Integer year);
+    
+    // Find similar vehicles based on attributes
+    @Query("SELECT c FROM Car c WHERE c.make = :make AND c.model = :model AND " +
+           "c.price BETWEEN :minPrice AND :maxPrice AND c.year BETWEEN :minYear AND :maxYear AND " +
+           "c.isActive = true ORDER BY ABS(c.price - :targetPrice)")
+    List<Car> findSimilarVehicles(@Param("make") String make, 
+                                 @Param("model") String model, 
+                                 @Param("minPrice") BigDecimal minPrice, 
+                                 @Param("maxPrice") BigDecimal maxPrice, 
+                                 @Param("minYear") Integer minYear, 
+                                 @Param("maxYear") Integer maxYear, 
+                                 @Param("targetPrice") BigDecimal targetPrice,
+                                 @Param("limit") int limit);
+    
+    // Find comparable vehicles for price prediction
+    @Query("SELECT c FROM Car c WHERE c.make = :make AND c.model = :model AND " +
+           "c.year BETWEEN :minYear AND :maxYear AND c.mileage BETWEEN :minMileage AND :maxMileage AND " +
+           "c.isActive = true ORDER BY ABS(c.year - :targetYear) ASC")
+    List<Car> findComparableVehicles(@Param("make") String make, 
+                                    @Param("model") String model, 
+                                    @Param("minYear") Integer minYear, 
+                                    @Param("maxYear") Integer maxYear, 
+                                    @Param("minMileage") Double minMileage, 
+                                    @Param("maxMileage") Double maxMileage, 
+                                    @Param("targetYear") Integer targetYear,
+                                    @Param("limit") int limit);
+    
+    // Find vehicles with high feature-to-price ratio
+    @Query("SELECT c FROM Car c WHERE c.isActive = true ORDER BY (c.viewCount / c.price) DESC")
+    List<Car> findVehiclesWithHighFeaturesToPriceRatio();
+    
+    // Find similar vehicles for trend analysis
+    @Query("SELECT c FROM Car c WHERE c.make = :make AND c.model = :model AND " +
+           "c.year BETWEEN :minYear AND :maxYear AND c.isActive = true")
+    List<Car> findSimilarVehiclesForTrends(@Param("make") String make, 
+                                          @Param("model") String model, 
+                                          @Param("minYear") Integer minYear, 
+                                          @Param("maxYear") Integer maxYear);
 }
