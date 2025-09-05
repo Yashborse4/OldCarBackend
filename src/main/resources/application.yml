@@ -38,6 +38,18 @@ spring:
     broker:
       host: ${WEBSOCKET_BROKER_HOST:localhost}
       port: ${WEBSOCKET_BROKER_PORT:61613}
+  
+  data:
+    elasticsearch:
+      repositories:
+        enabled: true
+  
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+    username: ${ELASTICSEARCH_USERNAME:}
+    password: ${ELASTICSEARCH_PASSWORD:}
+    connection-timeout: ${ELASTICSEARCH_CONNECTION_TIMEOUT:5s}
+    socket-timeout: ${ELASTICSEARCH_SOCKET_TIMEOUT:10s}
 
 server:
   port: ${SERVER_PORT:9000}
