@@ -2,7 +2,7 @@ package com.carselling.oldcar.websocket;
 
 import com.carselling.oldcar.dto.chat.*;
 import com.carselling.oldcar.model.User;
-import com.carselling.oldcar.service.ChatServiceV2;
+import com.carselling.oldcar.service.ChatService;
 import com.carselling.oldcar.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +23,7 @@ import java.util.Map;
 @Slf4j
 public class ChatWebSocketController {
 
-    private final ChatServiceV2 chatServiceV2;
+    private final ChatService ChatService;
     private final UserService userService;
     private final SimpMessagingTemplate messagingTemplate;
     private final WebSocketSessionManager sessionManager;
@@ -48,7 +48,7 @@ public class ChatWebSocketController {
             log.debug("User {} sending message to chat room {}", userId, chatRoomId);
 
             // Send message through service
-            ChatMessageDtoV2 message = chatServiceV2.sendMessage(chatRoomId, messageRequest, userId);
+            ChatMessageDtoV2 message = ChatService.sendMessage(messageRequest, userId);
 
             // Broadcast message to all participants in the chat room
             broadcastMessageToChatRoom(chatRoomId, message);
@@ -76,13 +76,14 @@ public class ChatWebSocketController {
             }
 
             Long userId = Long.valueOf(principal.getName());
-            ChatMessageDtoV2 updatedMessage = chatServiceV2.editMessage(messageId, editRequest.getNewContent(), userId);
+            ChatMessageDtoV2 updatedMessage = ChatService.editMessage(messageId, editRequest.getNewContent(), userId);
 
             // Create message update DTO
-            MessageUpdateDto updateDto = new MessageUpdateDto();
-            updateDto.setMessageId(messageId);
-            updateDto.setType("EDIT");
-            updateDto.setUpdatedMessage(updatedMessage);
+            MessageUpdateDto updateDto = MessageUpdateDto.builder()
+                    .action("EDIT")
+                    .message(updatedMessage)
+                    .timestamp(java.time.LocalDateTime.now())
+                    .build();
 
             // Broadcast edit to all participants in the chat room
             broadcastMessageUpdateToChatRoom(updatedMessage.getChatRoomId(), updateDto);
@@ -107,16 +108,18 @@ public class ChatWebSocketController {
             Long userId = Long.valueOf(principal.getName());
             
             // Get message details before deletion
-            ChatMessageDtoV2 messageToDelete = chatServiceV2.getChatMessage(messageId, userId);
+            ChatMessageDtoV2 messageToDelete = ChatService.getChatMessage(messageId, userId);
             Long chatRoomId = messageToDelete.getChatRoomId();
             
             // Delete the message
-            chatServiceV2.deleteMessage(messageId, userId);
+            ChatService.deleteMessage(messageId, userId);
 
-            // Create message update DTO
-            MessageUpdateDto updateDto = new MessageUpdateDto();
-            updateDto.setMessageId(messageId);
-            updateDto.setType("DELETE");
+            // Create message update DTO  
+            MessageUpdateDto updateDto = MessageUpdateDto.builder()
+                    .action("DELETE")
+                    .message(null) // No message content for delete
+                    .timestamp(java.time.LocalDateTime.now())
+                    .build();
 
             // Broadcast deletion to all participants in the chat room
             broadcastMessageUpdateToChatRoom(chatRoomId, updateDto);
@@ -143,17 +146,19 @@ public class ChatWebSocketController {
             boolean isTyping = typingStatus.getOrDefault("isTyping", false);
 
             // Update typing status in service
-            chatServiceV2.sendTypingIndicator(chatRoomId, userId, isTyping);
+            ChatService.sendTypingIndicator(chatRoomId, userId, isTyping);
 
             // Get user details
             User user = userService.findById(userId);
             
             // Create typing indicator DTO
-            TypingIndicatorDto typingIndicator = new TypingIndicatorDto();
-            typingIndicator.setChatRoomId(chatRoomId);
-            typingIndicator.setUserId(userId);
-            typingIndicator.setUserName(user.getFullName());
-            typingIndicator.setIsTyping(isTyping);
+            TypingIndicatorDto typingIndicator = TypingIndicatorDto.builder()
+                    .chatId(chatRoomId)
+                    .userId(userId)
+                    .userName(user.getDisplayName())
+                    .isTyping(isTyping)
+                    .timestamp(java.time.LocalDateTime.now())
+                    .build();
 
             // Broadcast typing indicator to all participants except sender
             messagingTemplate.convertAndSend(
@@ -179,7 +184,7 @@ public class ChatWebSocketController {
             }
 
             Long userId = Long.valueOf(principal.getName());
-            chatServiceV2.markMessagesAsRead(chatRoomId, readRequest.getMessageIds(), userId);
+            ChatService.markMessagesAsRead(chatRoomId, readRequest.getMessageIds(), userId);
 
             // Broadcast read receipts to other participants
             ReadReceiptDto readReceipt = new ReadReceiptDto();
@@ -216,7 +221,7 @@ public class ChatWebSocketController {
             Long userId = Long.valueOf(principal.getName());
             
             // Verify user has access to this chat room
-            chatServiceV2.getChatRoom(chatRoomId, userId);
+            ChatService.getChatRoom(chatRoomId, userId);
             
             // Register user session for this chat room
             sessionManager.addUserToChat(userId, chatRoomId);
@@ -273,7 +278,7 @@ public class ChatWebSocketController {
     private void updateUnreadCountsForParticipants(Long chatRoomId, Long senderId) {
         try {
             // Get all participants
-            var participants = chatServiceV2.getChatRoomParticipants(chatRoomId, senderId);
+            var participants = ChatService.getChatRoomParticipants(chatRoomId, senderId);
             
             // Send unread count updates to each participant (except sender)
             participants.stream()
@@ -290,7 +295,7 @@ public class ChatWebSocketController {
      */
     private void sendUnreadCountUpdate(Long userId) {
         try {
-            UnreadCountResponse unreadCount = chatServiceV2.getUnreadMessageCount(userId);
+            UnreadCountResponse unreadCount = ChatService.getUnreadMessageCount(userId);
             messagingTemplate.convertAndSendToUser(
                 userId.toString(), 
                 "/queue/unread-count", 
