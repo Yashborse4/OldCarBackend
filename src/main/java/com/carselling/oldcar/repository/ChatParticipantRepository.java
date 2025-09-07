@@ -50,7 +50,7 @@ public interface ChatParticipantRepository extends JpaRepository<ChatParticipant
     @Query("SELECT p FROM ChatParticipant p " +
            "WHERE p.user.id = :userId " +
            "AND p.isActive = true " +
-           "ORDER BY p.lastSeenAt DESC")
+           "ORDER BY p.lastActivityAt DESC")
     List<ChatParticipant> findActiveByUserId(@Param("userId") Long userId);
 
     /**
@@ -58,7 +58,7 @@ public interface ChatParticipantRepository extends JpaRepository<ChatParticipant
      */
     @Query("SELECT p FROM ChatParticipant p " +
            "WHERE p.user.id = :userId " +
-           "ORDER BY p.lastSeenAt DESC")
+           "ORDER BY p.lastActivityAt DESC")
     List<ChatParticipant> findAllByUserId(@Param("userId") Long userId);
 
     /**
@@ -100,12 +100,12 @@ public interface ChatParticipantRepository extends JpaRepository<ChatParticipant
     boolean isUserActiveParticipant(@Param("userId") Long userId, @Param("chatRoomId") Long chatRoomId);
 
     /**
-     * Update participant's last seen timestamp
+     * Update participant's last activity timestamp
      */
     @Modifying
-    @Query("UPDATE ChatParticipant p SET p.lastSeenAt = :lastSeenAt " +
+    @Query("UPDATE ChatParticipant p SET p.lastActivityAt = :lastActivityAt " +
            "WHERE p.user.id = :userId AND p.chatRoom.id = :chatRoomId")
-    int updateLastSeenAt(@Param("userId") Long userId, @Param("chatRoomId") Long chatRoomId, @Param("lastSeenAt") LocalDateTime lastSeenAt);
+    int updateLastActivityAt(@Param("userId") Long userId, @Param("chatRoomId") Long chatRoomId, @Param("lastActivityAt") LocalDateTime lastActivityAt);
 
     /**
      * Deactivate participant (remove from chat room)
@@ -132,13 +132,13 @@ public interface ChatParticipantRepository extends JpaRepository<ChatParticipant
     int updateParticipantRole(@Param("userId") Long userId, @Param("chatRoomId") Long chatRoomId, @Param("role") ChatParticipant.ParticipantRole role);
 
     /**
-     * Find participants who haven't been seen since a specific time
+     * Find participants who haven't been active since a specific time
      */
     @Query("SELECT p FROM ChatParticipant p " +
            "WHERE p.chatRoom.id = :chatRoomId " +
            "AND p.isActive = true " +
-           "AND p.lastSeenAt < :cutoffTime " +
-           "ORDER BY p.lastSeenAt ASC")
+           "AND p.lastActivityAt < :cutoffTime " +
+           "ORDER BY p.lastActivityAt ASC")
     List<ChatParticipant> findInactiveParticipants(@Param("chatRoomId") Long chatRoomId, @Param("cutoffTime") LocalDateTime cutoffTime);
 
     /**
@@ -168,4 +168,31 @@ public interface ChatParticipantRepository extends JpaRepository<ChatParticipant
            "AND p.isActive = true " +
            "ORDER BY p.joinedAt DESC")
     Page<ChatParticipant> findRecentParticipants(@Param("chatRoomId") Long chatRoomId, Pageable pageable);
+
+    // Additional methods for compatibility with ChatService
+    
+    /**
+     * Find participant by chat room ID and user ID
+     */
+    @Query("SELECT p FROM ChatParticipant p " +
+           "WHERE p.chatRoom.id = :chatRoomId " +
+           "AND p.user.id = :userId")
+    Optional<ChatParticipant> findByChatRoomIdAndUserId(@Param("chatRoomId") Long chatRoomId, @Param("userId") Long userId);
+    
+    /**
+     * Find active participants by chat room ID
+     */
+    @Query("SELECT p FROM ChatParticipant p " +
+           "WHERE p.chatRoom.id = :chatRoomId " +
+           "AND p.isActive = true")
+    List<ChatParticipant> findByChatRoomIdAndIsActiveTrue(@Param("chatRoomId") Long chatRoomId);
+    
+    /**
+     * Find active participant by chat room ID and user ID
+     */
+    @Query("SELECT p FROM ChatParticipant p " +
+           "WHERE p.chatRoom.id = :chatRoomId " +
+           "AND p.user.id = :userId " +
+           "AND p.isActive = true")
+    Optional<ChatParticipant> findByChatRoomIdAndUserIdAndIsActiveTrue(@Param("chatRoomId") Long chatRoomId, @Param("userId") Long userId);
 }
