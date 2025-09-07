@@ -39,6 +39,7 @@ public class ChatRoomV2 {
     private User createdBy;
 
     @Column(nullable = false)
+    @Builder.Default
     private boolean isActive = true;
 
     @ManyToOne(fetch = FetchType.LAZY)

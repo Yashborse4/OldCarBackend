@@ -36,6 +36,7 @@ public class ChatMessageV2 {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "message_type", nullable = false)
+    @Builder.Default
     private MessageType messageType = MessageType.TEXT;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -43,9 +44,11 @@ public class ChatMessageV2 {
     private ChatMessageV2 replyTo;
 
     @Column(name = "is_edited", nullable = false)
+    @Builder.Default
     private boolean isEdited = false;
 
     @Column(name = "is_deleted", nullable = false)
+    @Builder.Default
     private boolean isDeleted = false;
 
     @Column(name = "file_url")
@@ -71,6 +74,7 @@ public class ChatMessageV2 {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "delivery_status", nullable = false)
+    @Builder.Default
     private DeliveryStatus deliveryStatus = DeliveryStatus.SENT;
 
     public enum MessageType {
