@@ -96,4 +96,14 @@ public interface ChatRoomV2Repository extends JpaRepository<ChatRoomV2, Long> {
            "OR LOWER(cr.description) LIKE LOWER(CONCAT('%', :query, '%'))) " +
            "ORDER BY cr.lastActivityAt DESC")
     Page<ChatRoomV2> searchByNameOrDescription(@Param("userId") Long userId, @Param("query") String query, Pageable pageable);
+
+    /**
+     * Find chat rooms where user is participant and by specific chat type
+     */
+    @Query("SELECT DISTINCT cr FROM ChatRoomV2 cr " +
+           "JOIN cr.participants p " +
+           "WHERE p.user.id = :userId AND p.isActive = true " +
+           "AND cr.type = :chatType " +
+           "ORDER BY cr.lastActivityAt DESC")
+    Page<ChatRoomV2> findByParticipantUserIdAndType(@Param("userId") Long userId, @Param("chatType") ChatRoomV2.ChatType chatType, Pageable pageable);
 }

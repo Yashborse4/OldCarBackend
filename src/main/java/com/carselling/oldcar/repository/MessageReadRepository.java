@@ -137,8 +137,8 @@ public interface MessageReadRepository extends JpaRepository<MessageRead, Long> 
     /**
      * Get read receipts for a specific message (who read it and when)
      */
-    @Query("SELECT mr.user.id, mr.user.fullName, mr.readAt FROM MessageRead mr " +
+    @Query("SELECT mr FROM MessageRead mr " +
            "WHERE mr.message.id = :messageId " +
            "ORDER BY mr.readAt ASC")
-    List<Object[]> getReadReceiptsForMessage(@Param("messageId") Long messageId);
+    List<MessageRead> getReadReceiptsForMessage(@Param("messageId") Long messageId);
 }
