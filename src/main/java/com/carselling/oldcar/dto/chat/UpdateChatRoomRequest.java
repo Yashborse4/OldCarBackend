@@ -1,6 +1,6 @@
 package com.carselling.oldcar.dto.chat;
 
-import javax.validation.constraints.Size;
+import jakarta.validation.constraints.Size;
 
 /**
  * Request DTO for updating chat rooms

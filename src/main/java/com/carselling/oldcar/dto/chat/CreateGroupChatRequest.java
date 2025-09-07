@@ -26,8 +26,10 @@ public class CreateGroupChatRequest {
     @Size(max = 500, message = "Description cannot exceed 500 characters")
     private String description;
     
+    @Builder.Default
     private String type = "GROUP"; // GROUP, DEALER_ONLY
     
+    @Builder.Default
     private Integer maxParticipants = 50;
     
     @NotEmpty(message = "At least one participant is required")

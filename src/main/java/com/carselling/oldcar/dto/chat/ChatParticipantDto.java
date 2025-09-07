@@ -34,4 +34,9 @@ public class ChatParticipantDto {
         private String displayName;
         private String profileImage;
     }
+    
+    // Convenience method for ChatWebSocketController
+    public Long getUserId() {
+        return this.user != null ? this.user.getId() : null;
+    }
 }
