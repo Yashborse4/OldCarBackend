@@ -61,4 +61,9 @@ public class ChatMessageDtoV2 {
         private Long fileSize;
         private String mimeType;
     }
+    
+    // Compatibility method for ChatService
+    public Long getChatRoomId() {
+        return this.chatId;
+    }
 }

@@ -1,7 +1,7 @@
 package com.carselling.oldcar.dto.chat;
 
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.Size;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * Request DTO for editing messages
