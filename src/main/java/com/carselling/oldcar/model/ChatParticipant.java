@@ -34,6 +34,7 @@ public class ChatParticipant {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private ParticipantRole role = ParticipantRole.MEMBER;
 
     @Column(name = "joined_at", nullable = false)
@@ -43,6 +44,7 @@ public class ChatParticipant {
     private LocalDateTime leftAt;
 
     @Column(name = "is_active", nullable = false)
+    @Builder.Default
     private boolean isActive = true;
 
     @Column(name = "last_read_message_id")
