@@ -117,7 +117,7 @@ public interface ChatMessageV2Repository extends JpaRepository<ChatMessageV2, Lo
      */
     @Query("SELECT m FROM ChatMessageV2 m " +
            "WHERE m.chatRoom.id = :chatRoomId " +
-           "AND m.attachmentUrl IS NOT NULL " +
+           "AND m.fileUrl IS NOT NULL " +
            "AND m.isDeleted = false " +
            "ORDER BY m.createdAt DESC")
     Page<ChatMessageV2> findMessagesWithAttachments(@Param("chatRoomId") Long chatRoomId, Pageable pageable);
@@ -156,4 +156,40 @@ public interface ChatMessageV2Repository extends JpaRepository<ChatMessageV2, Lo
            "AND m.isDeleted = false " +
            "ORDER BY m.createdAt DESC")
     Page<ChatMessageV2> findByMessageTypeInChatRoom(@Param("chatRoomId") Long chatRoomId, @Param("messageType") ChatMessageV2.MessageType messageType, Pageable pageable);
+
+    // Additional methods needed by ChatService
+
+    /**
+     * Find messages by chat room ID with deleted filter, ordered by creation date desc
+     */
+    default Page<ChatMessageV2> findByChatRoomIdAndIsDeletedFalseOrderByCreatedAtDesc(Long chatRoomId, Pageable pageable) {
+        return findByChatRoomIdAndIsDeletedFalse(chatRoomId, pageable);
+    }
+
+    /**
+     * Search messages in specific chat
+     */
+    default Page<ChatMessageV2> searchInChat(Long chatRoomId, String query, Pageable pageable) {
+        return searchMessagesInChatRoom(chatRoomId, query, pageable);
+    }
+
+    /**
+     * Get unread count by chat for a user
+     */
+    @Query("SELECT m.chatRoom.id, COUNT(m) FROM ChatMessageV2 m " +
+           "JOIN m.chatRoom cr " +
+           "JOIN cr.participants p " +
+           "WHERE p.user.id = :userId AND p.isActive = true " +
+           "AND m.sender.id != :userId " +
+           "AND m.isDeleted = false " +
+           "AND m.id NOT IN (SELECT mr.message.id FROM MessageRead mr WHERE mr.user.id = :userId) " +
+           "GROUP BY m.chatRoom.id")
+    List<Object[]> getUnreadCountByChat(@Param("userId") Long userId);
+
+    /**
+     * Find first message by chat room ID ordered by creation date desc
+     */
+    default Optional<ChatMessageV2> findFirstByChatRoomIdOrderByCreatedAtDesc(Long chatRoomId) {
+        return findLatestMessageInChatRoom(chatRoomId);
+    }
 }
