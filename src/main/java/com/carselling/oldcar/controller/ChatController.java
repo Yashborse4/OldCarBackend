@@ -1,328 +1,445 @@
 package com.carselling.oldcar.controller;
 
-import com.carselling.oldcar.dto.chat.ChatMessageDto;
-import com.carselling.oldcar.dto.chat.ChatRoomDto;
-import com.carselling.oldcar.dto.chat.CreateChatRoomRequest;
-import com.carselling.oldcar.dto.chat.SendMessageRequest;
-import com.carselling.oldcar.dto.common.ApiResponse;
+import com.carselling.oldcar.dto.chat.*;
+import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.service.ChatService;
-import com.carselling.oldcar.util.SecurityUtils;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.messaging.handler.annotation.DestinationVariable;
-import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.handler.annotation.Payload;
-import org.springframework.messaging.handler.annotation.SendTo;
-import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.security.Principal;
+import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Map;
 
 /**
- * Chat Controller for chat REST API and WebSocket endpoints
- * Handles chat rooms, messaging, and real-time communication
+ * Enhanced Chat Controller V2 with comprehensive chat functionality
  */
 @RestController
-@RequestMapping("/api/chat")
-@RequiredArgsConstructor
-@Slf4j
-@PreAuthorize("hasRole('VIEWER')")
+@RequestMapping("/api/v2/chat")
+@CrossOrigin(origins = "*")
 public class ChatController {
 
-    private final ChatService chatService;
+    @Autowired
+    private ChatService ChatService;
+
+    // ========================= CHAT ROOM MANAGEMENT =========================
 
     /**
-     * Create a new chat room
-     * POST /api/chat/rooms
+     * Create a private chat between two users
      */
-    @PostMapping("/rooms")
-    public ResponseEntity<ApiResponse<ChatRoomDto>> createChatRoom(
-            @Valid @RequestBody CreateChatRoomRequest request) {
-        
-        log.info("Creating chat room for car ID: {}", request.getCarId());
-        
-        Long buyerId = SecurityUtils.getCurrentUserId();
-        ChatRoomDto chatRoom = chatService.createChatRoom(request, buyerId);
-
-        return ResponseEntity.ok(ApiResponse.success(
-                "Chat room created successfully",
-                "You can now start chatting about this car.",
-                chatRoom
-        ));
+    @PostMapping("/private")
+    public ResponseEntity<?> createPrivateChat(
+            @Valid @RequestBody CreatePrivateChatRequest request,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatRoomDtoV2 chatRoom = ChatService.createPrivateChat(request, currentUser.getId());
+            return ResponseEntity.ok(chatRoom);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Failed to create private chat", "message", e.getMessage()));
+        }
     }
 
     /**
-     * Get user's chat rooms with pagination
-     * GET /api/chat/rooms
+     * Create a group chat
+     */
+    @PostMapping("/group")
+    public ResponseEntity<?> createGroupChat(
+            @Valid @RequestBody CreateGroupChatRequest request,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatRoomDtoV2 chatRoom = ChatService.createGroupChat(request, currentUser.getId());
+            return ResponseEntity.ok(chatRoom);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Failed to create group chat", "message", e.getMessage()));
+        }
+    }
+
+    /**
+     * Create a car inquiry chat
+     */
+    @PostMapping("/car-inquiry")
+    public ResponseEntity<?> createCarInquiryChat(
+            @Valid @RequestBody CreateCarInquiryChatRequest request,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatRoomDtoV2 chatRoom = ChatService.createCarInquiryChat(request, currentUser.getId());
+            return ResponseEntity.ok(chatRoom);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Failed to create car inquiry chat", "message", e.getMessage()));
+        }
+    }
+
+    /**
+     * Get all chat rooms for the current user
      */
     @GetMapping("/rooms")
-    public ResponseEntity<ApiResponse<Page<ChatRoomDto>>> getUserChatRooms(
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "20") int size,
-            @RequestParam(value = "sort", defaultValue = "lastMessageAt") String sort,
-            @RequestParam(value = "direction", defaultValue = "desc") String direction) {
-        
-        log.info("Getting chat rooms for current user");
-        
-        Long userId = SecurityUtils.getCurrentUserId();
-        Sort.Direction sortDirection = "asc".equalsIgnoreCase(direction) 
-                ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+    public ResponseEntity<?> getUserChatRooms(
+            @PageableDefault(size = 20) Pageable pageable,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            Page<ChatRoomDtoV2> chatRooms = ChatService.getUserChatRooms(currentUser.getId(), pageable);
+            return ResponseEntity.ok(chatRooms);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to fetch chat rooms", "message", e.getMessage()));
+        }
+    }
 
-        Page<ChatRoomDto> chatRooms = chatService.getUserChatRooms(userId, pageable);
+    /**
+     * Get specific chat room details
+     */
+    @GetMapping("/rooms/{chatRoomId}")
+    public ResponseEntity<?> getChatRoom(
+            @PathVariable Long chatRoomId,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatRoomDtoV2 chatRoom = ChatService.getChatRoom(chatRoomId, currentUser.getId());
+            return ResponseEntity.ok(chatRoom);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Access denied or chat room not found", "message", e.getMessage()));
+        }
+    }
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Chat rooms retrieved successfully",
-                String.format("Retrieved %d chat rooms.", chatRooms.getTotalElements()),
-                chatRooms
-        ));
+    /**
+     * Update chat room (name, description, etc.)
+     */
+    @PutMapping("/rooms/{chatRoomId}")
+    public ResponseEntity<?> updateChatRoom(
+            @PathVariable Long chatRoomId,
+            @Valid @RequestBody UpdateChatRoomRequest request,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatRoomDtoV2 updatedRoom = ChatService.updateChatRoom(chatRoomId, request, currentUser.getId());
+            return ResponseEntity.ok(updatedRoom);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Failed to update chat room", "message", e.getMessage()));
+        }
+    }
+
+    // ========================= PARTICIPANT MANAGEMENT =========================
+
+    /**
+     * Add participants to a chat room
+     */
+    @PostMapping("/rooms/{chatRoomId}/participants")
+    public ResponseEntity<?> addParticipants(
+            @PathVariable Long chatRoomId,
+            @Valid @RequestBody AddParticipantsRequest request,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatService.addParticipants(chatRoomId, request.getUserIds(), currentUser.getId());
+            return ResponseEntity.ok(Map.of("message", "Participants added successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Failed to add participants", "message", e.getMessage()));
+        }
+    }
+
+    /**
+     * Remove participant from chat room
+     */
+    @DeleteMapping("/rooms/{chatRoomId}/participants/{userId}")
+    public ResponseEntity<?> removeParticipant(
+            @PathVariable Long chatRoomId,
+            @PathVariable Long userId,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatService.removeParticipant(chatRoomId, userId, currentUser.getId());
+            return ResponseEntity.ok(Map.of("message", "Participant removed successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Failed to remove participant", "message", e.getMessage()));
+        }
+    }
+
+    /**
+     * Get all participants in a chat room
+     */
+    @GetMapping("/rooms/{chatRoomId}/participants")
+    public ResponseEntity<?> getChatRoomParticipants(
+            @PathVariable Long chatRoomId,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            List<ChatParticipantDto> participants = ChatService.getChatRoomParticipants(chatRoomId, currentUser.getId());
+            return ResponseEntity.ok(participants);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Failed to fetch participants", "message", e.getMessage()));
+        }
+    }
+
+    /**
+     * Leave chat room
+     */
+    @PostMapping("/rooms/{chatRoomId}/leave")
+    public ResponseEntity<?> leaveChatRoom(
+            @PathVariable Long chatRoomId,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatService.leaveChatRoom(chatRoomId, currentUser.getId());
+            return ResponseEntity.ok(Map.of("message", "Left chat room successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Failed to leave chat room", "message", e.getMessage()));
+        }
+    }
+
+    // ========================= MESSAGE MANAGEMENT =========================
+
+    /**
+     * Send a text message
+     */
+    @PostMapping("/rooms/{chatRoomId}/messages")
+    public ResponseEntity<?> sendMessage(
+            @PathVariable Long chatRoomId,
+            @Valid @RequestBody SendMessageRequestV2 request,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            request.setChatId(chatRoomId); // Set the chat room ID from path
+            ChatMessageDtoV2 message = ChatService.sendMessage(request, currentUser.getId());
+            return ResponseEntity.ok(message);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Failed to send message", "message", e.getMessage()));
+        }
+    }
+
+    /**
+     * Upload and send file/image message
+     */
+    @PostMapping("/rooms/{chatRoomId}/messages/upload")
+    public ResponseEntity<?> sendFileMessage(
+            @PathVariable Long chatRoomId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "content", required = false) String content,
+            @RequestParam(value = "replyToId", required = false) Long replyToId,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatMessageDtoV2 message = ChatService.sendFileMessage(chatRoomId, file, content, replyToId, currentUser.getId());
+            return ResponseEntity.ok(message);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Failed to send file message", "message", e.getMessage()));
+        }
     }
 
     /**
      * Get messages in a chat room
-     * GET /api/chat/rooms/{roomId}/messages
      */
-    @GetMapping("/rooms/{roomId}/messages")
-    public ResponseEntity<ApiResponse<Page<ChatMessageDto>>> getChatRoomMessages(
-            @PathVariable Long roomId,
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "50") int size) {
-        
-        log.info("Getting messages for chat room ID: {}", roomId);
-        
-        Long userId = SecurityUtils.getCurrentUserId();
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "sentAt"));
-
-        Page<ChatMessageDto> messages = chatService.getChatRoomMessages(roomId, userId, pageable);
-
-        return ResponseEntity.ok(ApiResponse.success(
-                "Chat messages retrieved successfully",
-                String.format("Retrieved %d messages from this chat.", messages.getTotalElements()),
-                messages
-        ));
+    @GetMapping("/rooms/{chatRoomId}/messages")
+    public ResponseEntity<?> getChatMessages(
+            @PathVariable Long chatRoomId,
+            @PageableDefault(size = 50) Pageable pageable,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            Page<ChatMessageDtoV2> messages = ChatService.getChatMessages(chatRoomId, currentUser.getId(), pageable);
+            return ResponseEntity.ok(messages);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Failed to fetch messages", "message", e.getMessage()));
+        }
     }
 
     /**
-     * Send a message via REST API (fallback for non-WebSocket clients)
-     * POST /api/chat/rooms/{roomId}/messages
+     * Edit a message
      */
-    @PostMapping("/rooms/{roomId}/messages")
-    public ResponseEntity<ApiResponse<ChatMessageDto>> sendMessage(
-            @PathVariable Long roomId,
-            @Valid @RequestBody SendMessageRequest request) {
-        
-        log.info("Sending message to chat room ID: {} via REST", roomId);
-        
-        Long senderId = SecurityUtils.getCurrentUserId();
-        ChatMessageDto message = chatService.sendMessage(roomId, request.getContent(), senderId);
+    @PutMapping("/messages/{messageId}")
+    public ResponseEntity<?> editMessage(
+            @PathVariable Long messageId,
+            @Valid @RequestBody EditMessageRequest request,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatMessageDtoV2 updatedMessage = ChatService.editMessage(messageId, request.getNewContent(), currentUser.getId());
+            return ResponseEntity.ok(updatedMessage);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Failed to edit message", "message", e.getMessage()));
+        }
+    }
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Message sent successfully",
-                "Your message has been delivered.",
-                message
-        ));
+    /**
+     * Delete a message
+     */
+    @DeleteMapping("/messages/{messageId}")
+    public ResponseEntity<?> deleteMessage(
+            @PathVariable Long messageId,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatService.deleteMessage(messageId, currentUser.getId());
+            return ResponseEntity.ok(Map.of("message", "Message deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Failed to delete message", "message", e.getMessage()));
+        }
     }
 
     /**
      * Mark messages as read
-     * PUT /api/chat/rooms/{roomId}/read
      */
-    @PutMapping("/rooms/{roomId}/read")
-    public ResponseEntity<ApiResponse<Object>> markMessagesAsRead(@PathVariable Long roomId) {
-        log.info("Marking messages as read for chat room ID: {}", roomId);
-        
-        Long userId = SecurityUtils.getCurrentUserId();
-        chatService.markMessagesAsRead(roomId, userId);
+    @PostMapping("/rooms/{chatRoomId}/messages/read")
+    public ResponseEntity<?> markMessagesAsRead(
+            @PathVariable Long chatRoomId,
+            @Valid @RequestBody MarkMessagesReadRequest request,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatService.markMessagesAsRead(chatRoomId, request.getMessageIds(), currentUser.getId());
+            return ResponseEntity.ok(Map.of("message", "Messages marked as read"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Failed to mark messages as read", "message", e.getMessage()));
+        }
+    }
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Messages marked as read",
-                "All unread messages in this chat have been marked as read."
-        ));
+    // ========================= SEARCH AND UTILITIES =========================
+
+    /**
+     * Search messages across all user's chat rooms
+     */
+    @GetMapping("/search/messages")
+    public ResponseEntity<?> searchMessages(
+            @RequestParam String query,
+            @PageableDefault(size = 20) Pageable pageable,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            Page<ChatMessageDtoV2> messages = ChatService.searchMessages(query, currentUser.getId(), pageable);
+            return ResponseEntity.ok(messages);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Failed to search messages", "message", e.getMessage()));
+        }
     }
 
     /**
-     * Close a chat room
-     * DELETE /api/chat/rooms/{roomId}
+     * Search messages in specific chat room
      */
-    @DeleteMapping("/rooms/{roomId}")
-    public ResponseEntity<ApiResponse<Object>> closeChatRoom(@PathVariable Long roomId) {
-        log.info("Closing chat room ID: {}", roomId);
-        
-        Long userId = SecurityUtils.getCurrentUserId();
-        chatService.closeChatRoom(roomId, userId);
-
-        return ResponseEntity.ok(ApiResponse.success(
-                "Chat room closed successfully",
-                "This chat room has been deactivated."
-        ));
+    @GetMapping("/rooms/{chatRoomId}/search")
+    public ResponseEntity<?> searchMessagesInChatRoom(
+            @PathVariable Long chatRoomId,
+            @RequestParam String query,
+            @PageableDefault(size = 20) Pageable pageable,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            Page<ChatMessageDtoV2> messages = ChatService.searchMessagesInChatRoom(chatRoomId, query, currentUser.getId(), pageable);
+            return ResponseEntity.ok(messages);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Failed to search messages in chat room", "message", e.getMessage()));
+        }
     }
 
     /**
-     * Get unread message count
-     * GET /api/chat/unread-count
+     * Get unread message count for user
      */
     @GetMapping("/unread-count")
-    public ResponseEntity<ApiResponse<Long>> getUnreadMessageCount() {
-        log.info("Getting unread message count for current user");
-        
-        Long userId = SecurityUtils.getCurrentUserId();
-        long unreadCount = chatService.getUnreadMessageCount(userId);
-
-        return ResponseEntity.ok(ApiResponse.success(
-                "Unread count retrieved successfully",
-                "Current unread message count.",
-                unreadCount
-        ));
+    public ResponseEntity<?> getUnreadCount(Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            UnreadCountResponse unreadCount = ChatService.getUnreadMessageCount(currentUser.getId());
+            return ResponseEntity.ok(unreadCount);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to fetch unread count", "message", e.getMessage()));
+        }
     }
 
     /**
-     * Search messages
-     * GET /api/chat/search
+     * Get unread count per chat room
      */
-    @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<ChatMessageDto>>> searchMessages(
-            @RequestParam(value = "query") String query,
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "20") int size) {
-        
-        log.info("Searching messages with query: '{}'", query);
-        
-        Long userId = SecurityUtils.getCurrentUserId();
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "sentAt"));
+    @GetMapping("/rooms/unread-count")
+    public ResponseEntity<?> getUnreadCountPerRoom(Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            Map<Long, Long> unreadCounts = ChatService.getUnreadCountPerChatRoom(currentUser.getId());
+            return ResponseEntity.ok(unreadCounts);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to fetch unread counts per room", "message", e.getMessage()));
+        }
+    }
 
-        Page<ChatMessageDto> messages = chatService.searchMessages(query, userId, pageable);
+    // ========================= DEALER GROUP MANAGEMENT =========================
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Message search completed",
-                String.format("Found %d messages matching '%s'.", messages.getTotalElements(), query),
-                messages
-        ));
+    /**
+     * Get dealer-only group chats
+     */
+    @GetMapping("/dealer-groups")
+    public ResponseEntity<?> getDealerGroups(
+            @PageableDefault(size = 20) Pageable pageable,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            Page<ChatRoomDtoV2> dealerGroups = ChatService.getDealerGroups(currentUser.getId(), pageable);
+            return ResponseEntity.ok(dealerGroups);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Access denied to dealer groups", "message", e.getMessage()));
+        }
     }
 
     /**
-     * Get chat statistics for current user
-     * GET /api/chat/statistics
+     * Create dealer-only group
      */
-    @GetMapping("/statistics")
-    public ResponseEntity<ApiResponse<ChatService.ChatStatistics>> getChatStatistics() {
-        log.info("Getting chat statistics for current user");
-        
-        Long userId = SecurityUtils.getCurrentUserId();
-        ChatService.ChatStatistics statistics = chatService.getChatStatistics(userId);
-
-        return ResponseEntity.ok(ApiResponse.success(
-                "Chat statistics retrieved successfully",
-                "Your chat activity statistics.",
-                statistics
-        ));
+    @PostMapping("/dealer-groups")
+    public ResponseEntity<?> createDealerGroup(
+            @Valid @RequestBody CreateDealerGroupRequest request,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatRoomDtoV2 dealerGroup = ChatService.createDealerGroup(currentUser.getId(), request);
+            return ResponseEntity.ok(dealerGroup);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Failed to create dealer group", "message", e.getMessage()));
+        }
     }
 
-    // ============================
-    // WebSocket Message Handlers
-    // ============================
+    // ========================= TYPING INDICATORS =========================
 
     /**
-     * WebSocket endpoint for sending messages
-     * Destination: /app/chat/{roomId}
-     * Response: /topic/chat/{roomId}
+     * Send typing indicator
      */
-    @MessageMapping("/chat/{roomId}")
-    @SendTo("/topic/chat/{roomId}")
-    public ChatMessageDto sendMessageViaWebSocket(
-            @DestinationVariable Long roomId,
-            @Payload SendMessageRequest request,
-            Principal principal) {
-        
-        log.info("Receiving WebSocket message for room ID: {} from user: {}", roomId, principal.getName());
-        
-        // Extract user ID from principal (assuming it contains the user ID)
-        Long senderId = Long.parseLong(principal.getName());
-        
-        return chatService.sendMessage(roomId, request.getContent(), senderId);
-    }
-
-    /**
-     * WebSocket endpoint for joining a chat room
-     * Destination: /app/chat/{roomId}/join
-     */
-    @MessageMapping("/chat/{roomId}/join")
-    public void joinChatRoom(
-            @DestinationVariable Long roomId,
-            Principal principal) {
-        
-        log.info("User {} joining chat room {}", principal.getName(), roomId);
-        
-        // Mark messages as read when user joins the room
-        Long userId = Long.parseLong(principal.getName());
-        chatService.markMessagesAsRead(roomId, userId);
-    }
-
-    /**
-     * WebSocket endpoint for leaving a chat room
-     * Destination: /app/chat/{roomId}/leave
-     */
-    @MessageMapping("/chat/{roomId}/leave")
-    public void leaveChatRoom(
-            @DestinationVariable Long roomId,
-            Principal principal) {
-        
-        log.info("User {} leaving chat room {}", principal.getName(), roomId);
-        
-        // Could implement typing indicators or presence management here
-        // For now, just log the event
-    }
-
-    /**
-     * WebSocket endpoint for typing indicators
-     * Destination: /app/chat/{roomId}/typing
-     * Response: /topic/chat/{roomId}/typing
-     */
-    @MessageMapping("/chat/{roomId}/typing")
-    @SendTo("/topic/chat/{roomId}/typing")
-    public TypingIndicator handleTypingIndicator(
-            @DestinationVariable Long roomId,
-            @Payload TypingIndicatorRequest request,
-            Principal principal) {
-        
-        log.debug("User {} typing in room {}: {}", principal.getName(), roomId, request.isTyping());
-        
-        Long userId = Long.parseLong(principal.getName());
-        
-        return TypingIndicator.builder()
-                .userId(userId)
-                .roomId(roomId)
-                .isTyping(request.isTyping())
-                .timestamp(System.currentTimeMillis())
-                .build();
-    }
-
-    // ============================
-    // WebSocket DTOs
-    // ============================
-
-    /**
-     * Request object for typing indicator
-     */
-    @lombok.Data
-    public static class TypingIndicatorRequest {
-        private boolean typing;
-    }
-
-    /**
-     * Response object for typing indicator
-     */
-    @lombok.Builder
-    @lombok.Data
-    public static class TypingIndicator {
-        private Long userId;
-        private Long roomId;
-        private boolean isTyping;
-        private long timestamp;
+    @PostMapping("/rooms/{chatRoomId}/typing")
+    public ResponseEntity<?> sendTypingIndicator(
+            @PathVariable Long chatRoomId,
+            @RequestBody Map<String, Boolean> typingStatus,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            boolean isTyping = typingStatus.getOrDefault("isTyping", false);
+            ChatService.sendTypingIndicator(chatRoomId, currentUser.getId(), isTyping);
+            return ResponseEntity.ok(Map.of("message", "Typing indicator sent"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Failed to send typing indicator", "message", e.getMessage()));
+        }
     }
 }
