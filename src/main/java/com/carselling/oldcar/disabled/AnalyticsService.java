@@ -25,7 +25,7 @@ public class AnalyticsService {
 
     private final VehicleRepository vehicleRepository;
     private final UserRepository userRepository;
-    private final PerformanceMonitoringService performanceService;
+    // private final PerformanceMonitoringService performanceService; // Disabled
 
     /**
      * Get comprehensive dashboard analytics

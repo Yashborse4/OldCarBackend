@@ -32,7 +32,7 @@ public class MachineLearningRecommendationService {
     private final UserRepository userRepository;
     private final UserBehaviorTrackingService userBehaviorService;
     private final PricePredictionService pricePredictionService;
-    private final PerformanceMonitoringService performanceService;
+    // private final PerformanceMonitoringService performanceService; // Disabled
 
     /**
      * Get personalized vehicle recommendations using hybrid algorithm

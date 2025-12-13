@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 public class PricePredictionService {
 
     private final VehicleRepository vehicleRepository;
-    private final PerformanceMonitoringService performanceService;
+    // private final PerformanceMonitoringService performanceService; // Disabled
 
     // Market data constants (would typically come from external APIs)
     private static final Map<String, Double> BRAND_PREMIUM_FACTORS = Map.of(

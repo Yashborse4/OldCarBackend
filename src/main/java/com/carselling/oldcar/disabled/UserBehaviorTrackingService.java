@@ -30,7 +30,7 @@ public class UserBehaviorTrackingService {
     private final UserRepository userRepository;
     private final VehicleRepository vehicleRepository;
     private final RedisTemplate<String, Object> redisTemplate;
-    private final PerformanceMonitoringService performanceService;
+    // private final PerformanceMonitoringService performanceService; // Disabled
 
     // Redis key patterns
     private static final String USER_VIEWS_KEY = "user:views:";

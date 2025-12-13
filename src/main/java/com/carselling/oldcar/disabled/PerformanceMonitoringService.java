@@ -2,13 +2,14 @@ package com.carselling.oldcar.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.actuator.metrics.MetricsEndpoint;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -16,6 +17,7 @@ import java.lang.management.ThreadMXBean;
 import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.Map;
 
 /**
@@ -26,6 +28,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PerformanceMonitoringService {
 
+    private static final Logger log = LoggerFactory.getLogger(PerformanceMonitoringService.class);
     private final MeterRegistry meterRegistry;
     private final MemoryMXBean memoryMXBean = ManagementFactory.getMemoryMXBean();
     private final ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
@@ -35,6 +38,10 @@ public class PerformanceMonitoringService {
     private final AtomicLong errorCount = new AtomicLong(0);
     private final Map<String, AtomicLong> endpointCallCounts = new ConcurrentHashMap<>();
     private final Map<String, Timer> endpointTimers = new ConcurrentHashMap<>();
+    
+    // Gauge references to avoid re-registration
+    private final AtomicReference<Gauge> memoryGauge = new AtomicReference<>();
+    private final AtomicReference<Gauge> threadGauge = new AtomicReference<>();
 
     /**
      * Record API call performance
@@ -109,13 +116,24 @@ public class PerformanceMonitoringService {
         long maxMemory = memoryMXBean.getHeapMemoryUsage().getMax();
         double memoryUsagePercent = (double) usedMemory / maxMemory * 100;
         
-        Gauge.builder("system.memory.usage.percent")
-             .register(meterRegistry, () -> memoryUsagePercent);
+        // Register gauges only once
+        if (memoryGauge.get() == null) {
+            Gauge gauge = Gauge.builder("system.memory.usage.percent")
+                    .register(meterRegistry, this, service -> {
+                        long used = memoryMXBean.getHeapMemoryUsage().getUsed();
+                        long max = memoryMXBean.getHeapMemoryUsage().getMax();
+                        return (double) used / max * 100;
+                    });
+            memoryGauge.compareAndSet(null, gauge);
+        }
         
         // Thread metrics
         int threadCount = threadMXBean.getThreadCount();
-        Gauge.builder("system.threads.count")
-             .register(meterRegistry, () -> threadCount);
+        if (threadGauge.get() == null) {
+            Gauge gauge = Gauge.builder("system.threads.count")
+                    .register(meterRegistry, threadMXBean, ThreadMXBean::getThreadCount);
+            threadGauge.compareAndSet(null, gauge);
+        }
         
         // Log summary
         log.info("=== Performance Metrics Summary ===");

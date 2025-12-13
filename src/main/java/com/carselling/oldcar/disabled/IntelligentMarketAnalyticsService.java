@@ -30,7 +30,7 @@ public class IntelligentMarketAnalyticsService {
     private final UserRepository userRepository;
     private final UserBehaviorTrackingService behaviorTrackingService;
     private final PricePredictionService pricePredictionService;
-    private final PerformanceMonitoringService performanceService;
+    // private final PerformanceMonitoringService performanceService; // Disabled
 
     /**
      * Get comprehensive market overview dashboard
