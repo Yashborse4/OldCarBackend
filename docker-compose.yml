@@ -55,13 +55,13 @@ services:
       redis:
         condition: service_healthy
     environment:
-      - SPRING_PROFILES_ACTIVE=dev
-      - DATABASE_URL=jdbc:mysql://database:3306/car_selling_dev?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-      - DB_USERNAME=car_user
-      - DB_PASSWORD=car_password
-      - JWT_SECRET=mySecretKey12345678901234567890123456789012345678901234567890
-      - JWT_ACCESS_EXPIRATION=900000
-      - JWT_REFRESH_EXPIRATION=604800000
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-dev}
+      - DATABASE_URL=${DATABASE_URL:-jdbc:mysql://database:3306/car_selling_dev?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+      - DB_USERNAME=${DB_USERNAME:-car_user}
+      - DB_PASSWORD=${DB_PASSWORD:-car_password}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_EXPIRATION=${JWT_ACCESS_EXPIRATION:-900000}
+      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-604800000}
       - UPLOAD_PATH=/app/uploads
       - REDIS_HOST=redis
       - REDIS_PORT=6379

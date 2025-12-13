@@ -9,7 +9,7 @@ version = '0.0.1-SNAPSHOT'
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
+		languageVersion = JavaLanguageVersion.of(20)
 	}
 }
 
@@ -17,6 +17,14 @@ repositories {
 	mavenCentral()
 	maven { url 'https://repo.spring.io/milestone' }
 	maven { url 'https://repo.spring.io/snapshot' } // For Spring Boot non-GA versions
+}
+
+sourceSets {
+    main {
+        java {
+            exclude '**/disabled/**'
+        }
+    }
 }
 
 dependencies {
@@ -28,18 +36,45 @@ dependencies {
 	// WebSocket dependencies for real-time chat
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 	implementation 'org.springframework:spring-messaging'
+	// Mail support
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	// JWT dependencies
 	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+	// AWS SDK for S3 file uploads
+	implementation 'com.amazonaws:aws-java-sdk-s3:1.12.565'
+	// Apache Tika for file content type detection
+	implementation 'org.apache.tika:tika-core:2.9.1'
+	// Rate limiting with Bucket4j
+	implementation 'com.github.vladimir-bukhtoyarov:bucket4j-core:7.6.0'
+	implementation 'com.github.vladimir-bukhtoyarov:bucket4j-redis:7.6.0'
+	// Lettuce Redis client for Bucket4j integration (already included with spring-boot-starter-data-redis)
+	// implementation 'io.lettuce:lettuce-core' // Already provided by Spring Boot Redis starter
+
+	// SpringDoc OpenAPI (Swagger) for API documentation
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
 	// Database
 	runtimeOnly 'org.postgresql:postgresql'
-	// Rate limiting for chat
-	implementation 'io.github.bucket4j:bucket4j-core:7.6.0'
+	// Rate limiting - removed temporarily for compilation
+	
+	// Redis for caching and rate limiting
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	implementation 'org.springframework.boot:spring-boot-starter-cache'
+	
+
+	
+	// Micrometer for metrics
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'io.micrometer:micrometer-core'
+	
 	// Elasticsearch dependencies
-	implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
-	implementation 'org.elasticsearch.client:elasticsearch-rest-high-level-client:7.17.9'
-	implementation 'co.elastic.clients:elasticsearch-java:7.17.9'
+    implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+
+
+
+	// Firebase Admin SDK for push notifications (optional)
+	// implementation 'com.google.firebase:firebase-admin:9.2.0'
 	// JSON processing
 	implementation 'com.fasterxml.jackson.core:jackson-core'
 	implementation 'com.fasterxml.jackson.core:jackson-databind'
@@ -48,8 +83,12 @@ dependencies {
 	testImplementation 'org.springframework.graphql:spring-graphql-test'
 	testImplementation 'org.springframework.security:spring-security-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    compileOnly 'org.projectlombok:lombok:1.18.30'
-    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+}
+
+springBoot {
+    mainClass = 'com.carselling.oldcar.OldCarApplication'
 }
 
 tasks.named('test') {
