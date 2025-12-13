@@ -229,6 +229,15 @@ public class UserService {
     }
 
     /**
+     * Find user by ID (for internal service use)
+     */
+    @Transactional(readOnly = true)
+    public User findById(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+    }
+
+    /**
      * Convert User to UserSummary (for nested responses)
      */
     public UserSummary convertToUserSummary(User user) {

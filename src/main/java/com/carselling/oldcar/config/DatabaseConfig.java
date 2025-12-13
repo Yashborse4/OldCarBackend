@@ -12,6 +12,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
 
@@ -21,7 +23,6 @@ import javax.sql.DataSource;
  */
 @Configuration
 @EnableJpaRepositories(basePackages = "com.carselling.oldcar.repository")
-@EnableJpaAuditing
 @EnableTransactionManagement
 @Slf4j
 public class DatabaseConfig {
@@ -70,22 +71,21 @@ public class DatabaseConfig {
         // Pool name for identification
         hikariConfig.setPoolName("CarSellingHikariCP");
         
-        // Performance optimizations
+        // PostgreSQL Performance optimizations
         hikariConfig.addDataSourceProperty("cachePrepStmts", "true");
-        hikariConfig.addDataSourceProperty("prepStmtCacheSize", "250");
+        hikariConfig.addDataSourceProperty("prepStmtCacheSize", "300");
         hikariConfig.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
         hikariConfig.addDataSourceProperty("useServerPrepStmts", "true");
-        hikariConfig.addDataSourceProperty("useLocalSessionState", "true");
-        hikariConfig.addDataSourceProperty("rewriteBatchedStatements", "true");
-        hikariConfig.addDataSourceProperty("cacheResultSetMetadata", "true");
-        hikariConfig.addDataSourceProperty("cacheServerConfiguration", "true");
-        hikariConfig.addDataSourceProperty("elideSetAutoCommits", "true");
-        hikariConfig.addDataSourceProperty("maintainTimeStats", "false");
         
-        // SSL settings (customize as needed)
-        hikariConfig.addDataSourceProperty("useSSL", "false");
-        hikariConfig.addDataSourceProperty("requireSSL", "false");
-        hikariConfig.addDataSourceProperty("allowPublicKeyRetrieval", "true");
+        // PostgreSQL specific settings
+        hikariConfig.addDataSourceProperty("reWriteBatchedInserts", "true");
+        hikariConfig.addDataSourceProperty("ApplicationName", "CarSellingApp");
+        hikariConfig.addDataSourceProperty("connectTimeout", "10");
+        hikariConfig.addDataSourceProperty("socketTimeout", "30");
+        hikariConfig.addDataSourceProperty("tcpKeepAlive", "true");
+        
+        // SSL settings for PostgreSQL (disabled for local development)
+        hikariConfig.addDataSourceProperty("sslmode", "disable");
         
         log.info("HikariCP configured with pool size: {} - {}", 
                 hikariConfig.getMinimumIdle(), hikariConfig.getMaximumPoolSize());
@@ -98,6 +98,7 @@ public class DatabaseConfig {
      */
     @Configuration
     @Profile("dev")
+    @Slf4j
     static class DevDatabaseConfig {
         
         @Bean
@@ -121,6 +122,7 @@ public class DatabaseConfig {
      */
     @Configuration
     @Profile("prod")
+    @Slf4j
     static class ProdDatabaseConfig {
         
         @Bean
@@ -151,6 +153,7 @@ public class DatabaseConfig {
      */
     @Configuration
     @Profile("test")
+    @Slf4j
     static class TestDatabaseConfig {
         
         @Bean

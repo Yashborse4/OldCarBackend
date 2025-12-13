@@ -1,5 +1,6 @@
 package com.carselling.oldcar.security.jwt;
 
+import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.model.User;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
@@ -8,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -38,27 +40,44 @@ public class JwtTokenProvider {
     @PostConstruct
     public void init() {
         try {
+            if (jwtSecret == null || jwtSecret.trim().isEmpty()) {
+                throw new IllegalArgumentException("JWT_SECRET environment variable is not set. Please set a secure 256-bit (32-byte) secret.");
+            }
+            
             // Decode base64 secret if it's encoded, otherwise use as-is
             byte[] keyBytes;
             try {
                 keyBytes = java.util.Base64.getDecoder().decode(jwtSecret);
+                log.info("JWT secret decoded from base64");
             } catch (IllegalArgumentException e) {
                 // If decoding fails, use the secret as plain bytes
-                keyBytes = jwtSecret.getBytes();
+                keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+                log.warn("JWT secret is not base64 encoded. Consider using base64 encoding for better security.");
             }
             
             // Ensure key is at least 256 bits for HS256
             if (keyBytes.length < 32) {
-                throw new IllegalArgumentException("JWT secret must be at least 256 bits (32 bytes) long");
+                throw new IllegalArgumentException(
+                    "JWT secret must be at least 256 bits (32 bytes) long. " +
+                    "Current length: " + keyBytes.length + " bytes. " +
+                    "Generate a secure key using: openssl rand -hex 32"
+                );
+            }
+            
+            // Validate key strength
+            if (isWeakSecret(jwtSecret)) {
+                log.warn("JWT secret appears to be weak. Consider using a cryptographically secure random key.");
             }
             
             this.key = Keys.hmacShaKeyFor(keyBytes);
-            log.info("JWT key initialized successfully");
+            log.info("JWT key initialized successfully with {}-bit key", keyBytes.length * 8);
         } catch (Exception e) {
             log.error("Failed to initialize JWT key", e);
-            throw new RuntimeException("JWT key initialization failed", e);
+            throw new RuntimeException("JWT key initialization failed: " + e.getMessage(), e);
         }
     }
+    
+
 
     /**
      * Generate comprehensive access token with user details
@@ -362,5 +381,35 @@ public class JwtTokenProvider {
      */
     public long getRefreshTokenExpiration() {
         return refreshTokenExpirationMs;
+    }
+
+    /**
+     * Extract authorities (roles/permissions) from token for Spring Security
+     */
+    @SuppressWarnings("unchecked")
+    public List<String> getAuthoritiesFromToken(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+            
+            Object roles = claims.get("roles");
+            if (roles instanceof List) {
+                return (List<String>) roles;
+            }
+            
+            // Fallback to role-based authorities
+            String role = (String) claims.get("role");
+            if (role != null) {
+                return List.of("ROLE_" + role);
+            }
+            
+            return List.of("ROLE_VIEWER"); // Default role
+        } catch (Exception e) {
+            log.error("Failed to extract authorities from token", e);
+            return List.of("ROLE_VIEWER"); // Default role on error
+        }
     }
 }

@@ -11,6 +11,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Car entity representing car listings in the system
@@ -127,7 +129,66 @@ public class Car {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // Helper methods
+    @Column(name = "last_viewed_at")
+    private LocalDateTime lastViewedAt;
+
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
+    @Size(max = 200, message = "Location must not exceed 200 characters")
+    @Column(name = "location", length = 200)
+    private String location;
+
+    @ElementCollection
+    @CollectionTable(name = "car_images", joinColumns = @JoinColumn(name = "car_id"))
+    @Column(name = "image_url")
+    @Builder.Default
+    private List<String> images = new ArrayList<>();
+
+    @Column(name = "is_available")
+    @Builder.Default
+    private Boolean isAvailable = true;
+
+    // Helper methods for backward compatibility
+    public User getUser() {
+        return this.owner;
+    }
+
+    public void setUser(User user) {
+        this.owner = user;
+    }
+
+    public Boolean getIsAvailable() {
+        return this.isAvailable;
+    }
+
+    public void setIsAvailable(Boolean isAvailable) {
+        this.isAvailable = isAvailable;
+    }
+
+    public Boolean getIsFeatured() {
+        return this.isFeatured;
+    }
+
+    public void setIsFeatured(Boolean isFeatured) {
+        this.isFeatured = isFeatured;
+    }
+
+    public Long getViewCount() {
+        return (long) (this.viewCount != null ? this.viewCount.intValue() : 0);
+    }
+    
+    public Long getViewCountLong() {
+        return this.viewCount;
+    }
+
+    public void setViewCount(Long viewCount) {
+        this.viewCount = viewCount != null ? viewCount.longValue() : 0L;
+    }
+
     public boolean isOwnedBy(User user) {
         return this.owner != null && this.owner.getId().equals(user.getId());
     }

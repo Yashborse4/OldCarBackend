@@ -16,6 +16,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class BanUserRequest {
     
+    @Builder.Default
     private boolean banned = true; // true to ban, false to unban
     
     @NotBlank(message = "Reason is required")

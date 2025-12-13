@@ -31,6 +31,10 @@ public class Otp {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+    
     @NotBlank(message = "Username is required")
     @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
     @Column(nullable = false, length = 50)
@@ -68,5 +72,21 @@ public class Otp {
     public void markAsUsed() {
         this.isUsed = true;
         this.usedAt = LocalDateTime.now();
+    }
+    
+    // Convenience methods for backward compatibility
+    public LocalDateTime getExpiryTime() {
+        return this.expiresAt;
+    }
+    
+    public String getOtpValue() {
+        return this.otpCode;
+    }
+    
+    public void setUsed(boolean used) {
+        this.isUsed = used;
+        if (used) {
+            this.usedAt = LocalDateTime.now();
+        }
     }
 }

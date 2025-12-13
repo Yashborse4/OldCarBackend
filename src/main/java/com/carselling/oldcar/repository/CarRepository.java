@@ -6,6 +6,7 @@ import com.carselling.oldcar.model.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,7 +22,7 @@ import java.util.Optional;
  * Provides efficient data access methods for car management
  */
 @Repository
-public interface CarRepository extends JpaRepository<Car, Long> {
+public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificationExecutor<Car> {
 
     // Basic finder methods
     List<Car> findByOwner(User owner);
@@ -176,9 +177,14 @@ public interface CarRepository extends JpaRepository<Car, Long> {
     // Count methods for statistics
     long countByIsActive(Boolean isActive);
     
+    long countByIsSold(Boolean isSold);
+    
     long countByOwner(User owner);
     
     long countByOwnerRole(@Param("role") Role role);
+    
+    @Query("SELECT COUNT(c) FROM Car c WHERE c.isFeatured = true AND (c.featuredUntil IS NULL OR c.featuredUntil > :currentDate)")
+    long countByIsFeaturedTrueAndFeaturedUntilAfter(@Param("currentDate") LocalDateTime currentDate);
     
     @Query("SELECT COUNT(c) FROM Car c WHERE c.createdAt >= :date AND c.isActive = true")
     long countCarsCreatedSince(@Param("date") LocalDateTime date);
@@ -312,4 +318,53 @@ public interface CarRepository extends JpaRepository<Car, Long> {
                                           @Param("model") String model, 
                                           @Param("minYear") Integer minYear, 
                                           @Param("maxYear") Integer maxYear);
+
+    // Additional methods for CarServiceV2
+    List<Car> findByMakeAndIdNot(String make, Long id);
+
+    // Methods for VehicleServiceEnhanced
+    @Query("SELECT c FROM Car c WHERE c.make = :make AND c.model = :model AND " +
+           "c.year BETWEEN :yearFrom AND :yearTo AND " +
+           "c.price BETWEEN :priceFrom AND :priceTo AND " +
+           "c.id != :excludeId AND c.isActive = true")
+    List<Car> findSimilarCars(@Param("make") String make,
+                             @Param("model") String model,
+                             @Param("yearFrom") Integer yearFrom,
+                             @Param("yearTo") Integer yearTo,
+                             @Param("priceFrom") BigDecimal priceFrom,
+                             @Param("priceTo") BigDecimal priceTo,
+                             @Param("excludeId") Long excludeId,
+                             Pageable pageable);
+
+    @Query("SELECT AVG(c.price), MIN(c.price), MAX(c.price), COUNT(c) " +
+           "FROM Car c WHERE c.make = :make AND c.model = :model AND " +
+           "(:yearFrom IS NULL OR c.year >= :yearFrom) AND " +
+           "(:yearTo IS NULL OR c.year <= :yearTo) AND " +
+           "(:mileageFrom IS NULL OR c.mileage >= :mileageFrom) AND " +
+           "(:mileageTo IS NULL OR c.mileage <= :mileageTo) AND " +
+           "c.isActive = true")
+    List<Object[]> getPriceStatistics(@Param("make") String make,
+                                     @Param("model") String model,
+                                     @Param("yearFrom") Integer yearFrom,
+                                     @Param("yearTo") Integer yearTo,
+                                     @Param("mileageFrom") Integer mileageFrom,
+                                     @Param("mileageTo") Integer mileageTo);
+
+    @Query("SELECT c FROM Car c WHERE c.isActive = true " +
+           "ORDER BY c.viewCount DESC, c.createdAt DESC")
+    List<Car> findTrendingCars(Pageable pageable);
+
+    @Query("SELECT c FROM Car c WHERE c.latitude IS NOT NULL AND c.longitude IS NOT NULL AND " +
+           "c.isActive = true AND " +
+           "(6371 * ACOS(COS(RADIANS(:latitude)) * COS(RADIANS(c.latitude)) * " +
+           "COS(RADIANS(c.longitude) - RADIANS(:longitude)) + " +
+           "SIN(RADIANS(:latitude)) * SIN(RADIANS(c.latitude)))) <= :radiusKm")
+    Page<Car> findNearbyyCars(@Param("latitude") Double latitude,
+                             @Param("longitude") Double longitude,
+                             @Param("radiusKm") Double radiusKm,
+                             Pageable pageable);
+
+    @Query("SELECT c FROM Car c WHERE c.isActive = true " +
+           "ORDER BY c.viewCount DESC, c.isFeatured DESC, c.createdAt DESC")
+    List<Car> findRecommendedCars(@Param("userId") Long userId, Pageable pageable);
 }

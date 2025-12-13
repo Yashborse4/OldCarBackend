@@ -1,6 +1,6 @@
 package com.carselling.oldcar.config;
 
-import com.carselling.oldcar.security.JwtTokenProvider;
+import com.carselling.oldcar.security.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
@@ -16,7 +16,12 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+
+import java.util.Collection;
+import java.util.stream.Collectors;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
@@ -94,24 +99,35 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                             // Validate JWT token
                             if (jwtTokenProvider.validateToken(token)) {
                                 // Extract user information
-                                String userId = jwtTokenProvider.getUserIdFromToken(token);
+                                Long userIdLong = jwtTokenProvider.getUserIdFromToken(token);
+                                String userId = userIdLong != null ? userIdLong.toString() : null;
                                 
-                                // Create authentication object
-                                Authentication auth = new UsernamePasswordAuthenticationToken(
-                                        userId, null, jwtTokenProvider.getAuthoritiesFromToken(token));
-                                
-                                // Set authentication in security context
-                                SecurityContextHolder.getContext().setAuthentication(auth);
-                                
-                                // Set user principal for WebSocket session
-                                accessor.setUser(new Principal() {
-                                    @Override
-                                    public String getName() {
-                                        return userId;
-                                    }
-                                });
-                                
-                                log.debug("WebSocket authenticated user: {}", userId);
+                                if (userId != null) {
+                                    // Create authentication object with converted authorities
+                                    Collection<? extends GrantedAuthority> authorities = jwtTokenProvider.getAuthoritiesFromToken(token)
+                                            .stream()
+                                            .map(SimpleGrantedAuthority::new)
+                                            .collect(Collectors.toList());
+                                    
+                                    Authentication auth = new UsernamePasswordAuthenticationToken(
+                                            userId, null, authorities);
+                                    
+                                    // Set authentication in security context
+                                    SecurityContextHolder.getContext().setAuthentication(auth);
+                                    
+                                    // Set user principal for WebSocket session
+                                    accessor.setUser(new Principal() {
+                                        @Override
+                                        public String getName() {
+                                            return userId;
+                                        }
+                                    });
+                                    
+                                    log.debug("WebSocket authenticated user: {}", userId);
+                                } else {
+                                    log.warn("Could not extract user ID from JWT token");
+                                    return null; // Reject the connection
+                                }
                             } else {
                                 log.warn("Invalid JWT token in WebSocket connection");
                                 return null; // Reject the connection

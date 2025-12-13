@@ -1,9 +1,7 @@
 package com.carselling.oldcar.interceptor;
 
-import com.carselling.oldcar.service.PerformanceMonitoringService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -13,10 +11,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class PerformanceInterceptor implements HandlerInterceptor {
-
-    private final PerformanceMonitoringService performanceService;
+    
     private static final String START_TIME_ATTRIBUTE = "startTime";
 
     @Override
@@ -34,8 +30,8 @@ public class PerformanceInterceptor implements HandlerInterceptor {
             String endpoint = request.getRequestURI();
             boolean success = (response.getStatus() < 400) && (ex == null);
             
-            // Record the performance metrics
-            performanceService.recordApiCall(endpoint, executionTime, success);
+            // Log performance metrics (PerformanceMonitoringService disabled)
+            log.debug("API call: {} took {} ms, success: {}", endpoint, executionTime, success);
             
             // Log slow requests (> 2 seconds)
             if (executionTime > 2000) {

@@ -6,6 +6,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -114,21 +115,21 @@ public class InternationalizationService {
      * Get all supported locales with their display names
      */
     public Map<String, String> getSupportedLocales() {
-        return Map.of(
-            "en-US", "English (United States)",
-            "en-GB", "English (United Kingdom)",
-            "es", "Español",
-            "fr", "Français",
-            "de", "Deutsch",
-            "it", "Italiano",
-            "pt", "Português",
-            "ja", "日本語",
-            "ko", "한국어",
-            "zh", "中文",
-            "ar", "العربية",
-            "hi", "हिन्दी",
-            "ru", "Русский"
-        );
+        Map<String, String> locales = new HashMap<>();
+        locales.put("en-US", "English (United States)");
+        locales.put("en-GB", "English (United Kingdom)");
+        locales.put("es", "Español");
+        locales.put("fr", "Français");
+        locales.put("de", "Deutsch");
+        locales.put("it", "Italiano");
+        locales.put("pt", "Português");
+        locales.put("ja", "日本語");
+        locales.put("ko", "한국어");
+        locales.put("zh", "中文");
+        locales.put("ar", "العربية");
+        locales.put("hi", "हिन्दी");
+        locales.put("ru", "Русский");
+        return locales;
     }
 
     /**

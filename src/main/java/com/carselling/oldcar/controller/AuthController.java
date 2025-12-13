@@ -15,8 +15,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * Authentication Controller with comprehensive endpoints
- * Handles user registration, login, password reset, and token management
+ * Authentication Controller - Aligned with API Requirements
+ * Handles user authentication with device tracking, enhanced responses, and validation
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -27,87 +27,69 @@ public class AuthController {
     private final AuthService authService;
 
     /**
-     * Health check endpoint
-     */
-    @GetMapping("/health")
-    public ResponseEntity<ApiResponse<Map<String, String>>> healthCheck() {
-        Map<String, String> healthData = Map.of(
-                "status", "UP",
-                "service", "Car Selling API",
-                "version", "1.0.0"
-        );
-
-        return ResponseEntity.ok(ApiResponse.success(
-                "Service is healthy",
-                "The authentication service is running normally",
-                healthData
-        ));
-    }
-
-    /**
-     * Register a new user
+     * User Registration
      * POST /api/auth/register
      */
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<JwtAuthResponse>> registerUser(
+    public ResponseEntity<ApiResponse<RegisterResponse>> register(
             @Valid @RequestBody RegisterRequest request) {
         
         log.info("User registration request for username: {}", request.getUsername());
 
-        JwtAuthResponse authResponse = authService.registerUser(request);
+        RegisterResponse response = authService.registerUser(request);
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(
                         "User registered successfully",
-                        "Your account has been created successfully. You can now use the provided token for authentication.",
-                        authResponse
+                        "Account created successfully. Please verify your email.",
+                        response
                 ));
     }
 
     /**
-     * Login user
+     * User Login with Device Info
      * POST /api/auth/login
      */
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<JwtAuthResponse>> loginUser(
+    public ResponseEntity<ApiResponse<JwtAuthResponseV2>> login(
             @Valid @RequestBody LoginRequest request) {
         
-        log.info("Login request for user: {}", request.getUsernameOrEmail());
-
-        JwtAuthResponse authResponse = authService.loginUser(request);
+        log.info("Login attempt for user: {}", request.getUsernameOrEmail());
+        
+        JwtAuthResponseV2 authResponse = authService.loginUser(request);
 
         return ResponseEntity.ok(ApiResponse.success(
                 "Login successful",
-                "You have been successfully authenticated. Use the access token for API requests and the refresh token to get new access tokens.",
+                "Authentication completed successfully",
                 authResponse
         ));
     }
 
     /**
-     * Refresh access token
+     * Token Refresh
      * POST /api/auth/refresh-token
      */
     @PostMapping("/refresh-token")
-    public ResponseEntity<ApiResponse<JwtAuthResponse>> refreshToken(
+    public ResponseEntity<ApiResponse<JwtAuthResponseV2>> refreshToken(
             @Valid @RequestBody RefreshTokenRequest request) {
         
         log.info("Token refresh request");
 
-        JwtAuthResponse authResponse = authService.refreshToken(request);
+        JwtAuthResponseV2 authResponse = authService.refreshToken(request);
 
         return ResponseEntity.ok(ApiResponse.success(
                 "Token refreshed successfully",
-                "New access and refresh tokens have been generated.",
+                "New access and refresh tokens have been generated",
                 authResponse
         ));
     }
 
     /**
-     * Validate token
+     * Token Validation
      * POST /api/auth/validate-token
      */
     @PostMapping("/validate-token")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> validateToken(
+    public ResponseEntity<ApiResponse<TokenValidationResponse>> validateToken(
             HttpServletRequest request) {
         
         String token = extractTokenFromRequest(request);
@@ -119,10 +101,9 @@ public class AuthController {
                     ));
         }
 
-        Map<String, Object> validationResult = authService.validateToken(token);
-        boolean isValid = (Boolean) validationResult.get("valid");
+        TokenValidationResponse validationResult = authService.validateToken(token);
 
-        if (isValid) {
+        if (validationResult.isValid()) {
             return ResponseEntity.ok(ApiResponse.success(
                     "Token validation completed",
                     "Token is valid and active",
@@ -132,19 +113,18 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error(
                             "Token validation failed",
-                            "Token is invalid or expired",
-                            validationResult
+                            "Token is invalid or expired"
                     ));
         }
     }
 
     /**
-     * Forgot password - initiate password reset
+     * Forgot Password
      * POST /api/auth/forgot-password
      */
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<Object>> forgotPassword(
-            @Valid @RequestBody ForgotPasswordRequest request) {
+            @Valid @RequestBody ForgotPasswordRequestV2 request) {
         
         log.info("Forgot password request for username: {}", request.getUsername());
 
@@ -157,12 +137,12 @@ public class AuthController {
     }
 
     /**
-     * Reset password using OTP
+     * Reset Password with OTP
      * POST /api/auth/reset-password
      */
     @PostMapping("/reset-password")
     public ResponseEntity<ApiResponse<Object>> resetPassword(
-            @Valid @RequestBody ResetPasswordRequest request) {
+            @Valid @RequestBody ResetPasswordRequestV2 request) {
         
         log.info("Password reset request for username: {}", request.getUsername());
 
@@ -175,76 +155,65 @@ public class AuthController {
     }
 
     /**
-     * Logout (placeholder - JWT is stateless)
+     * Logout
      * POST /api/auth/logout
      */
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Object>> logout(HttpServletRequest request) {
+        String token = extractTokenFromRequest(request);
         log.info("Logout request");
 
-        // In a stateless JWT system, logout is typically handled on the client side
-        // by simply discarding the token. However, you could implement token blacklisting here.
-        
+        authService.logout(token);
+
         return ResponseEntity.ok(ApiResponse.success(
                 "Logout successful",
-                "You have been logged out successfully. Please discard your tokens."
+                "You have been logged out successfully."
         ));
     }
 
     /**
-     * Check if username is available
+     * Check Username Availability
      * GET /api/auth/check-username/{username}
      */
     @GetMapping("/check-username/{username}")
     public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkUsernameAvailability(
             @PathVariable String username) {
         
-        log.debug("Checking username availability: {}", username);
+        log.info("Checking username availability: {}", username);
 
-        // This would typically be handled by a separate service method
-        // For now, we'll use a simple approach
-        boolean isAvailable = !authService.hasRole(null); // Placeholder logic
-        
-        Map<String, Boolean> availability = Map.of(
-                "available", isAvailable,
-                "username", username.equals(username) // Placeholder
-        );
+        boolean isAvailable = authService.isUsernameAvailable(username);
+        Map<String, Boolean> result = Map.of("available", isAvailable);
 
         return ResponseEntity.ok(ApiResponse.success(
                 "Username availability checked",
                 isAvailable ? "Username is available" : "Username is already taken",
-                availability
+                result
         ));
     }
 
     /**
-     * Check if email is available
+     * Check Email Availability
      * GET /api/auth/check-email/{email}
      */
     @GetMapping("/check-email/{email}")
     public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkEmailAvailability(
             @PathVariable String email) {
         
-        log.debug("Checking email availability: {}", email);
+        log.info("Checking email availability: {}", email);
 
-        // This would typically be handled by a separate service method
-        // For now, we'll use a simple approach
-        boolean isAvailable = true; // Placeholder logic
-        
-        Map<String, Boolean> availability = Map.of(
-                "available", isAvailable,
-                "email", email.equals(email) // Placeholder
-        );
+        boolean isAvailable = authService.isEmailAvailable(email);
+        Map<String, Boolean> result = Map.of("available", isAvailable);
 
         return ResponseEntity.ok(ApiResponse.success(
                 "Email availability checked",
                 isAvailable ? "Email is available" : "Email is already registered",
-                availability
+                result
         ));
     }
 
-    // Private helper methods
-
+    /**
+     * Extract JWT token from Authorization header
+     */
     private String extractTokenFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {

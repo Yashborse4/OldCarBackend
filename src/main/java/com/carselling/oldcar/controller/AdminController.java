@@ -3,6 +3,7 @@ package com.carselling.oldcar.controller;
 import com.carselling.oldcar.dto.admin.ChangeRoleRequest;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.dto.user.UserResponse;
+import com.carselling.oldcar.dto.SystemStatistics;
 import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.service.AdminService;
 import jakarta.validation.Valid;
@@ -159,10 +160,10 @@ public class AdminController {
      * GET /api/admin/statistics
      */
     @GetMapping("/statistics")
-    public ResponseEntity<ApiResponse<AdminService.SystemStatistics>> getSystemStatistics() {
+    public ResponseEntity<ApiResponse<SystemStatistics>> getSystemStatistics() {
         log.info("Admin retrieving system statistics");
 
-        AdminService.SystemStatistics statistics = adminService.getSystemStatistics();
+        SystemStatistics statistics = adminService.getSystemStatistics();
 
         return ResponseEntity.ok(ApiResponse.success(
                 "System statistics retrieved successfully",
@@ -310,7 +311,7 @@ public class AdminController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> getDashboardSummary() {
         log.info("Admin retrieving dashboard summary");
 
-        AdminService.SystemStatistics stats = adminService.getSystemStatistics();
+        SystemStatistics stats = adminService.getSystemStatistics();
 
         Map<String, Object> dashboard = Map.of(
                 "systemStatistics", stats,

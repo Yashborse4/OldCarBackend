@@ -25,5 +25,6 @@ public class ResetPasswordRequest {
     )
     private String newPassword;
     
+    @Builder.Default
     private boolean forceChangeOnLogin = true; // Force user to change password on next login
 }

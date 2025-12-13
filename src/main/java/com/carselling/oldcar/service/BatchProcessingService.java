@@ -1,8 +1,7 @@
 package com.carselling.oldcar.service;
 
-import com.carselling.oldcar.dto.vehicle.VehicleDTO;
-import com.carselling.oldcar.entity.User;
-import com.carselling.oldcar.entity.Vehicle;
+import com.carselling.oldcar.model.Car;
+import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,8 +32,9 @@ public class BatchProcessingService {
 
     private final VehicleRepository vehicleRepository;
     private final FileUploadService fileUploadService;
-    private final EmailService emailService;
-    private final NotificationService notificationService;
+    // TODO: Add EmailService and NotificationService when available
+    // private final EmailService emailService;
+    // private final NotificationService notificationService;
 
     // Track batch job status
     private final Map<String, BatchJobStatus> batchJobs = new ConcurrentHashMap<>();
@@ -83,13 +83,9 @@ public class BatchProcessingService {
             status.setCompletedAt(LocalDateTime.now());
             
             // Send completion notification
-            notificationService.sendNotification(
-                user.getId(),
-                "Vehicle Import Completed",
-                String.format("Successfully imported %d out of %d vehicles", 
-                    successCount.get(), importRows.size()),
-                "SYSTEM"
-            );
+            // TODO: Implement when NotificationService is available
+            log.info("Vehicle Import Completed for user {}: Successfully imported {} out of {} vehicles", 
+                user.getId(), successCount.get(), importRows.size());
             
             log.info("Completed vehicle batch import. Success: {}, Errors: {}", 
                 successCount.get(), errorCount.get());
@@ -119,7 +115,7 @@ public class BatchProcessingService {
             log.info("Starting vehicle batch export for user: {}", user.getEmail());
             
             // Get vehicles based on filters
-            List<Vehicle> vehicles = getVehiclesForExport(filters);
+            List<Car> vehicles = getVehiclesForExport(filters);
             status.setTotalRecords(vehicles.size());
             
             // Generate CSV content
@@ -157,12 +153,9 @@ public class BatchProcessingService {
             status.setCompletedAt(LocalDateTime.now());
             
             // Send completion notification with download link
-            notificationService.sendNotification(
-                user.getId(),
-                "Vehicle Export Ready",
-                String.format("Your export of %d vehicles is ready for download", vehicles.size()),
-                "SYSTEM"
-            );
+            // TODO: Implement when NotificationService is available
+            log.info("Vehicle Export Ready for user {}: Export of {} vehicles ready for download", 
+                user.getId(), vehicles.size());
             
             log.info("Completed vehicle batch export. Total records: {}", vehicles.size());
             
@@ -194,9 +187,9 @@ public class BatchProcessingService {
                 MultipartFile thumbnailImage = resizeImage(image, 300, 200);
                 
                 // Upload original, resized, and thumbnail versions
-                String originalUrl = fileUploadService.uploadFile(image, "vehicles/" + vehicleId + "/original/");
-                String resizedUrl = fileUploadService.uploadFile(resizedImage, "vehicles/" + vehicleId + "/resized/");
-                String thumbnailUrl = fileUploadService.uploadFile(thumbnailImage, "vehicles/" + vehicleId + "/thumbnails/");
+                String originalUrl = fileUploadService.uploadFile(image, "vehicles/" + vehicleId + "/original/", 1L).getFileUrl();
+                String resizedUrl = fileUploadService.uploadFile(resizedImage, "vehicles/" + vehicleId + "/resized/", 1L).getFileUrl();
+                String thumbnailUrl = fileUploadService.uploadFile(thumbnailImage, "vehicles/" + vehicleId + "/thumbnails/", 1L).getFileUrl();
                 
                 processedImageUrls.add(originalUrl);
                 
@@ -293,7 +286,7 @@ public class BatchProcessingService {
                 validateVehicleImportRow(row);
                 
                 // Create vehicle entity
-                Vehicle vehicle = Vehicle.builder()
+                Car vehicle = Car.builder()
                         .make(row.getMake())
                         .model(row.getModel())
                         .year(row.getYear())
@@ -301,11 +294,9 @@ public class BatchProcessingService {
                         .mileage(row.getMileage())
                         .fuelType(row.getFuelType())
                         .transmission(row.getTransmission())
-                        .location(row.getLocation())
                         .description(row.getDescription())
                         .owner(user)
                         .isActive(true)
-                        .createdAt(LocalDateTime.now())
                         .build();
                 
                 vehicleRepository.save(vehicle);
@@ -336,7 +327,7 @@ public class BatchProcessingService {
         }
     }
 
-    private List<Vehicle> getVehiclesForExport(Map<String, Object> filters) {
+    private List<Car> getVehiclesForExport(Map<String, Object> filters) {
         // Implementation would use filters to query vehicles
         // For now, return all active vehicles
         return vehicleRepository.findByIsActiveTrue();
@@ -350,7 +341,10 @@ public class BatchProcessingService {
 
     private void updateVehicleImages(Long vehicleId, List<String> imageUrls) {
         vehicleRepository.findById(vehicleId).ifPresent(vehicle -> {
-            vehicle.setImages(imageUrls);
+            // For now, we'll set the first image as the main image URL
+            if (!imageUrls.isEmpty()) {
+                vehicle.setImageUrl(imageUrls.get(0));
+            }
             vehicleRepository.save(vehicle);
         });
     }

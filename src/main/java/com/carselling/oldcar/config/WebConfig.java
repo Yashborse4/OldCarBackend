@@ -1,7 +1,7 @@
 package com.carselling.oldcar.config;
 
 import com.carselling.oldcar.interceptor.PerformanceInterceptor;
-import com.carselling.oldcar.interceptor.RateLimitInterceptor;
+import com.carselling.oldcar.interceptor.RateLimitingInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -14,19 +14,19 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
 
-    private final RateLimitInterceptor rateLimitInterceptor;
+    private final RateLimitingInterceptor rateLimitingInterceptor;
     private final PerformanceInterceptor performanceInterceptor;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         // Register rate limiting interceptor
-        registry.addInterceptor(rateLimitInterceptor)
+        registry.addInterceptor(rateLimitingInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
-                    "/api/health/**",
-                    "/api/docs/**",
-                    "/api-docs/**",
-                    "/swagger-ui/**"
+                    "/api/auth/**",
+                    "/actuator/health",
+                    "/swagger-ui/**",
+                    "/v3/api-docs/**"
                 );
 
         // Register performance monitoring interceptor

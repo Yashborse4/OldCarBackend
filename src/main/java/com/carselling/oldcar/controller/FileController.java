@@ -3,6 +3,7 @@ package com.carselling.oldcar.controller;
 import com.carselling.oldcar.dto.file.FileUploadResponse;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.service.FileUploadService;
+import com.carselling.oldcar.service.FileValidationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -19,12 +20,12 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/files")
-@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 @Slf4j
 public class FileController {
 
     private final FileUploadService fileUploadService;
+    private final FileValidationService fileValidationService;
 
     /**
      * Upload single file
@@ -37,9 +38,16 @@ public class FileController {
         try {
             User currentUser = (User) authentication.getPrincipal();
             
+            // Validate file
+            fileValidationService.validateFile(file);
+            
             FileUploadResponse response = fileUploadService.uploadFile(file, folder, currentUser.getId());
             
             return ResponseEntity.ok(response);
+        } catch (SecurityException e) {
+            log.warn("Security validation failed for file upload: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "File validation failed", "message", e.getMessage()));
         } catch (Exception e) {
             log.error("Error uploading file: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -58,6 +66,9 @@ public class FileController {
         try {
             User currentUser = (User) authentication.getPrincipal();
             
+            // Validate files
+            fileValidationService.validateFiles(files);
+            
             List<FileUploadResponse> responses = fileUploadService.uploadMultipleFiles(files, folder, currentUser.getId());
             
             return ResponseEntity.ok(Map.of(
@@ -66,6 +77,10 @@ public class FileController {
                 "totalFiles", files.size(),
                 "successfulUploads", responses.size()
             ));
+        } catch (SecurityException e) {
+            log.warn("Security validation failed for multiple file upload: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "File validation failed", "message", e.getMessage()));
         } catch (Exception e) {
             log.error("Error uploading multiple files: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

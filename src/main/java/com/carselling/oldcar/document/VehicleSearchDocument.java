@@ -156,7 +156,7 @@ public class VehicleSearchDocument {
     @Field(type = FieldType.Text, analyzer = "keyword")
     private String searchableText; // Combined searchable content
 
-    @Field(type = FieldType.Completion)
+    @CompletionField
     private CompletionSuggestion suggest;
 
     @Data

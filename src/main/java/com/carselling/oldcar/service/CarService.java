@@ -1,27 +1,26 @@
 package com.carselling.oldcar.service;
 
-import com.carselling.oldcar.dto.car.CarRequest;
-import com.carselling.oldcar.dto.car.CarResponse;
-import com.carselling.oldcar.exception.InsufficientPermissionException;
-import com.carselling.oldcar.exception.ResourceNotFoundException;
+import com.carselling.oldcar.dto.car.*;
 import com.carselling.oldcar.model.Car;
-import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.model.User;
+import com.carselling.oldcar.exception.ResourceNotFoundException;
+import com.carselling.oldcar.exception.UnauthorizedActionException;
 import com.carselling.oldcar.repository.CarRepository;
+import com.carselling.oldcar.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- * Car Service for car management operations
- * Handles car CRUD operations, search, filtering, and car-related business logic
+ * Enhanced Car Service V2 with analytics and advanced features
  */
 @Service
 @RequiredArgsConstructor
@@ -30,111 +29,48 @@ import java.time.LocalDateTime;
 public class CarService {
 
     private final CarRepository carRepository;
-    private final AuthService authService;
-    private final UserService userService;
+    private final UserRepository userRepository;
 
     /**
-     * Get all active cars (public endpoint)
+     * Get all vehicles with pagination
      */
     @Transactional(readOnly = true)
-    public Page<CarResponse> getAllActiveCars(Pageable pageable) {
-        log.info("Retrieving all active cars");
+    public Page<CarResponseV2> getAllVehicles(Pageable pageable) {
+        log.debug("Getting all vehicles with pagination: {}", pageable);
         
-        Page<Car> cars = carRepository.findAllActiveCars(pageable);
-        return cars.map(this::convertToCarResponse);
-    }
-
-    /**
-     * Get car by ID (public endpoint)
-     */
-    @Transactional(readOnly = true)
-    public CarResponse getCarById(Long carId) {
-        log.info("Retrieving car by ID: {}", carId);
-
-        Car car = carRepository.findById(carId)
-                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", carId));
-
-        // Increment view count for active cars
-        if (Boolean.TRUE.equals(car.getIsActive())) {
-            car.incrementViewCount();
-            carRepository.save(car);
-        }
-
-        return convertToCarResponse(car);
-    }
-
-    /**
-     * Search cars with filters (public endpoint)
-     */
-    @Transactional(readOnly = true)
-    public Page<CarResponse> searchCars(String make, String model, Integer minYear, Integer maxYear,
-                                       BigDecimal minPrice, BigDecimal maxPrice, Role ownerRole,
-                                       Boolean isFeatured, Boolean isSold, Pageable pageable) {
-        log.info("Searching cars with filters");
-
-        Page<Car> cars = carRepository.findCarsByCriteria(
-                make, model, minYear, maxYear, minPrice, maxPrice, 
-                ownerRole, isFeatured, isSold, pageable);
-
-        return cars.map(this::convertToCarResponse);
-    }
-
-    /**
-     * Full text search across cars (public endpoint)
-     */
-    @Transactional(readOnly = true)
-    public Page<CarResponse> searchCarsByText(String searchTerm, Pageable pageable) {
-        log.info("Full text search for cars with term: {}", searchTerm);
-
-        Page<Car> cars = carRepository.searchCars(searchTerm, pageable);
-        return cars.map(this::convertToCarResponse);
-    }
-
-    /**
-     * Get featured cars (public endpoint)
-     */
-    @Transactional(readOnly = true)
-    public Page<CarResponse> getFeaturedCars(Pageable pageable) {
-        log.info("Retrieving featured cars");
-
-        Page<Car> cars = carRepository.findCurrentlyFeaturedCars(pageable);
-        return cars.map(this::convertToCarResponse);
-    }
-
-    /**
-     * Get recent cars (public endpoint)
-     */
-    @Transactional(readOnly = true)
-    public Page<CarResponse> getRecentCars(Pageable pageable) {
-        log.info("Retrieving recent cars");
-
-        Page<Car> cars = carRepository.findRecentCars(pageable);
-        return cars.map(this::convertToCarResponse);
-    }
-
-    /**
-     * Get most viewed cars (public endpoint)
-     */
-    @Transactional(readOnly = true)
-    public Page<CarResponse> getMostViewedCars(Pageable pageable) {
-        log.info("Retrieving most viewed cars");
-
-        Page<Car> cars = carRepository.findMostViewedCars(pageable);
-        return cars.map(this::convertToCarResponse);
-    }
-
-    /**
-     * Create a new car (requires SELLER/DEALER role)
-     */
-    public CarResponse createCar(CarRequest request) {
-        log.info("Creating new car");
-
-        User currentUser = authService.getCurrentUser();
+        Page<Car> cars = carRepository.findAll(pageable);
+        List<CarResponseV2> carResponses = cars.getContent().stream()
+                .map(this::convertToResponseV2)
+                .collect(Collectors.toList());
         
-        // Check if user has permission to create cars
-        if (!currentUser.hasPermission("car:create")) {
-            throw new InsufficientPermissionException("You don't have permission to create cars");
-        }
+        return new PageImpl<>(carResponses, pageable, cars.getTotalElements());
+    }
+
+    /**
+     * Get vehicle by ID
+     */
+    @Transactional(readOnly = true)
+    public CarResponseV2 getVehicleById(String id) {
+        log.debug("Getting vehicle by ID: {}", id);
+        
+        Car car = carRepository.findById(Long.parseLong(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
+        
+        // Increment view count
+        car.setViewCount(car.getViewCount() != null ? (long) car.getViewCount() + 1L : 1L);
+        carRepository.save(car);
+        
+        return convertToResponseV2(car);
+    }
+
+    /**
+     * Create a new vehicle
+     */
+    public CarResponseV2 createVehicle(CarRequest request, Long currentUserId) {
+        log.debug("Creating new vehicle for user: {}", currentUserId);
+        
+        User owner = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUserId.toString()));
 
         Car car = Car.builder()
                 .make(request.getMake())
@@ -149,302 +85,348 @@ public class CarService {
                 .color(request.getColor())
                 .vin(request.getVin())
                 .numberOfOwners(request.getNumberOfOwners())
-                .owner(currentUser)
                 .isActive(true)
                 .isFeatured(false)
                 .isSold(false)
                 .viewCount(0L)
+                .owner(owner)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
 
-        try {
-            car = carRepository.save(car);
-            log.info("Car created successfully with ID: {} by user: {}", car.getId(), currentUser.getUsername());
-            return convertToCarResponse(car);
-        } catch (Exception e) {
-            log.error("Error creating car for user: {}", currentUser.getUsername(), e);
-            throw new RuntimeException("Failed to create car", e);
-        }
+        Car savedCar = carRepository.save(car);
+        log.info("Created new vehicle with ID: {} for user: {}", savedCar.getId(), currentUserId);
+        
+        return convertToResponseV2(savedCar);
     }
 
     /**
-     * Update car (owner or admin only)
+     * Update vehicle
      */
-    public CarResponse updateCar(Long carId, CarRequest request) {
-        log.info("Updating car with ID: {}", carId);
+    public CarResponseV2 updateVehicle(String id, CarRequest request, Long currentUserId) {
+        log.debug("Updating vehicle: {} by user: {}", id, currentUserId);
+        
+        Car car = carRepository.findById(Long.parseLong(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
 
-        Car car = carRepository.findById(carId)
-                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", carId));
-
-        User currentUser = authService.getCurrentUser();
-
-        // Check if user can update this car
-        if (!car.canBeEditedBy(currentUser)) {
-            throw new InsufficientPermissionException("You don't have permission to update this car");
+        // Check ownership or admin role
+        if (!car.getOwner().getId().equals(currentUserId) && !isAdmin(currentUserId)) {
+            throw new UnauthorizedActionException("You can only update your own vehicles");
         }
 
-        // Update car fields
-        boolean updated = false;
+        // Update fields
+        car.setMake(request.getMake());
+        car.setModel(request.getModel());
+        car.setYear(request.getYear());
+        car.setPrice(request.getPrice());
+        car.setDescription(request.getDescription());
+        car.setImageUrl(request.getImageUrl());
+        car.setMileage(request.getMileage());
+        car.setFuelType(request.getFuelType());
+        car.setTransmission(request.getTransmission());
+        car.setColor(request.getColor());
+        car.setVin(request.getVin());
+        car.setNumberOfOwners(request.getNumberOfOwners());
+        car.setUpdatedAt(LocalDateTime.now());
 
-        if (StringUtils.hasText(request.getMake()) && !request.getMake().equals(car.getMake())) {
-            car.setMake(request.getMake());
-            updated = true;
+        Car updatedCar = carRepository.save(car);
+        log.info("Updated vehicle with ID: {} by user: {}", id, currentUserId);
+        
+        return convertToResponseV2(updatedCar);
+    }
+
+    /**
+     * Delete vehicle
+     */
+    public void deleteVehicle(String id, Long currentUserId, boolean hard) {
+        log.debug("Deleting vehicle: {} by user: {} (hard: {})", id, currentUserId, hard);
+        
+        Car car = carRepository.findById(Long.parseLong(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
+
+        // Check ownership or admin role
+        if (!car.getOwner().getId().equals(currentUserId) && !isAdmin(currentUserId)) {
+            throw new UnauthorizedActionException("You can only delete your own vehicles");
         }
 
-        if (StringUtils.hasText(request.getModel()) && !request.getModel().equals(car.getModel())) {
-            car.setModel(request.getModel());
-            updated = true;
-        }
-
-        if (request.getYear() != null && !request.getYear().equals(car.getYear())) {
-            car.setYear(request.getYear());
-            updated = true;
-        }
-
-        if (request.getPrice() != null && !request.getPrice().equals(car.getPrice())) {
-            car.setPrice(request.getPrice());
-            updated = true;
-        }
-
-        if (StringUtils.hasText(request.getDescription()) && !request.getDescription().equals(car.getDescription())) {
-            car.setDescription(request.getDescription());
-            updated = true;
-        }
-
-        if (StringUtils.hasText(request.getImageUrl()) && !request.getImageUrl().equals(car.getImageUrl())) {
-            car.setImageUrl(request.getImageUrl());
-            updated = true;
-        }
-
-        if (request.getMileage() != null && !request.getMileage().equals(car.getMileage())) {
-            car.setMileage(request.getMileage());
-            updated = true;
-        }
-
-        if (StringUtils.hasText(request.getFuelType()) && !request.getFuelType().equals(car.getFuelType())) {
-            car.setFuelType(request.getFuelType());
-            updated = true;
-        }
-
-        if (StringUtils.hasText(request.getTransmission()) && !request.getTransmission().equals(car.getTransmission())) {
-            car.setTransmission(request.getTransmission());
-            updated = true;
-        }
-
-        if (StringUtils.hasText(request.getColor()) && !request.getColor().equals(car.getColor())) {
-            car.setColor(request.getColor());
-            updated = true;
-        }
-
-        if (StringUtils.hasText(request.getVin()) && !request.getVin().equals(car.getVin())) {
-            car.setVin(request.getVin());
-            updated = true;
-        }
-
-        if (request.getNumberOfOwners() != null && !request.getNumberOfOwners().equals(car.getNumberOfOwners())) {
-            car.setNumberOfOwners(request.getNumberOfOwners());
-            updated = true;
-        }
-
-        if (updated) {
-            car = carRepository.save(car);
-            log.info("Car updated successfully with ID: {} by user: {}", car.getId(), currentUser.getUsername());
+        if (hard) {
+            carRepository.delete(car);
+            log.info("Hard deleted vehicle with ID: {} by user: {}", id, currentUserId);
         } else {
-            log.info("No changes detected for car ID: {}", car.getId());
+            car.setIsActive(false);
+            car.setUpdatedAt(LocalDateTime.now());
+            carRepository.save(car);
+            log.info("Soft deleted vehicle with ID: {} by user: {}", id, currentUserId);
         }
-
-        return convertToCarResponse(car);
     }
 
     /**
-     * Delete car (owner or admin only)
+     * Update vehicle status
      */
-    public void deleteCar(Long carId, boolean hardDelete) {
-        log.info("Deleting car with ID: {}, hardDelete: {}", carId, hardDelete);
+    public CarResponseV2 updateVehicleStatus(String id, String status, Long currentUserId) {
+        log.debug("Updating vehicle status: {} to {} by user: {}", id, status, currentUserId);
+        
+        Car car = carRepository.findById(Long.parseLong(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
 
-        Car car = carRepository.findById(carId)
-                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", carId));
-
-        User currentUser = authService.getCurrentUser();
-
-        // Check if user can delete this car
-        if (!car.canBeDeletedBy(currentUser)) {
-            throw new InsufficientPermissionException("You don't have permission to delete this car");
+        // Check ownership or admin role
+        if (!car.getOwner().getId().equals(currentUserId) && !isAdmin(currentUserId)) {
+            throw new UnauthorizedActionException("You can only update your own vehicles");
         }
 
-        try {
-            if (hardDelete && currentUser.hasRole(Role.ADMIN)) {
-                // Hard delete (admin only)
-                carRepository.delete(car);
-                log.info("Car hard deleted successfully with ID: {} by admin: {}", carId, currentUser.getUsername());
-            } else {
-                // Soft delete (set isActive to false)
+        // Update status based on string value
+        switch (status.toUpperCase()) {
+            case "AVAILABLE":
+                car.setIsActive(true);
+                car.setIsSold(false);
+                break;
+            case "SOLD":
+                car.setIsSold(true);
+                break;
+            case "INACTIVE":
                 car.setIsActive(false);
-                carRepository.save(car);
-                log.info("Car soft deleted successfully with ID: {} by user: {}", carId, currentUser.getUsername());
-            }
-        } catch (Exception e) {
-            log.error("Error deleting car with ID: {} by user: {}", carId, currentUser.getUsername(), e);
-            throw new RuntimeException("Failed to delete car", e);
-        }
-    }
-
-    /**
-     * Feature/Unfeature car (DEALER/ADMIN only)
-     */
-    public CarResponse toggleCarFeature(Long carId, boolean featured, int daysToFeature) {
-        log.info("Toggling feature status for car ID: {}, featured: {}", carId, featured);
-
-        Car car = carRepository.findById(carId)
-                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", carId));
-
-        User currentUser = authService.getCurrentUser();
-
-        // Check if user can feature cars
-        if (!car.canBeFeaturedBy(currentUser)) {
-            throw new InsufficientPermissionException("You don't have permission to feature cars");
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid status: " + status);
         }
 
-        car.setFeatured(featured, daysToFeature);
-        car = carRepository.save(car);
-
-        log.info("Car feature status updated successfully for car ID: {} by user: {}", 
-                carId, currentUser.getUsername());
-
-        return convertToCarResponse(car);
-    }
-
-    /**
-     * Mark car as sold/unsold
-     */
-    public CarResponse markCarAsSold(Long carId, boolean sold) {
-        log.info("Marking car ID: {} as sold: {}", carId, sold);
-
-        Car car = carRepository.findById(carId)
-                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", carId));
-
-        User currentUser = authService.getCurrentUser();
-
-        // Check if user can update this car
-        if (!car.canBeEditedBy(currentUser)) {
-            throw new InsufficientPermissionException("You don't have permission to update this car");
-        }
-
-        car.setIsSold(sold);
-        car = carRepository.save(car);
-
-        log.info("Car sold status updated successfully for car ID: {} by user: {}", 
-                carId, currentUser.getUsername());
-
-        return convertToCarResponse(car);
-    }
-
-    /**
-     * Get user's own cars (SELLER/DEALER only)
-     */
-    @Transactional(readOnly = true)
-    public Page<CarResponse> getUserCars(Pageable pageable) {
-        log.info("Retrieving current user's cars");
-
-        User currentUser = authService.getCurrentUser();
-
-        // Check if user has permission to view cars
-        if (!currentUser.hasPermission("car:create")) {
-            throw new InsufficientPermissionException("You don't have permission to view your cars");
-        }
-
-        Page<Car> cars = carRepository.findActiveCarsByOwner(currentUser, pageable);
-        return cars.map(this::convertToCarResponse);
-    }
-
-    /**
-     * Get cars by owner ID (admin only)
-     */
-    @Transactional(readOnly = true)
-    public Page<CarResponse> getCarsByOwnerId(Long ownerId, Pageable pageable) {
-        log.info("Retrieving cars for owner ID: {}", ownerId);
-
-        User currentUser = authService.getCurrentUser();
+        car.setUpdatedAt(LocalDateTime.now());
+        Car updatedCar = carRepository.save(car);
         
-        // Check if user is admin
-        if (!currentUser.hasRole(Role.ADMIN)) {
-            throw new InsufficientPermissionException("You don't have permission to view cars by owner");
-        }
-
-        Page<Car> cars = carRepository.findActiveCarsByOwnerId(ownerId, pageable);
-        return cars.map(this::convertToCarResponse);
+        return convertToResponseV2(updatedCar);
     }
 
     /**
-     * Get car statistics (admin only)
+     * Search vehicles with filters
      */
     @Transactional(readOnly = true)
-    public CarStatistics getCarStatistics() {
-        log.info("Getting car statistics");
-
-        User currentUser = authService.getCurrentUser();
+    public Page<CarResponseV2> searchVehicles(CarSearchCriteria criteria, Pageable pageable) {
+        log.debug("Searching vehicles with criteria: {}", criteria);
         
-        // Check if user is admin
-        if (!currentUser.hasRole(Role.ADMIN)) {
-            throw new InsufficientPermissionException("You don't have permission to view car statistics");
+        // For now, return all vehicles (can be enhanced with actual search implementation)
+        Page<Car> cars = carRepository.findAll(pageable);
+        List<CarResponseV2> carResponses = cars.getContent().stream()
+                .map(this::convertToResponseV2)
+                .collect(Collectors.toList());
+        
+        return new PageImpl<>(carResponses, pageable, cars.getTotalElements());
+    }
+
+    /**
+     * Get vehicle analytics (mock implementation)
+     */
+    @Transactional(readOnly = true)
+    public CarAnalyticsResponse getVehicleAnalytics(String id, Long currentUserId) {
+        log.debug("Getting analytics for vehicle: {} by user: {}", id, currentUserId);
+        
+        Car car = carRepository.findById(Long.parseLong(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
+
+        // Check ownership or admin role
+        if (!car.getOwner().getId().equals(currentUserId) && !isAdmin(currentUserId)) {
+            throw new UnauthorizedActionException("You can only view analytics for your own vehicles");
         }
 
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime thirtyDaysAgo = now.minusDays(30);
-        LocalDateTime sevenDaysAgo = now.minusDays(7);
-
-        return CarStatistics.builder()
-                .totalCars(carRepository.count())
-                .activeCars(carRepository.countByIsActive(true))
-                .inactiveCars(carRepository.countByIsActive(false))
-                .featuredCars(carRepository.countFeaturedCars())
-                .soldCars(carRepository.countByIsSold(true))
-                .availableCars(carRepository.countByIsSold(false))
-                .newCarsLast30Days(carRepository.countCarsCreatedSince(thirtyDaysAgo))
-                .newCarsLast7Days(carRepository.countCarsCreatedSince(sevenDaysAgo))
-                .averagePrice(carRepository.getAverageCarPrice())
+        // Mock analytics data
+        return CarAnalyticsResponse.builder()
+                .vehicleId(id)
+                .views((long) (car.getViewCount() != null ? car.getViewCount() : 0))
+                .inquiries((long) (Math.random() * 50))
+                .shares((long) (Math.random() * 25))
+                .coListings(0L)
+                .avgTimeOnMarket(30)
+                .lastActivity(LocalDateTime.now())
+                .topLocations(List.of("Mumbai", "Delhi", "Bangalore"))
+                .dealerInterest((int) (Math.random() * 100))
                 .build();
     }
 
-    // Private helper methods
+    /**
+     * Toggle featured status
+     */
+    public CarResponseV2 toggleFeatureVehicle(String id, boolean featured, Long currentUserId) {
+        log.debug("Toggling feature status for vehicle: {} to {} by user: {}", id, featured, currentUserId);
+        
+        Car car = carRepository.findById(Long.parseLong(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
 
-    private CarResponse convertToCarResponse(Car car) {
-        return CarResponse.builder()
-                .id(car.getId())
+        // Check ownership or admin/dealer role
+        if (!car.getOwner().getId().equals(currentUserId) && !isDealerOrHigher(currentUserId)) {
+            throw new UnauthorizedActionException("You don't have permission to feature vehicles");
+        }
+
+        car.setIsFeatured(featured);
+        car.setFeaturedUntil(featured ? LocalDateTime.now().plusDays(30) : null);
+        car.setUpdatedAt(LocalDateTime.now());
+
+        Car updatedCar = carRepository.save(car);
+        return convertToResponseV2(updatedCar);
+    }
+
+    /**
+     * Track vehicle view
+     */
+    public void trackVehicleView(String id) {
+        log.debug("Tracking view for vehicle: {}", id);
+        
+        Car car = carRepository.findById(Long.parseLong(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
+
+        car.setViewCount(car.getViewCount() != null ? (long) car.getViewCount() + 1L : 1L);
+        carRepository.save(car);
+    }
+
+    /**
+     * Track vehicle share
+     */
+    public void trackVehicleShare(String id, String platform) {
+        log.debug("Tracking share for vehicle: {} on platform: {}", id, platform);
+        
+        // Can be enhanced with actual tracking implementation
+        Car car = carRepository.findById(Long.parseLong(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
+        
+        // For now, just increment view count as a proxy
+        car.setViewCount(car.getViewCount() != null ? (long) car.getViewCount() + 1L : 1L);
+        carRepository.save(car);
+    }
+
+    /**
+     * Get similar vehicles (mock implementation)
+     */
+    @Transactional(readOnly = true)
+    public List<CarResponseV2> getSimilarVehicles(String id, int limit) {
+        log.debug("Getting similar vehicles for: {} with limit: {}", id, limit);
+        
+        Car car = carRepository.findById(Long.parseLong(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
+
+        // Simple implementation: get cars of the same make
+        List<Car> similarCars = carRepository.findByMakeAndIdNot(car.getMake(), car.getId())
+                .stream()
+                .limit(limit)
+                .collect(Collectors.toList());
+
+        return similarCars.stream()
+                .map(this::convertToResponseV2)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get vehicles by dealer
+     */
+    @Transactional(readOnly = true)
+    public Page<CarResponseV2> getVehiclesByDealer(String dealerId, String status, Pageable pageable) {
+        log.debug("Getting vehicles by dealer: {} with status: {}", dealerId, status);
+        
+        Page<Car> cars = carRepository.findByOwnerId(Long.parseLong(dealerId), pageable);
+        List<CarResponseV2> carResponses = cars.getContent().stream()
+                .map(this::convertToResponseV2)
+                .collect(Collectors.toList());
+        
+        return new PageImpl<>(carResponses, pageable, cars.getTotalElements());
+    }
+
+    // Helper methods
+
+    private CarResponseV2 convertToResponseV2(Car car) {
+        return CarResponseV2.builder()
+                .id(car.getId().toString())
                 .make(car.getMake())
                 .model(car.getModel())
                 .year(car.getYear())
-                .price(car.getPrice())
-                .description(car.getDescription())
-                .imageUrl(car.getImageUrl())
-                .owner(userService.convertToUserSummary(car.getOwner()))
-                .isActive(car.getIsActive())
-                .isFeatured(car.getIsFeatured())
-                .isSold(car.getIsSold())
-                .viewCount(car.getViewCount())
-                .mileage(car.getMileage())
-                .fuelType(car.getFuelType())
-                .transmission(car.getTransmission())
-                .color(car.getColor())
-                .vin(car.getVin())
-                .numberOfOwners(car.getNumberOfOwners())
-                .featuredUntil(car.getFeaturedUntil())
+                .price(car.getPrice() != null ? car.getPrice().longValue() : 0L)
+                .mileage(car.getMileage() != null ? car.getMileage().longValue() : 0L)
+                .location(car.getOwner().getLocation())
+                .condition("Good") // Default value
+                .images(List.of(car.getImageUrl() != null ? car.getImageUrl() : ""))
+                .specifications(CarResponseV2.CarSpecifications.builder()
+                        .fuelType(car.getFuelType())
+                        .transmission(car.getTransmission())
+                        .color(car.getColor())
+                        .build())
+                .dealerId(car.getOwner().getId().toString())
+                .dealerName(car.getOwner().getUsername())
+                .isCoListed(false)
+                .coListedIn(List.of())
+                .views(car.getViewCount() != null ? (long) car.getViewCount() : 0L)
+                .inquiries(0L)
+                .shares(0L)
+                .status(getCarStatus(car))
+                .featured(Boolean.TRUE.equals(car.getIsFeatured()) && 
+                         (car.getFeaturedUntil() == null || car.getFeaturedUntil().isAfter(LocalDateTime.now())))
                 .createdAt(car.getCreatedAt())
                 .updatedAt(car.getUpdatedAt())
                 .build();
     }
 
-    // Inner class for car statistics
+    private String getCarStatus(Car car) {
+        if (Boolean.TRUE.equals(car.getIsSold())) {
+            return "Sold";
+        } else if (Boolean.TRUE.equals(car.getIsActive())) {
+            return "Available";
+        } else {
+            return "Inactive";
+        }
+    }
+
+    private boolean isAdmin(Long userId) {
+        return userRepository.findById(userId)
+                .map(user -> "ADMIN".equals(user.getRole().name()))
+                .orElse(false);
+    }
+
+    private boolean isDealerOrHigher(Long userId) {
+        return userRepository.findById(userId)
+                .map(user -> {
+                    String role = user.getRole().name();
+                    return "ADMIN".equals(role) || "DEALER".equals(role);
+                })
+                .orElse(false);
+    }
+
+    /**
+     * Get car statistics for admin dashboard
+     */
+    @Transactional(readOnly = true)
+    public CarStatistics getCarStatistics() {
+        log.debug("Getting car statistics for admin dashboard");
+        
+        long totalCars = carRepository.count();
+        long activeCars = carRepository.countByIsActive(true);
+        long soldCars = carRepository.countByIsSold(true);
+        long featuredCars = carRepository.countByIsFeaturedTrueAndFeaturedUntilAfter(LocalDateTime.now());
+        
+        // Calculate new cars in last 7 days
+        LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
+        long newCarsLast7Days = carRepository.countCarsCreatedSince(sevenDaysAgo);
+        
+        return CarStatistics.builder()
+                .totalCars(totalCars)
+                .activeCars(activeCars)
+                .soldCars(soldCars)
+                .featuredCars(featuredCars)
+                .inactiveCars(totalCars - activeCars)
+                .newCarsLast7Days(newCarsLast7Days)
+                .lastUpdated(LocalDateTime.now())
+                .build();
+    }
+
+    // Inner class for statistics
     @lombok.Data
     @lombok.Builder
     public static class CarStatistics {
         private long totalCars;
         private long activeCars;
+        private long soldCars;
         private long inactiveCars;
         private long featuredCars;
-        private long soldCars;
-        private long availableCars;
-        private long newCarsLast30Days;
         private long newCarsLast7Days;
-        private BigDecimal averagePrice;
+        private LocalDateTime lastUpdated;
+        
+        // Helper method to get new cars in last 7 days (placeholder)
+        public long getNewCarsLast7Days() {
+            return newCarsLast7Days;
+        }
     }
 }

@@ -29,7 +29,7 @@ public class InternationalizationConfig implements WebMvcConfigurer {
             new Locale("fr"),   // French
             new Locale("de"),   // German
             new Locale("it"),   // Italian
-            new Locale("pt"),   // Portuguese
+            new Locale("pt"),   // Portuguese   
             new Locale("ja"),   // Japanese
             new Locale("ko"),   // Korean
             new Locale("zh"),   // Chinese

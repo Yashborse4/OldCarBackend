@@ -56,7 +56,7 @@ public class SecurityConfig {
                     .httpStrictTransportSecurity(hstsConfig -> 
                         hstsConfig
                             .maxAgeInSeconds(31536000)
-                            .includeSubdomains(true)))
+                            .includeSubDomains(true)))
             
             // Configure session management (stateless for JWT)
             .sessionManagement(session -> 

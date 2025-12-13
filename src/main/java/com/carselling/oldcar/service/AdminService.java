@@ -2,6 +2,7 @@ package com.carselling.oldcar.service;
 
 import com.carselling.oldcar.dto.admin.ChangeRoleRequest;
 import com.carselling.oldcar.dto.user.UserResponse;
+import com.carselling.oldcar.dto.SystemStatistics;
 import com.carselling.oldcar.exception.InsufficientPermissionException;
 import com.carselling.oldcar.exception.InvalidInputException;
 import com.carselling.oldcar.exception.ResourceNotFoundException;
@@ -10,6 +11,8 @@ import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.Data;
+import lombok.Builder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -194,8 +197,6 @@ public class AdminService {
         return SystemStatistics.builder()
                 .userStatistics(userStats)
                 .carStatistics(carStats)
-                .systemUptime(getSystemUptime())
-                .lastUpdated(LocalDateTime.now())
                 .build();
     }
 
@@ -300,7 +301,9 @@ public class AdminService {
             }
             case "CHANGE_ROLE" -> {
                 String newRole = (String) parameter;
-                ChangeRoleRequest roleRequest = new ChangeRoleRequest(newRole);
+                ChangeRoleRequest roleRequest = ChangeRoleRequest.builder()
+                        .newRole(newRole)
+                        .build();
                 for (Long userId : userIds) {
                     if (!userId.equals(currentAdmin.getId())) {
                         changeUserRole(userId, roleRequest);
@@ -329,17 +332,8 @@ public class AdminService {
 
     // Inner classes for response DTOs
 
-    @lombok.Data
-    @lombok.Builder
-    public static class SystemStatistics {
-        private UserService.UserStatistics userStatistics;
-        private CarService.CarStatistics carStatistics;
-        private String systemUptime;
-        private LocalDateTime lastUpdated;
-    }
-
-    @lombok.Data
-    @lombok.Builder
+    @Data
+    @Builder
     public static class UserActivityLog {
         private Long userId;
         private String action;

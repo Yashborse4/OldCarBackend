@@ -1,6 +1,7 @@
 package com.carselling.oldcar.repository;
 
 import com.carselling.oldcar.model.Otp;
+import com.carselling.oldcar.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -20,6 +21,14 @@ public interface OtpRepository extends JpaRepository<Otp, Long> {
 
     // Find OTP by username and code
     Optional<Otp> findByUsernameAndOtpCode(String username, String otpCode);
+    
+    // Find OTP by User and OTP value and not used
+    Optional<Otp> findByUserAndOtpCodeAndIsUsedFalse(User user, String otpCode);
+    
+    // Alias method for backward compatibility
+    default Optional<Otp> findByUserAndOtpValueAndIsUsedFalse(User user, String otpValue) {
+        return findByUserAndOtpCodeAndIsUsedFalse(user, otpValue);
+    }
 
     // Find valid OTP (not used and not expired)
     @Query("SELECT o FROM Otp o WHERE o.username = :username AND o.otpCode = :otpCode " +

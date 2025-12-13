@@ -12,6 +12,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 
 /**
  * User entity representing system users with different roles
@@ -83,6 +85,19 @@ public class User {
 
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
+    
+    @Column(name = "is_account_non_locked")
+    @Builder.Default
+    private Boolean isAccountNonLocked = true;
+    
+    @Column(name = "account_locked_at")
+    private LocalDateTime accountLockedAt;
+    
+    @Column(name = "last_login_device")
+    private String lastLoginDevice;
+
+    @Column(name = "fcm_token", length = 500)
+    private String fcmToken; // Firebase Cloud Messaging token for push notifications
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -97,8 +112,20 @@ public class User {
     @Builder.Default
     private List<Car> cars = new ArrayList<>();
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "user_favorite_cars",
+        joinColumns = @JoinColumn(name = "user_id"),
+        inverseJoinColumns = @JoinColumn(name = "car_id")
+    )
+    @Builder.Default
+    private Set<Car> favoriteCars = new HashSet<>();
+
     // Helper methods
     public boolean isAccountNonLocked() {
+        if (isAccountNonLocked != null && !isAccountNonLocked) {
+            return false;
+        }
         return lockedUntil == null || lockedUntil.isBefore(LocalDateTime.now());
     }
 
@@ -123,6 +150,10 @@ public class User {
         this.lockedUntil = LocalDateTime.now().plusMinutes(lockDurationMinutes);
     }
 
+    public void setAccountNonLocked(Boolean accountNonLocked) {
+        this.isAccountNonLocked = accountNonLocked;
+    }
+
     public void updateLastLogin() {
         this.lastLoginAt = LocalDateTime.now();
     }
@@ -135,6 +166,10 @@ public class User {
         } else {
             return username;
         }
+    }
+
+    public String getFullName() {
+        return getDisplayName();
     }
 
     // Security method to exclude password from toString

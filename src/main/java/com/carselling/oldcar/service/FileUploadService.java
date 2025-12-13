@@ -1,5 +1,6 @@
 package com.carselling.oldcar.service;
 
+import com.amazonaws.HttpMethod;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.*;
 import com.carselling.oldcar.config.S3Config;

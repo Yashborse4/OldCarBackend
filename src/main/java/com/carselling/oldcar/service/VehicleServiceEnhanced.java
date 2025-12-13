@@ -14,7 +14,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Predicate;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -226,7 +226,7 @@ public class VehicleServiceEnhanced {
         try {
             Car car = carRepository.findById(vehicleId).orElse(null);
             if (car != null) {
-                car.setViewCount(car.getViewCount() + 1);
+                car.setViewCount((long) (car.getViewCount() + 1));
                 car.setLastViewedAt(LocalDateTime.now());
                 carRepository.save(car);
                 
@@ -296,6 +296,7 @@ public class VehicleServiceEnhanced {
 
             // Only show available cars
             predicates.add(criteriaBuilder.isTrue(root.get("isAvailable")));
+            predicates.add(criteriaBuilder.isTrue(root.get("isActive")));
 
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
@@ -369,8 +370,8 @@ public class VehicleServiceEnhanced {
                 .description(car.getDescription())
                 .images(car.getImages())
                 .location(car.getLocation())
-                .sellerName(car.getUser().getFullName())
-                .viewCount(car.getViewCount())
+                .sellerName(car.getOwner() != null ? car.getOwner().getFullName() : "Unknown")
+                .viewCount(Math.toIntExact(car.getViewCount()))
                 .isFeatured(car.getIsFeatured())
                 .createdAt(car.getCreatedAt())
                 .build();
@@ -403,7 +404,7 @@ public class VehicleServiceEnhanced {
     private VehicleTrendingDto convertToTrendingDto(Car car) {
         return VehicleTrendingDto.builder()
                 .vehicle(convertToSummaryDto(car))
-                .viewCount(car.getViewCount())
+                .viewCount(Math.toIntExact(car.getViewCount()))
                 .trendingScore(car.getViewCount() * 1.2) // Simple trending calculation
                 .build();
     }
