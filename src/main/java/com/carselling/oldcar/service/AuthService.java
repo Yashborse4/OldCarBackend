@@ -2,6 +2,7 @@ package com.carselling.oldcar.service;
 
 import com.carselling.oldcar.dto.auth.*;
 import com.carselling.oldcar.exception.AuthenticationFailedException;
+import com.carselling.oldcar.exception.InvalidInputException;
 import com.carselling.oldcar.exception.ResourceNotFoundException;
 import com.carselling.oldcar.exception.ResourceAlreadyExistsException;
 import com.carselling.oldcar.model.User;
@@ -10,6 +11,7 @@ import com.carselling.oldcar.model.Otp;
 import com.carselling.oldcar.repository.UserRepository;
 import com.carselling.oldcar.repository.OtpRepository;
 import com.carselling.oldcar.security.jwt.JwtTokenProvider;
+import com.carselling.oldcar.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -18,9 +20,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.Random;
 
 /**
  * Authentication Service - Aligned with API Requirements
@@ -29,38 +31,65 @@ import java.util.Random;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Transactional
 public class AuthService {
 
     private final UserRepository userRepository;
     private final OtpRepository otpRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final OtpDeliveryService otpDeliveryService;
 
     /**
      * Register a new user
      */
-    public RegisterResponse registerUser(RegisterRequest request) {
-        log.info("Registering new user: {}", request.getUsername());
+    @Transactional
+    public JwtAuthResponseV2 registerUser(RegisterRequest request) {
+        if (request == null) {
+            throw new InvalidInputException("Registration request cannot be null");
+        }
+
+        if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
+            throw new InvalidInputException("Email is required for registration");
+        }
+
+        if (request.getPassword() == null || request.getPassword().trim().isEmpty()) {
+            throw new InvalidInputException("Password is required for registration");
+        }
+
+        String username = request.getUsername();
+        if (username == null || username.trim().isEmpty()) {
+            // Extract username from email using utility method
+            String email = request.getEmail();
+            username = SecurityUtils.extractUsernameFromEmail(email);
+            if (username == null) {
+                throw new InvalidInputException("Invalid email format provided");
+            }
+            log.info("No username provided, extracting from email: {} -> {}", email, username);
+            request.setUsername(username); // Update request object
+        }
+        log.info("Registering new user: {}", username);
 
         // Check if username already exists
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new ResourceAlreadyExistsException("Username already exists: " + request.getUsername());
+            throw new IllegalArgumentException("Username already exists: " + request.getUsername());
         }
 
         // Check if email already exists
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new ResourceAlreadyExistsException("Email already exists: " + request.getEmail());
+            throw new IllegalArgumentException("Email already registered");
         }
 
         // Create new user
+        // IMPORTANT: Frontend must NOT control role during registration.
+        // Regardless of any incoming role hint, we always assign USER here.
         User user = User.builder()
                 .username(request.getUsername())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.valueOf(request.getRole().toUpperCase()))
+                .role(Role.USER)
                 .isActive(true)
                 .isEmailVerified(false) // In production, send verification email
+                .verifiedDealer(false)
                 .isAccountNonLocked(true)
                 .failedLoginAttempts(0)
                 .createdAt(LocalDateTime.now())
@@ -69,12 +98,27 @@ public class AuthService {
 
         user = userRepository.save(user);
 
-        return RegisterResponse.builder()
+        String accessToken = jwtTokenProvider.generateAccessToken(user);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user);
+
+        LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(900); // 15 minutes
+        LocalDateTime refreshExpiresAt = LocalDateTime.now().plusSeconds(604800); // 7 days
+
+        return JwtAuthResponseV2.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
                 .userId(user.getId())
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .role(user.getRole().name())
-                .createdAt(user.getCreatedAt())
+                .location(user.getLocation())
+                .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
+                .verifiedDealer(Boolean.TRUE.equals(user.getVerifiedDealer()))
+                .expiresAt(expiresAt)
+                .refreshExpiresAt(refreshExpiresAt)
+                .expiresIn(900L)
+                .refreshExpiresIn(604800L)
                 .build();
     }
 
@@ -109,7 +153,8 @@ public class AuthService {
         // Update last login time and device info
         user.setLastLoginAt(LocalDateTime.now());
         if (request.getDeviceInfo() != null) {
-            // Store device info - in production, you might want a separate DeviceSession table
+            // Store device info - in production, you might want a separate DeviceSession
+            // table
             user.setLastLoginDevice(request.getDeviceInfo().getPlatform());
         }
         userRepository.save(user);
@@ -130,6 +175,8 @@ public class AuthService {
                 .email(user.getEmail())
                 .role(user.getRole().name())
                 .location(user.getLocation())
+                .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
+                .verifiedDealer(Boolean.TRUE.equals(user.getVerifiedDealer()))
                 .expiresAt(expiresAt)
                 .refreshExpiresAt(refreshExpiresAt)
                 .expiresIn(900L)
@@ -171,6 +218,8 @@ public class AuthService {
                 .email(user.getEmail())
                 .role(user.getRole().name())
                 .location(user.getLocation())
+                .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
+                .verifiedDealer(Boolean.TRUE.equals(user.getVerifiedDealer()))
                 .expiresAt(expiresAt)
                 .refreshExpiresAt(refreshExpiresAt)
                 .expiresIn(900L)
@@ -183,7 +232,7 @@ public class AuthService {
      */
     public TokenValidationResponse validateToken(String token) {
         boolean isValid = jwtTokenProvider.validateToken(token);
-        
+
         if (!isValid) {
             return TokenValidationResponse.builder()
                     .valid(false)
@@ -201,6 +250,8 @@ public class AuthService {
                     .email(user.getEmail())
                     .role(user.getRole().name())
                     .location(user.getLocation())
+                    .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
+                    .verifiedDealer(Boolean.TRUE.equals(user.getVerifiedDealer()))
                     .build();
 
             return TokenValidationResponse.builder()
@@ -220,17 +271,25 @@ public class AuthService {
     public void forgotPassword(ForgotPasswordRequestV2 request) {
         log.info("Forgot password request for username: {}", request.getUsername());
 
+        // Find user by username or email to allow password reset via either
         Optional<User> userOpt = userRepository.findByUsername(request.getUsername());
         if (userOpt.isEmpty()) {
-            log.warn("Forgot password request for non-existent username: {}", request.getUsername());
-            return; // Don't reveal if username exists
+            // Also try to find by email in case the user provided email instead of username
+            userOpt = userRepository.findByEmail(request.getUsername());
+        }
+
+        if (userOpt.isEmpty()) {
+            log.warn("Forgot password request for non-existent user: {}", request.getUsername());
+            // Don't reveal if username/email exists - return successfully to prevent
+            // enumeration
+            return;
         }
 
         User user = userOpt.get();
 
         // Generate OTP
         String otpValue = generateOtp();
-        
+
         // Save OTP
         Otp otp = Otp.builder()
                 .user(user)
@@ -243,18 +302,28 @@ public class AuthService {
 
         otpRepository.save(otp);
 
-        // In production, send OTP via email/SMS
-        log.info("OTP generated for user {}: {}", request.getUsername(), otpValue);
+        otpDeliveryService.sendPasswordResetOtp(user, otpValue);
+        log.info("OTP generated for user: {}", request.getUsername());
     }
 
     /**
      * Reset password with OTP
      */
     public void resetPassword(ResetPasswordRequestV2 request) {
-        log.info("Password reset request for username: {}", request.getUsername());
+        log.info("Password reset request for user: {}", request.getUsername());
 
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        // Find user by username or email to allow password reset via either
+        Optional<User> userOpt = userRepository.findByUsername(request.getUsername());
+        if (userOpt.isEmpty()) {
+            userOpt = userRepository.findByEmail(request.getUsername());
+        }
+
+        if (userOpt.isEmpty()) {
+            // Don't reveal if user exists - throw generic exception
+            throw new AuthenticationFailedException("Invalid credentials");
+        }
+
+        User user = userOpt.get();
 
         // Find valid OTP
         Otp otp = otpRepository.findByUserAndOtpValueAndIsUsedFalse(user, request.getOtp())
@@ -267,12 +336,12 @@ public class AuthService {
         // Update password
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setUpdatedAt(LocalDateTime.now());
-        
+
         // Reset account lock if any
         user.setAccountNonLocked(true);
         user.setFailedLoginAttempts(0);
         user.setAccountLockedAt(null);
-        
+
         userRepository.save(user);
 
         // Mark OTP as used
@@ -287,13 +356,18 @@ public class AuthService {
      */
     public void logout(String token) {
         log.info("Logout request");
-        // In a stateless JWT system, logout is typically handled client-side
-        // However, you could implement token blacklisting here if needed
+        if (token == null || token.trim().isEmpty()) {
+            log.warn("Logout requested without a valid token");
+            return;
+        }
+
+        jwtTokenProvider.blacklistToken(token);
     }
 
     /**
      * Check username availability
      */
+    @Transactional(readOnly = true)
     public boolean isUsernameAvailable(String username) {
         return !userRepository.existsByUsername(username);
     }
@@ -301,6 +375,7 @@ public class AuthService {
     /**
      * Check email availability
      */
+    @Transactional(readOnly = true)
     public boolean isEmailAvailable(String email) {
         return !userRepository.existsByEmail(email);
     }
@@ -310,12 +385,12 @@ public class AuthService {
      */
     private void handleFailedLogin(User user) {
         user.setFailedLoginAttempts(user.getFailedLoginAttempts() + 1);
-        
+
         if (user.getFailedLoginAttempts() >= 5) {
             user.setAccountNonLocked(false);
             user.setAccountLockedAt(LocalDateTime.now());
         }
-        
+
         userRepository.save(user);
     }
 
@@ -324,15 +399,27 @@ public class AuthService {
      */
     public User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
             throw new AuthenticationFailedException("No authenticated user found");
         }
-        
+
         String userId = authentication.getName();
         return userRepository.findById(Long.parseLong(userId))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
-    
+
+    /**
+     * Get current authenticated user or null if anonymous
+     */
+    public User getCurrentUserOrNull() {
+        try {
+            return getCurrentUser();
+        } catch (AuthenticationFailedException | ResourceNotFoundException e) {
+            return null;
+        }
+    }
+
     /**
      * Check if current user has specific role
      */
@@ -346,11 +433,27 @@ public class AuthService {
     }
 
     /**
-     * Generate 6-digit OTP
+     * Generate 6-digit OTP using cryptographically secure random
      */
     private String generateOtp() {
-        Random random = new Random();
+        SecureRandom random = new SecureRandom();
         int otp = 100000 + random.nextInt(900000);
         return String.valueOf(otp);
+    }
+
+    /**
+     * Parse role from string with null-safety and defaults to USER
+     */
+    private Role parseRole(String role) {
+        if (role == null || role.trim().isEmpty()) {
+            log.info("No role provided, defaulting to USER");
+            return Role.USER;
+        }
+        try {
+            return Role.valueOf(role.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid role provided: {}, defaulting to USER", role);
+            return Role.USER;
+        }
     }
 }
