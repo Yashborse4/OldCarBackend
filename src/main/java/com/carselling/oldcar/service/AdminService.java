@@ -36,13 +36,14 @@ public class AdminService {
     private final AuthService authService;
     private final UserService userService;
     private final CarService carService;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     /**
      * Get all users with pagination and filtering (admin only)
      */
     @Transactional(readOnly = true)
     public Page<UserResponse> getAllUsers(String username, String email, Role role,
-                                         String location, Boolean isActive, Pageable pageable) {
+            String location, Boolean isActive, Pageable pageable) {
         log.info("Admin retrieving all users with filters");
 
         // Check admin permission
@@ -87,13 +88,54 @@ public class AdminService {
 
         Role oldRole = user.getRole();
         user.setRole(newRole);
+
+        // Auto-verify if promoted to DEALER - DISABLED per new requirement
+        // Users promoted to DEALER must be manually verified.
+
+        // If demoted to USER, ensure verifiedDealer is false
+        if (newRole == Role.USER) {
+            user.setVerifiedDealer(false);
+        }
+
         user = userRepository.save(user);
 
-        log.info("User role changed successfully for user: {} from {} to {} by admin: {}", 
+        log.info("User role changed successfully for user: {} from {} to {} by admin: {}",
                 user.getUsername(), oldRole, newRole, currentAdmin.getUsername());
 
-        return userService.convertToUserSummary(user) != null ? 
-               userService.getUserProfile(user.getId()) : null;
+        if (newRole == Role.DEALER) {
+            // Publish event for email/notification
+            eventPublisher.publishEvent(new com.carselling.oldcar.event.DealerUpgradedEvent(this, user));
+        }
+
+        return userService.getUserProfile(user.getId());
+    }
+
+    /**
+     * Verify/Unverify a Dealer (admin only)
+     */
+    public UserResponse verifyDealer(Long userId, boolean verified) {
+        log.info("Admin setting dealer verification for user ID: {} to: {}", userId, verified);
+
+        // Check admin permission
+        ensureAdminPermission();
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        // Ensure user is actually a dealer
+        if (user.getRole() != Role.DEALER) {
+            throw new InvalidInputException("User is not a dealer. Only dealers can be verified.");
+        }
+
+        user.setVerifiedDealer(verified);
+        user = userRepository.save(user);
+
+        log.info("Dealer verification updated: {} for user: {}", verified, user.getUsername());
+
+        // Publish event for notification
+        eventPublisher.publishEvent(new com.carselling.oldcar.event.DealerVerifiedEvent(this, user, verified));
+
+        return userService.getUserProfile(user.getId());
     }
 
     /**
@@ -121,16 +163,16 @@ public class AdminService {
         }
 
         user.setIsActive(!ban);
-        
+
         if (ban) {
             // When banning, also lock the account and reset failed attempts
             user.lockAccount(Integer.MAX_VALUE); // Effectively permanent lock
-            log.info("User banned: {} by admin: {} for reason: {}", 
+            log.info("User banned: {} by admin: {} for reason: {}",
                     user.getUsername(), currentAdmin.getUsername(), reason);
         } else {
             // When unbanning, unlock account and reset failed attempts
             user.resetFailedLoginAttempts();
-            log.info("User unbanned: {} by admin: {}", 
+            log.info("User unbanned: {} by admin: {}",
                     user.getUsername(), currentAdmin.getUsername());
         }
 
@@ -166,7 +208,8 @@ public class AdminService {
             if (hardDelete) {
                 // Hard delete - remove from database completely
                 // First, soft delete all user's cars
-                // Note: In a real application, you might want to transfer ownership or handle this differently
+                // Note: In a real application, you might want to transfer ownership or handle
+                // this differently
                 userRepository.delete(user);
                 log.info("User hard deleted: {} by admin: {}", user.getUsername(), currentAdmin.getUsername());
             } else {
@@ -211,22 +254,8 @@ public class AdminService {
         ensureAdminPermission();
 
         // In a real application, you would have an activity log table
-        // For now, we'll return a placeholder
-        return List.of(
-            UserActivityLog.builder()
-                .userId(userId)
-                .action("LOGIN")
-                .timestamp(LocalDateTime.now().minusHours(1))
-                .ipAddress("192.168.1.1")
-                .userAgent("Mozilla/5.0...")
-                .build(),
-            UserActivityLog.builder()
-                .userId(userId)
-                .action("CAR_CREATED")
-                .timestamp(LocalDateTime.now().minusHours(2))
-                .details("Created car: Toyota Camry 2020")
-                .build()
-        );
+        // For now, return an empty list until implemented
+        return List.of();
     }
 
     /**
@@ -247,7 +276,7 @@ public class AdminService {
         user.setPassword(newPassword); // This should be encoded in the service layer
         // Reset failed login attempts
         user.resetFailedLoginAttempts();
-        
+
         userRepository.save(user);
 
         log.info("Password reset for user: {} by admin: {}", user.getUsername(), currentAdmin.getUsername());
@@ -269,10 +298,9 @@ public class AdminService {
         // Transform data for frontend consumption
         // This would typically return a structured format for charts/graphs
         return Map.of(
-            "period", days + " days",
-            "data", stats,
-            "totalNewUsers", userRepository.countUsersCreatedSince(startDate)
-        );
+                "period", days + " days",
+                "data", stats,
+                "totalNewUsers", userRepository.countUsersCreatedSince(startDate));
     }
 
     /**
