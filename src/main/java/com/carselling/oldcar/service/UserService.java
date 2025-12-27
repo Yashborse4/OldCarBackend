@@ -31,6 +31,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final AuthService authService;
+    private final FileUploadService fileUploadService;
 
     /**
      * Get user profile by ID
@@ -57,7 +58,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public UserResponse getCurrentUserProfile() {
         log.info("Retrieving current user profile");
-        
+
         User currentUser = authService.getCurrentUser();
         return convertToUserResponse(currentUser);
     }
@@ -143,6 +144,26 @@ public class UserService {
     }
 
     /**
+     * Request to become a Dealer (User self-service)
+     */
+    public UserResponse requestDealerRole() {
+        User currentUser = authService.getCurrentUser();
+        log.info("User requesting dealer role: {}", currentUser.getUsername());
+
+        if (currentUser.getRole() == Role.DEALER || currentUser.getRole() == Role.ADMIN) {
+            throw new IllegalArgumentException("User is already a dealer or admin");
+        }
+
+        currentUser.setRole(Role.DEALER);
+        currentUser.setVerifiedDealer(false); // Validated by Admin later
+
+        currentUser = userRepository.save(currentUser);
+        log.info("User role upgraded to DEALER (Unverified) for: {}", currentUser.getUsername());
+
+        return convertToUserResponse(currentUser);
+    }
+
+    /**
      * Search users (admin only)
      */
     @Transactional(readOnly = true)
@@ -168,8 +189,8 @@ public class UserService {
      * Get all users with filtering (admin only)
      */
     @Transactional(readOnly = true)
-    public Page<UserResponse> getAllUsers(String username, String email, Role role, 
-                                         String location, Boolean isActive, Pageable pageable) {
+    public Page<UserResponse> getAllUsers(String username, String email, Role role,
+            String location, Boolean isActive, Pageable pageable) {
         log.info("Getting all users with filters");
 
         // Check admin permission
@@ -219,8 +240,7 @@ public class UserService {
                 .totalUsers(userRepository.count())
                 .activeUsers(userRepository.countByIsActive(true))
                 .inactiveUsers(userRepository.countByIsActive(false))
-                .viewerCount(userRepository.countByRole(Role.VIEWER))
-                .sellerCount(userRepository.countByRole(Role.SELLER))
+                .userCount(userRepository.countByRole(Role.USER))
                 .dealerCount(userRepository.countByRole(Role.DEALER))
                 .adminCount(userRepository.countByRole(Role.ADMIN))
                 .newUsersLast30Days(userRepository.countUsersCreatedSince(thirtyDaysAgo))
@@ -237,18 +257,71 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
     }
 
-    /**
-     * Convert User to UserSummary (for nested responses)
-     */
-    public UserSummary convertToUserSummary(User user) {
-        if (user == null) return null;
+    // ... existing constructor ...
 
-        return UserSummary.builder()
-                .id(user.getId())
-                .username(user.getUsername())
-                .role(user.getRole().name())
-                .location(user.getLocation())
-                .build();
+    // ... existing methods ...
+
+    /**
+     * Upload profile image for current user (stored in Firebase)
+     */
+    public String uploadProfileImage(org.springframework.web.multipart.MultipartFile file) {
+        log.info("Uploading profile image for current user");
+
+        User currentUser = authService.getCurrentUser();
+        return uploadProfileImageForUser(currentUser.getId(), file);
+    }
+
+    /**
+     * Upload profile image for specific user (admin or self) - stored in Firebase
+     */
+    public String uploadProfileImageForUser(Long userId, org.springframework.web.multipart.MultipartFile file) {
+        log.info("Uploading profile image for user ID: {}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        // Check permission
+        User currentUser = authService.getCurrentUser();
+        if (!canUpdateUserProfile(currentUser, user)) {
+            throw new InsufficientPermissionException("You don't have permission to update this user's profile image");
+        }
+
+        try {
+            // Upload to Firebase
+            String folder = "users/" + userId + "/profile";
+
+            // Uses strict upload with USER_PROFILE resource type
+            com.carselling.oldcar.dto.file.FileUploadResponse response = fileUploadService.uploadFile(
+                    file, folder, currentUser, com.carselling.oldcar.model.ResourceType.USER_PROFILE, userId);
+
+            // Store URL in database
+            user.setProfileImageUrl(response.getFileUrl());
+            userRepository.save(user);
+
+            log.info("Profile image uploaded successfully for user: {}", user.getUsername());
+
+            return response.getFileUrl();
+        } catch (java.io.IOException e) {
+            log.error("Failed to upload profile image for user: {}", user.getUsername(), e);
+            throw new RuntimeException("Failed to upload profile image", e);
+        }
+    }
+
+    /**
+     * Delete profile image for current user
+     */
+    public void deleteProfileImage() {
+        log.info("Deleting profile image for current user");
+
+        User currentUser = authService.getCurrentUser();
+
+        // Optionally delete from storage if needed, but for now just clear DB reference
+        // fileUploadService.deleteFile(currentUser.getProfileImageUrl());
+
+        currentUser.setProfileImageUrl(null);
+        userRepository.save(currentUser);
+
+        log.info("Profile image deleted successfully for user: {}", currentUser.getUsername());
     }
 
     // Private helper methods
@@ -268,6 +341,7 @@ public class UserService {
                 .lastLoginAt(user.getLastLoginAt())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
+                .profileImageUrl(user.getProfileImageUrl())
                 .build();
     }
 
@@ -276,14 +350,13 @@ public class UserService {
         if (currentUser.hasRole(Role.ADMIN)) {
             return true;
         }
-        
+
         // Users can view their own profile
         if (currentUser.getId().equals(targetUser.getId())) {
             return true;
         }
 
         // For now, users can view other users' basic profiles
-        // In a real app, you might want more restrictive permissions
         return true;
     }
 
@@ -292,7 +365,7 @@ public class UserService {
         if (currentUser.hasRole(Role.ADMIN)) {
             return true;
         }
-        
+
         // Users can only update their own profile
         return currentUser.getId().equals(targetUser.getId());
     }
@@ -302,7 +375,7 @@ public class UserService {
         if (currentUser.hasRole(Role.ADMIN)) {
             return true;
         }
-        
+
         // Users can only delete their own account
         return currentUser.getId().equals(targetUser.getId());
     }
@@ -314,8 +387,7 @@ public class UserService {
         private long totalUsers;
         private long activeUsers;
         private long inactiveUsers;
-        private long viewerCount;
-        private long sellerCount;
+        private long userCount;
         private long dealerCount;
         private long adminCount;
         private long newUsersLast30Days;
