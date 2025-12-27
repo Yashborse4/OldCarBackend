@@ -29,319 +29,283 @@ import java.util.Map;
 @Slf4j
 public class CarController {
 
-    private final CarService carService;
+        private final CarService carService;
 
-    /**
-     * Get All Vehicles with Enhanced Features
-     * GET /api/v2/cars
-     */
-    @GetMapping
-    public ResponseEntity<ApiResponse<Page<CarResponseV2>>> getAllVehicles(
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "20") int size,
-            @RequestParam(value = "sort", defaultValue = "createdAt,desc") String sort) {
+        /**
+         * Get All Vehicles with Enhanced Features
+         * GET /api/v2/cars
+         */
+        /**
+         * Get All Vehicles with Enhanced Features
+         * GET /api/v2/cars
+         */
+        @GetMapping
+        public ResponseEntity<ApiResponse<Page<CarResponseV2>>> getAllVehicles(
+                        @RequestParam(value = "page", defaultValue = "0") int page,
+                        @RequestParam(value = "size", defaultValue = "20") int size,
+                        @RequestParam(value = "sort", defaultValue = "createdAt,desc") String sort) {
 
-        log.info("Getting all vehicles - page: {}, size: {}, sort: {}", page, size, sort);
+                log.info("Getting all vehicles - page: {}, size: {}, sort: {}", page, size, sort);
 
-        // Parse sort parameter
-        String[] sortParams = sort.split(",");
-        String sortField = sortParams[0];
-        String sortDirection = sortParams.length > 1 ? sortParams[1] : "desc";
+                // Parse sort parameter
+                String[] sortParams = sort.split(",");
+                String sortField = sortParams[0];
+                String sortDirection = sortParams.length > 1 ? sortParams[1] : "desc";
 
-        Sort.Direction direction = "asc".equalsIgnoreCase(sortDirection) 
-                ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortField));
+                Sort.Direction direction = "asc".equalsIgnoreCase(sortDirection)
+                                ? Sort.Direction.ASC
+                                : Sort.Direction.DESC;
+                Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortField));
 
-        Page<CarResponseV2> cars = carService.getAllVehicles(pageable);
+                Page<CarResponseV2> cars = carService.getAllVehicles(pageable);
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Vehicles retrieved successfully",
-                String.format("Retrieved %d vehicles out of %d total", 
-                    cars.getNumberOfElements(), cars.getTotalElements()),
-                cars
-        ));
-    }
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Vehicles retrieved successfully",
+                                String.format("Retrieved %d vehicles out of %d total",
+                                                cars.getNumberOfElements(), cars.getTotalElements()),
+                                cars));
+        }
 
-    /**
-     * Get Vehicle by ID
-     * GET /api/cars/{id}
-     */
-    @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<CarResponseV2>> getVehicleById(@PathVariable String id) {
-        log.info("Getting vehicle by ID: {}", id);
+        /**
+         * Get Public Vehicles (Limited Data)
+         * GET /api/v2/cars/public
+         */
+        @GetMapping("/public")
+        public ResponseEntity<ApiResponse<Page<PublicCarDTO>>> getPublicVehicles(
+                        @RequestParam(value = "page", defaultValue = "0") int page,
+                        @RequestParam(value = "size", defaultValue = "20") int size,
+                        @RequestParam(value = "sort", defaultValue = "createdAt,desc") String sort) {
 
-        CarResponseV2 car = carService.getVehicleById(id);
+                log.info("Getting public vehicles");
+                Pageable pageable = PageRequest.of(page, size); // Simplified sort for now
+                Page<PublicCarDTO> cars = carService.getPublicVehicles(pageable);
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Vehicle retrieved successfully",
-                "Vehicle details fetched successfully",
-                car
-        ));
-    }
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Public vehicles retrieved",
+                                "List of vehicles with public information",
+                                cars));
+        }
 
-    /**
-     * Create Vehicle
-     * POST /api/v2/cars
-     */
-    @PostMapping
-    @PreAuthorize("hasAnyRole('SELLER', 'DEALER', 'ADMIN')")
-    public ResponseEntity<ApiResponse<CarResponseV2>> createVehicle(
-            @Valid @RequestBody CarRequest request) {
-        
-        log.info("Creating new vehicle: {} {}", request.getMake(), request.getModel());
-        
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        CarResponseV2 createdCar = carService.createVehicle(request, currentUserId);
+        /**
+         * Get Public Vehicle by ID
+         * GET /api/v2/cars/public/{id}
+         */
+        @GetMapping("/public/{id}")
+        public ResponseEntity<ApiResponse<PublicCarDTO>> getPublicVehicleById(@PathVariable String id) {
+                log.info("Getting public vehicle by ID: {}", id);
+                PublicCarDTO car = carService.getPublicVehicleById(id);
+                return ResponseEntity.ok(ApiResponse.success("Vehicle retrieved", "Public vehicle details", car));
+        }
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(
-                        "Vehicle created successfully",
-                        "Your vehicle listing has been created and is now active",
-                        createdCar
-                ));
-    }
+        /**
+         * Get Vehicle by ID
+         * GET /api/cars/{id}
+         */
+        @GetMapping("/{id}")
+        public ResponseEntity<ApiResponse<CarResponseV2>> getVehicleById(@PathVariable String id) {
+                log.info("Getting vehicle by ID: {}", id);
 
-    /**
-     * Update Vehicle
-     * PATCH /api/v2/cars/{id}
-     */
-    @PatchMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SELLER', 'DEALER', 'ADMIN')")
-    public ResponseEntity<ApiResponse<CarResponseV2>> updateVehicle(
-            @PathVariable String id,
-            @Valid @RequestBody CarRequest request) {
-        
-        log.info("Updating vehicle: {}", id);
-        
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        CarResponseV2 updatedCar = carService.updateVehicle(id, request, currentUserId);
+                CarResponseV2 car = carService.getVehicleById(id);
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Vehicle updated successfully",
-                "Your vehicle listing has been updated",
-                updatedCar
-        ));
-    }
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Vehicle retrieved successfully",
+                                "Vehicle details fetched successfully",
+                                car));
+        }
 
-    /**
-     * Delete Vehicle
-     * DELETE /api/v2/cars/{id}
-     */
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SELLER', 'DEALER', 'ADMIN')")
-    public ResponseEntity<ApiResponse<Object>> deleteVehicle(
-            @PathVariable String id,
-            @RequestParam(value = "hard", defaultValue = "false") boolean hard) {
-        
-        log.info("Deleting vehicle: {} (hard: {})", id, hard);
-        
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        carService.deleteVehicle(id, currentUserId, hard);
+        /**
+         * Create Vehicle
+         * POST /api/v2/cars
+         *
+         * Permission matrix:
+         * - USER: can create own cars
+         * - DEALER: can create cars
+         * - ADMIN: can create cars for anyone
+         */
+        @PostMapping
+        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        public ResponseEntity<ApiResponse<CarResponseV2>> createVehicle(
+                        @Valid @RequestBody CarRequest request) {
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Vehicle deleted successfully",
-                hard ? "Vehicle permanently deleted" : "Vehicle moved to inactive status"
-        ));
-    }
+                log.info("Creating new vehicle: {} {}", request.getMake(), request.getModel());
 
-    /**
-     * Update Vehicle Status
-     * POST /api/v2/cars/{id}/status
-     */
-    @PostMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('SELLER', 'DEALER', 'ADMIN')")
-    public ResponseEntity<ApiResponse<CarResponseV2>> updateVehicleStatus(
-            @PathVariable String id,
-            @RequestBody Map<String, String> statusRequest) {
-        
-        log.info("Updating vehicle status: {} to {}", id, statusRequest.get("status"));
-        
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        String newStatus = statusRequest.get("status");
-        CarResponseV2 updatedCar = carService.updateVehicleStatus(id, newStatus, currentUserId);
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                CarResponseV2 createdCar = carService.createVehicle(request, currentUserId);
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Vehicle status updated successfully",
-                String.format("Vehicle status changed to %s", newStatus),
-                updatedCar
-        ));
-    }
+                return ResponseEntity.status(HttpStatus.CREATED)
+                                .body(ApiResponse.success(
+                                                "Vehicle created successfully",
+                                                "Your vehicle listing has been created and is now active",
+                                                createdCar));
+        }
 
-    /**
-     * Search Vehicles with Advanced Filters
-     * GET /api/v2/cars/search
-     */
-    @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<CarResponseV2>>> searchVehicles(
-            @RequestParam(value = "make", required = false) String make,
-            @RequestParam(value = "model", required = false) String model,
-            @RequestParam(value = "minYear", required = false) Integer minYear,
-            @RequestParam(value = "maxYear", required = false) Integer maxYear,
-            @RequestParam(value = "minPrice", required = false) Long minPrice,
-            @RequestParam(value = "maxPrice", required = false) Long maxPrice,
-            @RequestParam(value = "location", required = false) String location,
-            @RequestParam(value = "condition", required = false) String condition,
-            @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "featured", required = false) Boolean featured,
-            @RequestParam(value = "fuelType", required = false) String fuelType,
-            @RequestParam(value = "transmission", required = false) String transmission,
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "20") int size,
-            @RequestParam(value = "sort", defaultValue = "createdAt,desc") String sort) {
+        /**
+         * Update Vehicle
+         * PATCH /api/v2/cars/{id}
+         *
+         * Permission matrix:
+         * - USER: own cars only (enforced in service via ownership check)
+         * - DEALER: own cars only
+         * - ADMIN: any car
+         */
+        @PatchMapping("/{id}")
+        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        public ResponseEntity<ApiResponse<CarResponseV2>> updateVehicle(
+                        @PathVariable String id,
+                        @Valid @RequestBody CarRequest request) {
 
-        log.info("Searching vehicles with filters");
+                log.info("Updating vehicle: {}", id);
 
-        // Parse sort parameter
-        String[] sortParams = sort.split(",");
-        String sortField = sortParams[0];
-        String sortDirection = sortParams.length > 1 ? sortParams[1] : "desc";
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                CarResponseV2 updatedCar = carService.updateVehicle(id, request, currentUserId);
 
-        Sort.Direction direction = "asc".equalsIgnoreCase(sortDirection) 
-                ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortField));
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Vehicle updated successfully",
+                                "Your vehicle listing has been updated",
+                                updatedCar));
+        }
 
-        // Create search criteria
-        CarSearchCriteria searchCriteria = CarSearchCriteria.builder()
-                .make(make)
-                .model(model)
-                .minYear(minYear)
-                .maxYear(maxYear)
-                .minPrice(minPrice)
-                .maxPrice(maxPrice)
-                .location(location)
-                .condition(condition)
-                .status(status)
-                .featured(featured)
-                .fuelType(fuelType)
-                .transmission(transmission)
-                .build();
+        /**
+         * Delete Vehicle
+         * DELETE /api/v2/cars/{id}
+         *
+         * Permission matrix:
+         * - USER/DEALER: can delete own cars (service enforces ownership)
+         * - ADMIN: can delete any car ("delete any car" action)
+         */
+        @DeleteMapping("/{id}")
+        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        public ResponseEntity<ApiResponse<Object>> deleteVehicle(
+                        @PathVariable String id,
+                        @RequestParam(value = "hard", defaultValue = "false") boolean hard) {
 
-        Page<CarResponseV2> cars = carService.searchVehicles(searchCriteria, pageable);
+                log.info("Deleting vehicle: {} (hard: {})", id, hard);
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Vehicle search completed",
-                String.format("Found %d vehicles matching your criteria", cars.getTotalElements()),
-                cars
-        ));
-    }
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                carService.deleteVehicle(id, currentUserId, hard);
 
-    /**
-     * Get Vehicle Analytics
-     * GET /api/v2/cars/{id}/analytics
-     */
-    @GetMapping("/{id}/analytics")
-    @PreAuthorize("hasAnyRole('SELLER', 'DEALER', 'ADMIN')")
-    public ResponseEntity<ApiResponse<CarAnalyticsResponse>> getVehicleAnalytics(@PathVariable String id) {
-        log.info("Getting analytics for vehicle: {}", id);
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Vehicle deleted successfully",
+                                hard ? "Vehicle permanently deleted" : "Vehicle moved to inactive status"));
+        }
 
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        CarAnalyticsResponse analytics = carService.getVehicleAnalytics(id, currentUserId);
+        /**
+         * Update Vehicle Status
+         * POST /api/v2/cars/{id}/status
+         */
+        @PostMapping("/{id}/status")
+        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        public ResponseEntity<ApiResponse<CarResponseV2>> updateVehicleStatus(
+                        @PathVariable String id,
+                        @RequestBody Map<String, String> statusRequest) {
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Vehicle analytics retrieved successfully",
-                "Analytics data for your vehicle listing",
-                analytics
-        ));
-    }
+                log.info("Updating vehicle status: {} to {}", id, statusRequest.get("status"));
 
-    /**
-     * Feature/Unfeature Vehicle
-     * POST /api/v2/cars/{id}/feature
-     */
-    @PostMapping("/{id}/feature")
-    @PreAuthorize("hasAnyRole('SELLER', 'DEALER', 'ADMIN')")
-    public ResponseEntity<ApiResponse<CarResponseV2>> toggleFeatureVehicle(
-            @PathVariable String id,
-            @RequestParam("featured") boolean featured) {
-        
-        log.info("Toggling feature status for vehicle: {} to {}", id, featured);
-        
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        CarResponseV2 updatedCar = carService.toggleFeatureVehicle(id, featured, currentUserId);
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                String newStatus = statusRequest.get("status");
+                CarResponseV2 updatedCar = carService.updateVehicleStatus(id, newStatus, currentUserId);
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Vehicle feature status updated",
-                featured ? "Vehicle is now featured" : "Vehicle is no longer featured",
-                updatedCar
-        ));
-    }
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Vehicle status updated successfully",
+                                String.format("Vehicle status changed to %s", newStatus),
+                                updatedCar));
+        }
 
-    /**
-     * Track Vehicle View
-     * POST /api/v2/cars/{id}/view
-     */
-    @PostMapping("/{id}/view")
-    public ResponseEntity<ApiResponse<Object>> trackVehicleView(@PathVariable String id) {
-        log.info("Tracking view for vehicle: {}", id);
+        /**
+         * Toggle Vehicle Visibility (Hide/Show)
+         * PATCH /api/v2/cars/{id}/visibility
+         */
+        @PatchMapping("/{id}/visibility")
+        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        public ResponseEntity<ApiResponse<CarResponseV2>> toggleVisibility(
+                        @PathVariable String id,
+                        @RequestParam("visible") boolean visible) {
 
-        carService.trackVehicleView(id);
+                log.info("Toggling vehicle visibility: {} to {}", id, visible);
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "View tracked successfully",
-                "Vehicle view has been recorded"
-        ));
-    }
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                CarResponseV2 updatedCar = carService.toggleVisibility(id, visible, currentUserId);
 
-    /**
-     * Track Vehicle Share
-     * POST /api/v2/cars/{id}/share
-     */
-    @PostMapping("/{id}/share")
-    public ResponseEntity<ApiResponse<Object>> trackVehicleShare(
-            @PathVariable String id,
-            @RequestBody Map<String, String> shareRequest) {
-        
-        log.info("Tracking share for vehicle: {} on platform: {}", id, shareRequest.get("platform"));
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Vehicle visibility updated successfully",
+                                visible ? "Vehicle is now visible" : "Vehicle is now hidden",
+                                updatedCar));
+        }
 
-        String platform = shareRequest.get("platform");
-        carService.trackVehicleShare(id, platform);
+        /**
+         * Feature/Unfeature Vehicle
+         * POST /api/v2/cars/{id}/feature
+         */
+        @PostMapping("/{id}/feature")
+        @PreAuthorize("hasAnyRole('DEALER', 'ADMIN')")
+        public ResponseEntity<ApiResponse<CarResponseV2>> toggleFeatureVehicle(
+                        @PathVariable String id,
+                        @RequestParam("featured") boolean featured) {
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Share tracked successfully",
-                String.format("Vehicle share on %s has been recorded", platform)
-        ));
-    }
+                log.info("Toggling feature status for vehicle: {} to {}", id, featured);
 
-    /**
-     * Get Similar Vehicles
-     * GET /api/v2/cars/{id}/similar
-     */
-    @GetMapping("/{id}/similar")
-    public ResponseEntity<ApiResponse<List<CarResponseV2>>> getSimilarVehicles(
-            @PathVariable String id,
-            @RequestParam(value = "limit", defaultValue = "5") int limit) {
-        
-        log.info("Getting similar vehicles for: {} (limit: {})", id, limit);
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                CarResponseV2 updatedCar = carService.toggleFeatureVehicle(id, featured, currentUserId);
 
-        List<CarResponseV2> similarVehicles = carService.getSimilarVehicles(id, limit);
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Vehicle feature status updated",
+                                featured ? "Vehicle is now featured" : "Vehicle is no longer featured",
+                                updatedCar));
+        }
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Similar vehicles retrieved successfully",
-                String.format("Found %d similar vehicles", similarVehicles.size()),
-                similarVehicles
-        ));
-    }
+        /**
+         * Track Vehicle View
+         * POST /api/v2/cars/{id}/view
+         */
+        @PostMapping("/{id}/view")
+        public ResponseEntity<ApiResponse<Object>> trackVehicleView(@PathVariable String id) {
+                log.info("Tracking view for vehicle: {}", id);
 
-    /**
-     * Get Vehicles by Dealer
-     * GET /api/v1/seller/{dealerId}/cars
-     */
-    @GetMapping("/seller/{dealerId}")
-    public ResponseEntity<ApiResponse<Page<CarResponseV2>>> getVehiclesByDealer(
-            @PathVariable String dealerId,
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "20") int size,
-            @RequestParam(value = "status", required = false) String status) {
-        
-        log.info("Getting vehicles by dealer: {} (page: {}, size: {})", dealerId, page, size);
+                carService.trackVehicleView(id);
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<CarResponseV2> vehicles = carService.getVehiclesByDealer(dealerId, status, pageable);
+                return ResponseEntity.ok(ApiResponse.success(
+                                "View tracked successfully",
+                                "Vehicle view has been recorded"));
+        }
 
-        return ResponseEntity.ok(ApiResponse.success(
-                "Dealer vehicles retrieved successfully",
-                String.format("Found %d vehicles for dealer", vehicles.getTotalElements()),
-                vehicles
-        ));
-    }
+        /**
+         * Track Vehicle Share
+         * POST /api/v2/cars/{id}/share
+         */
+        @PostMapping("/{id}/share")
+        public ResponseEntity<ApiResponse<Object>> trackVehicleShare(
+                        @PathVariable String id,
+                        @RequestBody Map<String, String> shareRequest) {
+
+                log.info("Tracking share for vehicle: {} on platform: {}", id, shareRequest.get("platform"));
+
+                String platform = shareRequest.get("platform");
+                carService.trackVehicleShare(id, platform);
+
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Share tracked successfully",
+                                String.format("Vehicle share on %s has been recorded", platform)));
+        }
+
+        /**
+         * Get Vehicles by Dealer
+         * GET /api/v1/seller/{dealerId}/cars
+         */
+        @GetMapping("/seller/{dealerId}")
+        public ResponseEntity<ApiResponse<Page<CarResponseV2>>> getVehiclesByDealer(
+                        @PathVariable String dealerId,
+                        @RequestParam(value = "page", defaultValue = "0") int page,
+                        @RequestParam(value = "size", defaultValue = "20") int size,
+                        @RequestParam(value = "status", required = false) String status) {
+
+                log.info("Getting vehicles by dealer: {} (page: {}, size: {})", dealerId, page, size);
+
+                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+                Page<CarResponseV2> vehicles = carService.getVehiclesByDealer(dealerId, status, pageable);
+
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Dealer vehicles retrieved successfully",
+                                String.format("Found %d vehicles for dealer", vehicles.getTotalElements()),
+                                vehicles));
+        }
 }
