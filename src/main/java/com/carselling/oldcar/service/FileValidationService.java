@@ -51,6 +51,16 @@ public class FileValidationService {
 
         // Check for potential security threats
         checkForSecurityThreats(originalFilename);
+
+        // Scan for viruses if enabled
+        if (fileUploadConfig.isScanForViruses()) {
+            scanForViruses(file);
+        }
+
+        // Validate image dimensions if it's an image
+        if (isImageFile(originalFilename)) {
+            validateImageDimensions(file);
+        }
     }
 
     /**
@@ -59,8 +69,7 @@ public class FileValidationService {
     public void validateFiles(List<MultipartFile> files) throws SecurityException {
         if (files.size() > fileUploadConfig.getMaxFilesPerRequest()) {
             throw new SecurityException(
-                "Too many files. Maximum allowed: " + fileUploadConfig.getMaxFilesPerRequest()
-            );
+                    "Too many files. Maximum allowed: " + fileUploadConfig.getMaxFilesPerRequest());
         }
 
         for (MultipartFile file : files) {
@@ -72,8 +81,7 @@ public class FileValidationService {
         long maxFileSizeBytes = fileUploadConfig.getMaxFileSizeMB() * 1024L * 1024L;
         if (file.getSize() > maxFileSizeBytes) {
             throw new SecurityException(
-                "File size exceeds maximum allowed size of " + fileUploadConfig.getMaxFileSizeMB() + "MB"
-            );
+                    "File size exceeds maximum allowed size of " + fileUploadConfig.getMaxFileSizeMB() + "MB");
         }
     }
 
@@ -86,8 +94,7 @@ public class FileValidationService {
         extension = extension.toLowerCase();
         if (!fileUploadConfig.getAllowedExtensions().contains(extension)) {
             throw new SecurityException(
-                "File extension not allowed. Allowed extensions: " + fileUploadConfig.getAllowedExtensions()
-            );
+                    "File extension not allowed. Allowed extensions: " + fileUploadConfig.getAllowedExtensions());
         }
     }
 
@@ -101,14 +108,16 @@ public class FileValidationService {
             // Check if detected content type is allowed
             if (!isAllowedContentType(detectedContentType)) {
                 throw new SecurityException(
-                    "Content type not allowed: " + detectedContentType + 
-                    ". Allowed types: " + fileUploadConfig.getAllowedContentTypes()
-                );
+                        "Content type not allowed: " + detectedContentType +
+                                ". Allowed types: " + fileUploadConfig.getAllowedContentTypes());
             }
 
-            // Verify declared type matches detected type
+            // Verify declared type matches detected type - STRICT Check
             if (declaredContentType != null && !declaredContentType.equals(detectedContentType)) {
                 log.warn("Content type mismatch: declared={}, detected={}", declaredContentType, detectedContentType);
+                // Strict enforcing:
+                throw new SecurityException("Content type mismatch: declared " + declaredContentType + " but detected "
+                        + detectedContentType);
             }
 
         } catch (IOException e) {
@@ -131,8 +140,7 @@ public class FileValidationService {
         // Check for executable files
         String lowerFilename = filename.toLowerCase();
         List<String> dangerousExtensions = Arrays.asList(
-            "exe", "bat", "cmd", "com", "pif", "scr", "vbs", "js", "jar", "sh"
-        );
+                "exe", "bat", "cmd", "com", "pif", "scr", "vbs", "js", "jar", "sh");
 
         for (String dangerousExt : dangerousExtensions) {
             if (lowerFilename.endsWith("." + dangerousExt)) {
@@ -160,17 +168,158 @@ public class FileValidationService {
         }
 
         return fileUploadConfig.getAllowedContentTypes().stream()
-            .anyMatch(allowed -> contentType.startsWith(allowed.split("/")[0] + "/") ||
-                                contentType.equals(allowed));
+                .anyMatch(allowed -> contentType.startsWith(allowed.split("/")[0] + "/") ||
+                        contentType.equals(allowed));
     }
 
     /**
      * Get file size in human readable format
      */
     public String getFileSizeDisplay(long bytes) {
-        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024)
+            return bytes + " B";
         int exp = (int) (Math.log(bytes) / Math.log(1024));
         String pre = "KMGTPE".charAt(exp - 1) + "";
         return String.format("%.1f %sB", bytes / Math.pow(1024, exp), pre);
+    }
+
+    /**
+     * Scan file for viruses and malware
+     */
+    private void scanForViruses(MultipartFile file) throws SecurityException {
+        try {
+            // Basic virus scanning - in production, integrate with actual antivirus service
+            byte[] fileBytes = file.getBytes();
+
+            // Check for common malicious signatures
+            if (containsMaliciousSignatures(fileBytes)) {
+                throw new SecurityException("File contains potential malware signatures");
+            }
+
+            // Check file entropy (high entropy might indicate encryption/obfuscation)
+            if (hasHighEntropy(fileBytes)) {
+                log.warn("File {} has high entropy, potential obfuscation detected", file.getOriginalFilename());
+            }
+
+            // Check for embedded scripts in images (polyglot files)
+            if (isImageFile(file.getOriginalFilename()) && containsScriptContent(fileBytes)) {
+                throw new SecurityException("Image file contains embedded scripts");
+            }
+
+        } catch (IOException e) {
+            log.error("Error scanning file for viruses", e);
+            throw new SecurityException("Unable to scan file for viruses");
+        }
+    }
+
+    /**
+     * Check if file contains known malicious signatures
+     */
+    private boolean containsMaliciousSignatures(byte[] fileBytes) {
+        // Basic check for common malicious patterns
+        String content = new String(fileBytes);
+        String[] maliciousPatterns = {
+                "<script", "javascript:", "vbscript:", "onload=", "onerror=",
+                "eval(", "exec(", "system(", "shell_exec", "passthru",
+                "<?php", "<%", "<iframe", "<object", "<embed"
+        };
+
+        String lowerContent = content.toLowerCase();
+        for (String pattern : maliciousPatterns) {
+            if (lowerContent.contains(pattern.toLowerCase())) {
+                log.warn("Malicious pattern detected in file: {}", pattern);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Calculate file entropy to detect potential obfuscation
+     */
+    private boolean hasHighEntropy(byte[] fileBytes) {
+        if (fileBytes.length == 0)
+            return false;
+
+        int[] frequency = new int[256];
+        for (byte b : fileBytes) {
+            frequency[b & 0xFF]++;
+        }
+
+        double entropy = 0.0;
+        for (int freq : frequency) {
+            if (freq > 0) {
+                double probability = (double) freq / fileBytes.length;
+                entropy -= probability * (Math.log(probability) / Math.log(2));
+            }
+        }
+
+        // Entropy > 7.5 is suspicious for most file types
+        return entropy > 7.5;
+    }
+
+    /**
+     * Check if filename indicates an image file
+     */
+    private boolean isImageFile(String filename) {
+        String extension = getFileExtension(filename);
+        return extension != null &&
+                (extension.equalsIgnoreCase("jpg") || extension.equalsIgnoreCase("jpeg") ||
+                        extension.equalsIgnoreCase("png") || extension.equalsIgnoreCase("gif") ||
+                        extension.equalsIgnoreCase("webp"));
+    }
+
+    /**
+     * Check if image file contains script content
+     */
+    private boolean containsScriptContent(byte[] fileBytes) {
+        String content = new String(fileBytes);
+        String[] scriptIndicators = {
+                "<script", "javascript:", "eval(", "function(", "alert(", "document."
+        };
+
+        for (String indicator : scriptIndicators) {
+            if (content.toLowerCase().contains(indicator.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Validate image dimensions for mobile performance
+     */
+    private void validateImageDimensions(MultipartFile file) throws SecurityException {
+        try {
+            java.awt.image.BufferedImage image = javax.imageio.ImageIO.read(file.getInputStream());
+            if (image == null) {
+                // Not a valid image or format not supported by ImageIO
+                // We let it pass if Tika said it was an image, but log warning
+                log.warn("Could not parse image dimensions for validation: {}", file.getOriginalFilename());
+                return;
+            }
+
+            int width = image.getWidth();
+            int height = image.getHeight();
+
+            // Max dimensions 4K usually enough
+            int MAX_WIDTH = 4096;
+            int MAX_HEIGHT = 4096;
+
+            if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+                throw new SecurityException(String.format(
+                        "Image dimensions too large (%dx%d). Max allowed is %dx%d",
+                        width, height, MAX_WIDTH, MAX_HEIGHT));
+            }
+
+            // Min dimensions? Maybe 1x1 is fine, but 0x0 is invalid
+            if (width < 1 || height < 1) {
+                throw new SecurityException("Invalid image dimensions");
+            }
+
+        } catch (IOException e) {
+            log.error("Error checking image dimensions", e);
+            throw new SecurityException("Unable to validate image dimensions");
+        }
     }
 }
