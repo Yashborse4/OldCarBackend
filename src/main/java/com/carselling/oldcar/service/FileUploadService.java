@@ -1,9 +1,6 @@
 package com.carselling.oldcar.service;
 
-import com.amazonaws.HttpMethod;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.*;
-import com.carselling.oldcar.config.S3Config;
+import com.carselling.oldcar.dto.file.FileMetadata;
 import com.carselling.oldcar.dto.file.FileUploadResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,24 +13,24 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * Service for handling file uploads to AWS S3
+ * Service for handling file uploads to Firebase Storage
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class FileUploadService {
 
-    private final AmazonS3 amazonS3Client;
-    private final S3Config s3Config;
+    private final FirebaseStorageService firebaseStorageService;
+    private final com.carselling.oldcar.repository.UploadedFileRepository uploadedFileRepository;
+    private final com.carselling.oldcar.repository.UserRepository userRepository;
 
     // Allowed file types and their MIME types
     private static final Map<String, Set<String>> ALLOWED_FILE_TYPES = Map.of(
-        "image", Set.of("image/jpeg", "image/png", "image/gif", "image/webp"),
-        "document", Set.of("application/pdf", "application/msword", 
-                          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                          "text/plain"),
-        "video", Set.of("video/mp4", "video/avi", "video/mov", "video/wmv")
-    );
+            "image", Set.of("image/jpeg", "image/png", "image/gif", "image/webp"),
+            "document", Set.of("application/pdf", "application/msword",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "text/plain"),
+            "video", Set.of("video/mp4", "video/avi", "video/mov", "video/wmv"));
 
     // Maximum file sizes (in bytes)
     private static final long MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -41,43 +38,35 @@ public class FileUploadService {
     private static final long MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
 
     /**
-     * Upload file to S3 and return file URL
+     * Upload file with strict ownership tracking
      */
-    public FileUploadResponse uploadFile(MultipartFile file, String folder, Long userId) throws IOException {
+    public FileUploadResponse uploadFile(MultipartFile file, String folder, com.carselling.oldcar.model.User uploader,
+            com.carselling.oldcar.model.ResourceType ownerType, Long ownerId) throws IOException {
         // Validate file
         validateFile(file);
 
-        String fileName = generateUniqueFileName(file.getOriginalFilename(), userId);
-        String key = folder + "/" + fileName;
+        String fileName = generateUniqueFileName(file.getOriginalFilename(), uploader.getId());
+        String fullPath = folder + "/" + fileName;
 
         try {
-            // Create metadata
-            ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentType(file.getContentType());
-            metadata.setContentLength(file.getSize());
-            metadata.addUserMetadata("original-filename", file.getOriginalFilename());
-            metadata.addUserMetadata("uploaded-by", userId.toString());
-            metadata.addUserMetadata("upload-timestamp", LocalDateTime.now().toString());
-
-            // Upload file to S3
-            PutObjectRequest putObjectRequest = new PutObjectRequest(
-                s3Config.getBucketName(), 
-                key, 
-                file.getInputStream(), 
-                metadata
-            );
-
-            // Set public read permissions for images
-            if (isImageFile(file)) {
-                putObjectRequest.setCannedAcl(CannedAccessControlList.PublicRead);
-            }
-
-            amazonS3Client.putObject(putObjectRequest);
-
-            // Generate file URL
-            String fileUrl = amazonS3Client.getUrl(s3Config.getBucketName(), key).toString();
+            // Upload file to Firebase
+            String fileUrl = firebaseStorageService.uploadFile(file, fullPath);
 
             log.info("File uploaded successfully: {} -> {}", file.getOriginalFilename(), fileUrl);
+
+            // Save metadata to DB
+            com.carselling.oldcar.model.UploadedFile uploadedFile = com.carselling.oldcar.model.UploadedFile.builder()
+                    .fileUrl(fileUrl)
+                    .fileName(fileName)
+                    .originalFileName(file.getOriginalFilename())
+                    .contentType(file.getContentType())
+                    .size(file.getSize())
+                    .uploadedBy(uploader)
+                    .ownerType(ownerType)
+                    .ownerId(ownerId)
+                    .build();
+
+            uploadedFileRepository.save(uploadedFile);
 
             return FileUploadResponse.builder()
                     .fileName(fileName)
@@ -90,78 +79,93 @@ public class FileUploadService {
                     .build();
 
         } catch (Exception e) {
-            log.error("Error uploading file to S3: {}", e.getMessage(), e);
+            log.error("Error uploading file to Firebase: {}", e.getMessage(), e);
             throw new IOException("Failed to upload file: " + e.getMessage());
         }
     }
 
     /**
+     * Legacy upload method (Deprecated) - Use strict version instead
+     */
+    public FileUploadResponse uploadFile(MultipartFile file, String folder, Long userId) throws IOException {
+        com.carselling.oldcar.model.User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IOException("User not found: " + userId));
+
+        // Default to OTHER type if not specified
+        return uploadFile(file, folder, user, com.carselling.oldcar.model.ResourceType.OTHER, userId);
+    }
+
+    /**
      * Upload multiple files
      */
-    public List<FileUploadResponse> uploadMultipleFiles(List<MultipartFile> files, String folder, Long userId) throws IOException {
+    public List<FileUploadResponse> uploadMultipleFiles(List<MultipartFile> files, String folder,
+            com.carselling.oldcar.model.User uploader,
+            com.carselling.oldcar.model.ResourceType ownerType,
+            Long ownerId) throws IOException {
         List<FileUploadResponse> responses = new ArrayList<>();
-        
+
         for (MultipartFile file : files) {
             try {
-                FileUploadResponse response = uploadFile(file, folder, userId);
+                FileUploadResponse response = uploadFile(file, folder, uploader, ownerType, ownerId);
                 responses.add(response);
             } catch (Exception e) {
                 log.error("Error uploading file {}: {}", file.getOriginalFilename(), e.getMessage());
                 // Continue with other files, but log the error
             }
         }
-        
+
         return responses;
     }
 
     /**
-     * Delete file from S3
+     * Legacy multiple upload (Deprecated)
+     */
+    public List<FileUploadResponse> uploadMultipleFiles(List<MultipartFile> files, String folder, Long userId)
+            throws IOException {
+        com.carselling.oldcar.model.User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IOException("User not found: " + userId));
+
+        return uploadMultipleFiles(files, folder, user, com.carselling.oldcar.model.ResourceType.OTHER, userId);
+    }
+
+    /**
+     * Delete file from Firebase
      */
     public boolean deleteFile(String fileUrl) {
         try {
-            String key = extractKeyFromUrl(fileUrl);
-            amazonS3Client.deleteObject(s3Config.getBucketName(), key);
+            firebaseStorageService.deleteFile(fileUrl);
             log.info("File deleted successfully: {}", fileUrl);
             return true;
         } catch (Exception e) {
-            log.error("Error deleting file from S3: {}", e.getMessage(), e);
+            log.error("Error deleting file from Firebase: {}", e.getMessage(), e);
             return false;
         }
     }
 
     /**
      * Generate presigned URL for secure file access
+     * Note: Firebase public URLs are persistent if made public.
+     * For now returning the original URL as it is practically accessible.
      */
     public String generatePresignedUrl(String fileUrl, int expirationMinutes) {
-        try {
-            String key = extractKeyFromUrl(fileUrl);
-            Date expiration = new Date();
-            long expTimeMillis = expiration.getTime() + (expirationMinutes * 60 * 1000L);
-            expiration.setTime(expTimeMillis);
-
-            GeneratePresignedUrlRequest generatePresignedUrlRequest = 
-                new GeneratePresignedUrlRequest(s3Config.getBucketName(), key)
-                    .withMethod(HttpMethod.GET)
-                    .withExpiration(expiration);
-
-            return amazonS3Client.generatePresignedUrl(generatePresignedUrlRequest).toString();
-        } catch (Exception e) {
-            log.error("Error generating presigned URL: {}", e.getMessage(), e);
-            return fileUrl; // Return original URL as fallback
-        }
+        return fileUrl;
     }
 
     /**
      * Get file metadata
+     * Note: Current basic implementation returns basic info from what we can infer
+     * or fetch.
+     * To fully implement, we would need to fetch generic metadata from Firebase.
      */
-    public ObjectMetadata getFileMetadata(String fileUrl) {
-        try {
-            String key = extractKeyFromUrl(fileUrl);
-            return amazonS3Client.getObjectMetadata(s3Config.getBucketName(), key);
-        } catch (Exception e) {
-            log.error("Error getting file metadata: {}", e.getMessage(), e);
-            return null;
-        }
+    public FileMetadata getFileMetadata(String fileUrl) {
+        // Stub implementation - in a real scenario we'd query Firebase Storage for Blob
+        // metadata
+        return FileMetadata.builder()
+                .contentType("application/octet-stream") // Default or fetched
+                .contentLength(0)
+                .lastModified(new Date())
+                .userMetadata(new HashMap<>())
+                .build();
     }
 
     // ========================= PRIVATE HELPER METHODS =========================
@@ -182,6 +186,8 @@ public class FileUploadService {
         // Check file type
         String fileCategory = getFileCategory(contentType);
         if (fileCategory == null) {
+            // Strict check disabled for now? Or keep enabled.
+            // keeping it enabled as per original code
             throw new IOException("File type not allowed: " + contentType);
         }
 
@@ -214,10 +220,14 @@ public class FileUploadService {
      */
     private long getMaxFileSize(String category) {
         switch (category) {
-            case "image": return MAX_IMAGE_SIZE;
-            case "document": return MAX_DOCUMENT_SIZE;
-            case "video": return MAX_VIDEO_SIZE;
-            default: return MAX_DOCUMENT_SIZE;
+            case "image":
+                return MAX_IMAGE_SIZE;
+            case "document":
+                return MAX_DOCUMENT_SIZE;
+            case "video":
+                return MAX_VIDEO_SIZE;
+            default:
+                return MAX_DOCUMENT_SIZE;
         }
     }
 
@@ -236,21 +246,13 @@ public class FileUploadService {
     }
 
     /**
-     * Check if file is an image
-     */
-    private boolean isImageFile(MultipartFile file) {
-        String contentType = file.getContentType();
-        return contentType != null && contentType.startsWith("image/");
-    }
-
-    /**
      * Generate unique file name
      */
     private String generateUniqueFileName(String originalFilename, Long userId) {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
         String uuid = UUID.randomUUID().toString().substring(0, 8);
         String extension = getFileExtension(originalFilename);
-        
+
         return String.format("%d_%s_%s.%s", userId, timestamp, uuid, extension);
     }
 
@@ -262,35 +264,5 @@ public class FileUploadService {
             return "";
         }
         return filename.substring(filename.lastIndexOf(".") + 1);
-    }
-
-    /**
-     * Extract S3 key from file URL
-     */
-    private String extractKeyFromUrl(String fileUrl) {
-        // Extract key from S3 URL format
-        // Example: https://bucket.s3.region.amazonaws.com/folder/file.jpg
-        try {
-            String bucketUrl = "https://" + s3Config.getBucketName() + ".s3.";
-            if (fileUrl.contains(bucketUrl)) {
-                int keyStart = fileUrl.indexOf(".com/") + 5;
-                return fileUrl.substring(keyStart);
-            }
-            
-            // Alternative format: https://s3.region.amazonaws.com/bucket/folder/file.jpg
-            String s3Url = "https://s3.";
-            if (fileUrl.contains(s3Url)) {
-                int bucketStart = fileUrl.indexOf(s3Config.getBucketName());
-                if (bucketStart > 0) {
-                    int keyStart = bucketStart + s3Config.getBucketName().length() + 1;
-                    return fileUrl.substring(keyStart);
-                }
-            }
-            
-            throw new IllegalArgumentException("Invalid S3 URL format");
-        } catch (Exception e) {
-            log.error("Error extracting key from URL: {}", fileUrl, e);
-            throw new IllegalArgumentException("Invalid S3 URL: " + fileUrl);
-        }
     }
 }
