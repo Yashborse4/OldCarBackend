@@ -3,14 +3,16 @@
 spring:
   # Database Configuration for Development
   datasource:
-    url: jdbc:mysql://localhost:3306/car_selling_dev?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-    username: ${DB_USERNAME:car_user}
-    password: ${DB_PASSWORD:car_password}
+    url: jdbc:postgresql://localhost:5432/carselling # Override if needed, but defaulting to main yaml allows consistency
+#    url: jdbc:mysql://localhost:3306/car_selling_dev?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+#    username: ${DB_USERNAME:car_user}
+#    password: ${DB_PASSWORD:car_password}
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
       connection-timeout: 20000
       leak-detection-threshold: 30000
+      auto-commit: false
 
   # JPA Configuration for Development
   jpa:
