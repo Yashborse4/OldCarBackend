@@ -1,25 +1,35 @@
 package com.carselling.oldcar.controller;
 
 import com.carselling.oldcar.dto.admin.ChangeRoleRequest;
+import com.carselling.oldcar.dto.admin.ResetPasswordRequest;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.dto.user.UserResponse;
 import com.carselling.oldcar.dto.SystemStatistics;
+import com.carselling.oldcar.model.UserActivityLog;
 import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.service.AdminService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+
 import java.util.List;
 import java.util.Map;
+
+import com.carselling.oldcar.util.PaginationUtil;
 
 /**
  * Admin Controller for administrative operations
@@ -31,6 +41,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 @PreAuthorize("hasRole('ADMIN')")
+@Validated
 public class AdminController {
 
         private final AdminService adminService;
@@ -65,10 +76,16 @@ public class AdminController {
                         }
                 }
 
-                Sort.Direction sortDirection = "asc".equalsIgnoreCase(direction)
-                                ? Sort.Direction.ASC
-                                : Sort.Direction.DESC;
-                Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+                if (roleString != null) {
+                        try {
+                                role = Role.valueOf(roleString.toUpperCase());
+                        } catch (IllegalArgumentException e) {
+                                throw new IllegalArgumentException(
+                                                "Invalid role parameter. Valid roles are: USER, DEALER, ADMIN");
+                        }
+                }
+
+                Pageable pageable = PaginationUtil.createPageable(page, size, sort, direction);
 
                 Page<UserResponse> users = adminService.getAllUsers(
                                 username, email, role, location, isActive, pageable);
@@ -194,20 +211,37 @@ public class AdminController {
          * GET /api/admin/users/{id}/activity
          */
         @GetMapping("/users/{id}/activity")
-        public ResponseEntity<ApiResponse<List<AdminService.UserActivityLog>>> getUserActivityLogs(
+        public ResponseEntity<ApiResponse<List<UserActivityLog>>> getUserActivityLogs(
                         @PathVariable Long id,
                         @RequestParam(value = "startDate", required = false) String startDateString,
                         @RequestParam(value = "endDate", required = false) String endDateString) {
 
                 log.info("Admin retrieving activity logs for user ID: {}", id);
 
-                // Parse date parameters (simplified for demo - in production use proper date
-                // parsing)
-                LocalDateTime startDate = startDateString != null ? LocalDateTime.now().minusDays(30)
-                                : LocalDateTime.now().minusDays(30);
-                LocalDateTime endDate = endDateString != null ? LocalDateTime.now() : LocalDateTime.now();
+                LocalDateTime startDate;
+                LocalDateTime endDate;
 
-                List<AdminService.UserActivityLog> activityLogs = adminService.getUserActivityLogs(
+                // Date parsing is now cleaner, but we still need to catch format errors here
+                // locally or let global handler catch it.
+                // Since user requested removal of manual try/catch, we will let
+                // DateTimeParseException bubble up.
+                // However, GlobalExceptionHandler might not catch strict DateTimeParseException
+                // as a BAD_REQUEST unless configured.
+                // GlobalHandler has handleIllegalArgumentException but not specifically
+                // DateTimeParseException.
+                // Let's rely on generic handling or if we want specific message, we'd add it to
+                // GlobalHandler.
+                // But for standardization, "remove manual try-catch".
+
+                startDate = startDateString != null
+                                ? LocalDate.parse(startDateString).atStartOfDay()
+                                : LocalDateTime.now().minusDays(30);
+
+                endDate = endDateString != null
+                                ? LocalDate.parse(endDateString).atTime(23, 59, 59)
+                                : LocalDateTime.now();
+
+                List<UserActivityLog> activityLogs = adminService.getUserActivityLogs(
                                 id, startDate, endDate);
 
                 return ResponseEntity.ok(ApiResponse.success(
@@ -223,11 +257,11 @@ public class AdminController {
         @PostMapping("/users/{id}/reset-password")
         public ResponseEntity<ApiResponse<Object>> resetUserPassword(
                         @PathVariable Long id,
-                        @RequestParam(value = "newPassword") String newPassword) {
+                        @Valid @RequestBody ResetPasswordRequest request) {
 
                 log.info("Admin resetting password for user ID: {}", id);
 
-                adminService.resetUserPassword(id, newPassword);
+                adminService.resetUserPassword(id, request.getNewPassword());
 
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Password reset successfully",
@@ -240,7 +274,7 @@ public class AdminController {
          */
         @GetMapping("/users/registration-stats")
         public ResponseEntity<ApiResponse<Map<String, Object>>> getUserRegistrationStats(
-                        @RequestParam(value = "days", defaultValue = "30") int days) {
+                        @RequestParam(value = "days", defaultValue = "30") @Min(1) int days) {
 
                 log.info("Admin retrieving user registration stats for last {} days", days);
 
@@ -258,7 +292,7 @@ public class AdminController {
          */
         @PostMapping("/users/bulk-ban")
         public ResponseEntity<ApiResponse<Object>> bulkBanUsers(
-                        @RequestBody List<Long> userIds,
+                        @RequestBody @NotEmpty(message = "User ID list cannot be empty") List<Long> userIds,
                         @RequestParam(value = "reason", defaultValue = "Bulk administrative action") String reason) {
 
                 log.info("Admin performing bulk ban on {} users", userIds.size());
@@ -275,7 +309,8 @@ public class AdminController {
          * POST /api/admin/users/bulk-unban
          */
         @PostMapping("/users/bulk-unban")
-        public ResponseEntity<ApiResponse<Object>> bulkUnbanUsers(@RequestBody List<Long> userIds) {
+        public ResponseEntity<ApiResponse<Object>> bulkUnbanUsers(
+                        @RequestBody @NotEmpty(message = "User ID list cannot be empty") List<Long> userIds) {
                 log.info("Admin performing bulk unban on {} users", userIds.size());
 
                 adminService.bulkUpdateUsers(userIds, "UNBAN", null);
@@ -291,7 +326,7 @@ public class AdminController {
          */
         @PostMapping("/users/bulk-role-change")
         public ResponseEntity<ApiResponse<Object>> bulkChangeUserRole(
-                        @RequestBody List<Long> userIds,
+                        @RequestBody @NotEmpty(message = "User ID list cannot be empty") List<Long> userIds,
                         @RequestParam(value = "newRole") String newRole) {
 
                 log.info("Admin performing bulk role change to {} on {} users", newRole, userIds.size());
@@ -300,10 +335,8 @@ public class AdminController {
                 try {
                         Role.valueOf(newRole.toUpperCase());
                 } catch (IllegalArgumentException e) {
-                        return ResponseEntity.badRequest()
-                                        .body(ApiResponse.error(
-                                                        "Invalid role parameter",
-                                                        "Valid roles are: USER, DEALER, ADMIN"));
+                        throw new IllegalArgumentException(
+                                        "Invalid role parameter. Valid roles are: USER, DEALER, ADMIN");
                 }
 
                 adminService.bulkUpdateUsers(userIds, "CHANGE_ROLE", newRole);
