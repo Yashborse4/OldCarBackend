@@ -36,6 +36,8 @@ bin/
 .DS_Store
 
 # Environment and Security
+application.yml
+**/application.yml
 .env
 .env.local
 .env.*.local
@@ -179,3 +181,8 @@ jacoco-resources/
 application-dev.properties
 application-prod.properties
 application-local.properties
+
+# Firebase Service Account
+src/main/resources/carimages-*.json
+serviceAccountKey.json
+
