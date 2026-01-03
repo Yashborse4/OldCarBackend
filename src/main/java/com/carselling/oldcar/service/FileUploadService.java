@@ -23,19 +23,9 @@ public class FileUploadService {
     private final FirebaseStorageService firebaseStorageService;
     private final com.carselling.oldcar.repository.UploadedFileRepository uploadedFileRepository;
     private final com.carselling.oldcar.repository.UserRepository userRepository;
+    private final FileValidationService fileValidationService;
 
-    // Allowed file types and their MIME types
-    private static final Map<String, Set<String>> ALLOWED_FILE_TYPES = Map.of(
-            "image", Set.of("image/jpeg", "image/png", "image/gif", "image/webp"),
-            "document", Set.of("application/pdf", "application/msword",
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    "text/plain"),
-            "video", Set.of("video/mp4", "video/avi", "video/mov", "video/wmv"));
-
-    // Maximum file sizes (in bytes)
-    private static final long MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
-    private static final long MAX_DOCUMENT_SIZE = 20 * 1024 * 1024; // 20MB
-    private static final long MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
+    // Validation constants moved to FileUploadConfig/FileValidationService
 
     /**
      * Upload file with strict ownership tracking
@@ -43,7 +33,8 @@ public class FileUploadService {
     public FileUploadResponse uploadFile(MultipartFile file, String folder, com.carselling.oldcar.model.User uploader,
             com.carselling.oldcar.model.ResourceType ownerType, Long ownerId) throws IOException {
         // Validate file
-        validateFile(file);
+        // Validate file
+        fileValidationService.validateFile(file);
 
         String fileName = generateUniqueFileName(file.getOriginalFilename(), uploader.getId());
         String fullPath = folder + "/" + fileName;
@@ -70,7 +61,7 @@ public class FileUploadService {
 
             return FileUploadResponse.builder()
                     .fileName(fileName)
-                    .originalFileName(file.getOriginalFilename())
+                    .originalFileName(sanitizeFileName(file.getOriginalFilename()))
                     .fileUrl(fileUrl)
                     .fileSize(file.getSize())
                     .contentType(file.getContentType())
@@ -110,7 +101,12 @@ public class FileUploadService {
                 responses.add(response);
             } catch (Exception e) {
                 log.error("Error uploading file {}: {}", file.getOriginalFilename(), e.getMessage());
-                // Continue with other files, but log the error
+                // Return failure response instead of skipping
+                responses.add(FileUploadResponse.builder()
+                        .originalFileName(file.getOriginalFilename())
+                        .success(false)
+                        .message("Failed to upload: " + e.getMessage())
+                        .build());
             }
         }
 
@@ -148,7 +144,21 @@ public class FileUploadService {
      * For now returning the original URL as it is practically accessible.
      */
     public String generatePresignedUrl(String fileUrl, int expirationMinutes) {
+        String fileName = getFileNameFromUrl(fileUrl);
+        if (fileName != null) {
+            String signedUrl = firebaseStorageService.generateSignedUrl(fileName, expirationMinutes);
+            return signedUrl != null ? signedUrl : fileUrl;
+        }
         return fileUrl;
+    }
+
+    private String getFileNameFromUrl(String fileUrl) {
+        // Basic extraction, assuming standard GCS public URL structure
+        // https://storage.googleapis.com/<bucket>/<filename>
+        if (fileUrl != null && fileUrl.contains("storage.googleapis.com")) {
+            return fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+        }
+        return null;
     }
 
     /**
@@ -158,92 +168,19 @@ public class FileUploadService {
      * To fully implement, we would need to fetch generic metadata from Firebase.
      */
     public FileMetadata getFileMetadata(String fileUrl) {
-        // Stub implementation - in a real scenario we'd query Firebase Storage for Blob
-        // metadata
-        return FileMetadata.builder()
-                .contentType("application/octet-stream") // Default or fetched
-                .contentLength(0)
-                .lastModified(new Date())
-                .userMetadata(new HashMap<>())
-                .build();
+        String fileName = getFileNameFromUrl(fileUrl);
+        if (fileName != null) {
+            FileMetadata metadata = firebaseStorageService.getFileMetadata(fileName);
+            if (metadata != null) {
+                return metadata;
+            }
+        }
+
+        // Fallback or empty if not found/error
+        return FileMetadata.builder().build();
     }
 
     // ========================= PRIVATE HELPER METHODS =========================
-
-    /**
-     * Validate uploaded file
-     */
-    private void validateFile(MultipartFile file) throws IOException {
-        if (file.isEmpty()) {
-            throw new IOException("File is empty");
-        }
-
-        String contentType = file.getContentType();
-        if (contentType == null) {
-            throw new IOException("Unable to determine file type");
-        }
-
-        // Check file type
-        String fileCategory = getFileCategory(contentType);
-        if (fileCategory == null) {
-            // Strict check disabled for now? Or keep enabled.
-            // keeping it enabled as per original code
-            throw new IOException("File type not allowed: " + contentType);
-        }
-
-        // Check file size
-        long maxSize = getMaxFileSize(fileCategory);
-        if (file.getSize() > maxSize) {
-            throw new IOException("File size exceeds limit. Max allowed: " + (maxSize / 1024 / 1024) + "MB");
-        }
-
-        // Additional validation for specific file types
-        if ("image".equals(fileCategory)) {
-            validateImageFile(file);
-        }
-    }
-
-    /**
-     * Get file category based on content type
-     */
-    private String getFileCategory(String contentType) {
-        for (Map.Entry<String, Set<String>> entry : ALLOWED_FILE_TYPES.entrySet()) {
-            if (entry.getValue().contains(contentType)) {
-                return entry.getKey();
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Get maximum file size for category
-     */
-    private long getMaxFileSize(String category) {
-        switch (category) {
-            case "image":
-                return MAX_IMAGE_SIZE;
-            case "document":
-                return MAX_DOCUMENT_SIZE;
-            case "video":
-                return MAX_VIDEO_SIZE;
-            default:
-                return MAX_DOCUMENT_SIZE;
-        }
-    }
-
-    /**
-     * Validate image file (additional checks)
-     */
-    private void validateImageFile(MultipartFile file) throws IOException {
-        // Check if file has valid image extension
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename != null) {
-            String extension = getFileExtension(originalFilename).toLowerCase();
-            if (!Set.of("jpg", "jpeg", "png", "gif", "webp").contains(extension)) {
-                throw new IOException("Invalid image file extension: " + extension);
-            }
-        }
-    }
 
     /**
      * Generate unique file name
@@ -264,5 +201,26 @@ public class FileUploadService {
             return "";
         }
         return filename.substring(filename.lastIndexOf(".") + 1);
+    }
+
+    /**
+     * Sanitize filename to prevent XSS in response
+     */
+    private String sanitizeFileName(String filename) {
+        if (filename == null)
+            return null;
+
+        // Strict whitelist: alphanumeric, dots, underscores, hyphens only
+        String safeName = filename.replaceAll("[^a-zA-Z0-9._-]", "_");
+
+        // Prevent directory traversal
+        safeName = safeName.replace("..", "");
+
+        // Max length Limit
+        if (safeName.length() > 200) {
+            safeName = safeName.substring(0, 196) + getFileExtension(filename);
+        }
+
+        return safeName;
     }
 }
