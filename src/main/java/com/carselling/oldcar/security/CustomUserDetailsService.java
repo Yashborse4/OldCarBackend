@@ -32,7 +32,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                             String.format("User not found with username or email: %s", usernameOrEmail)));
 
             log.debug("Successfully loaded user: {} with role: {}", user.getUsername(), user.getRole());
-            return UserPrincipal.create(user);
+            return UserPrincipal.from(user);
             
         } catch (Exception e) {
             log.error("Error loading user details for: {}", usernameOrEmail, e);
@@ -54,7 +54,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                             String.format("User not found with id: %s", userId)));
 
             log.debug("Successfully loaded user by ID: {} - {}", userId, user.getUsername());
-            return UserPrincipal.create(user);
+            return UserPrincipal.from(user);
             
         } catch (Exception e) {
             log.error("Error loading user details by ID: {}", userId, e);

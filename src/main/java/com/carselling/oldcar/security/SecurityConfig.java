@@ -3,6 +3,7 @@ package com.carselling.oldcar.security;
 import com.carselling.oldcar.security.jwt.JwtAuthenticationEntryPoint;
 import com.carselling.oldcar.security.jwt.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -25,6 +26,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Comprehensive Spring Security Configuration
@@ -40,81 +42,102 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080}")
+    private String corsAllowedOrigins;
+
+    @Value("${app.cors.allowed-methods:GET,POST,PUT,DELETE,PATCH,OPTIONS}")
+    private String corsAllowedMethods;
+
+    @Value("${app.cors.allowed-headers:*}")
+    private String corsAllowedHeaders;
+
+    @Value("${app.cors.allow-credentials:true}")
+    private boolean corsAllowCredentials;
+
+    @Value("${app.cors.max-age:3600}")
+    private long corsMaxAge;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            // Disable CSRF for REST API
-            .csrf(AbstractHttpConfigurer::disable)
-            
-            // Configure CORS
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            
-            // Configure frame options for development (remove in production if not needed)
-            .headers(headers -> headers
-                    .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
-                    .contentTypeOptions(contentTypeOptions -> {})
-                    .httpStrictTransportSecurity(hstsConfig -> 
-                        hstsConfig
-                            .maxAgeInSeconds(31536000)
-                            .includeSubDomains(true)))
-            
-            // Configure session management (stateless for JWT)
-            .sessionManagement(session -> 
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            
-            // Configure authentication entry point
-            .exceptionHandling(exception -> 
-                exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
-            
-            // Configure authorization rules
-            .authorizeHttpRequests(authz -> authz
-                // Public endpoints
-                .requestMatchers("/").permitAll()
-                .requestMatchers("/favicon.ico").permitAll()
-                .requestMatchers("/error").permitAll()
-                
-                // Authentication endpoints
-                .requestMatchers("/api/auth/**").permitAll()
-                
-                // Public car viewing endpoints
-                .requestMatchers(HttpMethod.GET, "/api/cars", "/api/cars/*").permitAll()
-                
-                // GraphQL endpoint
-                .requestMatchers("/graphql").permitAll()
-                
-                // WebSocket endpoints
-                .requestMatchers("/ws/**", "/ws-native/**").permitAll()
-                
-                // Actuator endpoints
-                .requestMatchers("/actuator/health").permitAll()
-                .requestMatchers("/actuator/**").hasRole("ADMIN")
-                
-                // Swagger/OpenAPI documentation (development)
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
-                
-                // Static resources
-                .requestMatchers("/static/**", "/public/**").permitAll()
-                
-                // User profile endpoints
-                .requestMatchers("/api/user/**").authenticated()
-                
-                // Car management endpoints
-                .requestMatchers(HttpMethod.POST, "/api/cars").hasAnyRole("SELLER", "DEALER", "ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/cars/*").hasAnyRole("SELLER", "DEALER", "ADMIN")
-                .requestMatchers(HttpMethod.PATCH, "/api/cars/*").hasAnyRole("SELLER", "DEALER", "ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/api/cars/*").hasAnyRole("SELLER", "DEALER", "ADMIN")
-                .requestMatchers("/api/cars/mycars").hasAnyRole("SELLER", "DEALER", "ADMIN")
-                .requestMatchers("/api/cars/*/feature").hasAnyRole("DEALER", "ADMIN")
-                
-                // Admin endpoints
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                
-                // Chat endpoints
-                .requestMatchers("/api/chat/**").authenticated()
-                
-                // All other requests require authentication
-                .anyRequest().authenticated()
-            );
+                // Disable CSRF for REST API
+                .csrf(AbstractHttpConfigurer::disable)
+
+                // Configure CORS
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+
+                // Configure frame options for development (remove in production if not needed)
+                .headers(headers -> headers
+                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
+                        .contentTypeOptions(contentTypeOptions -> {
+                        })
+                        .httpStrictTransportSecurity(hstsConfig -> hstsConfig
+                                .maxAgeInSeconds(31536000)
+                                .includeSubDomains(true)))
+
+                // Configure session management (stateless for JWT)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+                // Configure authentication entry point
+                .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+
+                // Configure authorization rules
+                .authorizeHttpRequests(authz -> authz
+                        // =====================================================
+                        // PUBLIC ENDPOINTS
+                        // =====================================================
+
+                        // Core Public Routes
+                        .requestMatchers("/").permitAll()
+                        .requestMatchers("/favicon.ico", "/error").permitAll()
+                        .requestMatchers("/static/**", "/public/**").permitAll()
+
+                        // Authentication (Login, Register, OTP)
+                        .requestMatchers("/api/auth/**").permitAll()
+
+                        // Public Car Viewing & Search
+                        .requestMatchers(HttpMethod.GET, "/api/cars", "/api/cars/*", "/api/cars/**")
+                        .permitAll()
+                        .requestMatchers("/api/search/**").permitAll()
+                        .requestMatchers("/graphql").permitAll()
+
+                        // WebSocket & System
+                        .requestMatchers("/ws/**", "/ws-native/**").permitAll()
+                        .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
+
+                        // =====================================================
+                        // PROTECTED ENDPOINTS (Requiure Auth)
+                        // =====================================================
+
+                        // User Profile
+                        .requestMatchers("/api/user/**").authenticated()
+
+                        // Car Management (Create/Update/Delete) - Requires Role
+                        .requestMatchers(HttpMethod.POST, "/api/cars")
+                        .hasAnyRole("USER", "DEALER", "ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/cars/*")
+                        .hasAnyRole("USER", "DEALER", "ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/cars/*")
+                        .hasAnyRole("USER", "DEALER", "ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/cars/*")
+                        .hasAnyRole("USER", "DEALER", "ADMIN")
+                        .requestMatchers("/api/cars/mycars").hasAnyRole("USER", "DEALER", "ADMIN")
+
+                        // Dealer Specific Actions (Feature Car, etc.)
+                        // Note: Additional verificaton (isVerifiedDealer) should be enforced at
+                        // Controller level
+                        .requestMatchers("/api/cars/*/feature").hasAnyRole("DEALER", "ADMIN")
+
+                        // Admin Only
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
+
+                        // Communication
+                        .requestMatchers("/api/chat/**").authenticated()
+
+                        // Fallback: Secure everything else
+                        .anyRequest().authenticated());
 
         // Add JWT authentication filter
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -123,6 +146,7 @@ public class SecurityConfig {
     }
 
     @Bean
+    @SuppressWarnings("deprecation")
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
         authProvider.setUserDetailsService(userDetailsService);
@@ -144,46 +168,42 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        
-        // Allow specific origins (configure based on your frontend)
-        configuration.setAllowedOriginPatterns(List.of(
-            "http://localhost:3000",    // React development
-            "http://localhost:8080",    // Alternative frontend port
-            "http://localhost:19006",   // React Native Expo
-            "https://*.yourdomain.com"  // Production domain (replace with actual)
-        ));
-        
-        // Allow specific methods
-        configuration.setAllowedMethods(Arrays.asList(
-            "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"
-        ));
-        
-        // Allow specific headers
-        configuration.setAllowedHeaders(Arrays.asList(
-            "Authorization", 
-            "Content-Type", 
-            "X-Requested-With", 
-            "Accept", 
-            "Origin", 
-            "Access-Control-Request-Method", 
-            "Access-Control-Request-Headers"
-        ));
-        
-        // Expose specific headers
+
+        if (corsAllowedOrigins != null && !corsAllowedOrigins.isBlank()) {
+            configuration.setAllowedOriginPatterns(Arrays.stream(corsAllowedOrigins.split(","))
+                    .map(String::trim)
+                    .filter(origin -> !origin.isEmpty())
+                    .collect(Collectors.toList()));
+        }
+
+        if (corsAllowedMethods != null && !corsAllowedMethods.isBlank()) {
+            configuration.setAllowedMethods(Arrays.stream(corsAllowedMethods.split(","))
+                    .map(String::trim)
+                    .filter(method -> !method.isEmpty())
+                    .collect(Collectors.toList()));
+        }
+
+        if (corsAllowedHeaders != null && !corsAllowedHeaders.isBlank()) {
+            if ("*".equals(corsAllowedHeaders.trim())) {
+                configuration.setAllowedHeaders(List.of("*"));
+            } else {
+                configuration.setAllowedHeaders(Arrays.stream(corsAllowedHeaders.split(","))
+                        .map(String::trim)
+                        .filter(header -> !header.isEmpty())
+                        .collect(Collectors.toList()));
+            }
+        }
+
         configuration.setExposedHeaders(Arrays.asList(
-            "Access-Control-Allow-Origin", 
-            "Access-Control-Allow-Credentials"
-        ));
-        
-        // Allow credentials
-        configuration.setAllowCredentials(true);
-        
-        // Cache preflight responses for 1 hour
-        configuration.setMaxAge(3600L);
+                "Access-Control-Allow-Origin",
+                "Access-Control-Allow-Credentials"));
+
+        configuration.setAllowCredentials(corsAllowCredentials);
+        configuration.setMaxAge(corsMaxAge);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
-        
+
         return source;
     }
 }
