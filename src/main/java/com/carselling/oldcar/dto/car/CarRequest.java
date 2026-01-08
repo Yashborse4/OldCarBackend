@@ -40,8 +40,7 @@ public class CarRequest {
     private String description;
 
     @Size(max = 500, message = "Image URL must not exceed 500 characters")
-    @Pattern(regexp = "^(https?://.*\\.(jpg|jpeg|png|gif|webp))$|^$", 
-             message = "Please provide a valid image URL")
+    @Pattern(regexp = "^(https?://.*\\.(jpg|jpeg|png|gif|webp))$|^$", message = "Please provide a valid image URL")
     private String imageUrl;
 
     @Min(value = 0, message = "Mileage cannot be negative")
@@ -64,4 +63,6 @@ public class CarRequest {
     @Min(value = 1, message = "Number of owners must be at least 1")
     @Max(value = 20, message = "Number of owners cannot exceed 20")
     private Integer numberOfOwners;
+
+    private java.util.List<String> images;
 }

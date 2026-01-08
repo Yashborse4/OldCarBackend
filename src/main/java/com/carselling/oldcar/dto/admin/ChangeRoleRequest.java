@@ -17,7 +17,7 @@ import lombok.NoArgsConstructor;
 public class ChangeRoleRequest {
 
     @NotBlank(message = "Role is required")
-    @Pattern(regexp = "^(VIEWER|SELLER|DEALER|ADMIN)$", message = "Role must be VIEWER, SELLER, DEALER, or ADMIN")
+    @Pattern(regexp = "^(USER|DEALER|ADMIN)$", message = "Role must be USER, DEALER, or ADMIN")
     private String newRole;
     
     private String reason; // Optional reason for role change

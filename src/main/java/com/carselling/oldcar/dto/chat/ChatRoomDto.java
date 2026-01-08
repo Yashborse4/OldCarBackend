@@ -16,17 +16,48 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ChatRoomDto {
     private Long id;
+    private String name;
+    private String description;
+    private String type;
+    private CreatedBy createdBy;
+    private boolean isActive;
     private Long carId;
-    private String carTitle;
-    private String carImageUrl;
-    private Long buyerId;
-    private String buyerName;
-    private String buyerAvatarUrl;
-    private Long sellerId;
-    private String sellerName;
-    private String sellerAvatarUrl;
-    private boolean active;
     private LocalDateTime createdAt;
-    private LocalDateTime lastMessageAt;
-    private long unreadCount;
+    private LocalDateTime updatedAt;
+    private LocalDateTime lastActivityAt;
+    private int participantCount;
+    private LastMessage lastMessage;
+    private Integer maxParticipants;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CreatedBy {
+        private Long id;
+        private String username;
+        private String email;
+        private String displayName;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LastMessage {
+        private Long id;
+        private String content;
+        private String messageType;
+        private Sender sender;
+        private LocalDateTime createdAt;
+
+        @Data
+        @Builder
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class Sender {
+            private Long id;
+            private String username;
+        }
+    }
 }

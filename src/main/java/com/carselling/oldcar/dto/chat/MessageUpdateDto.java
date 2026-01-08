@@ -16,6 +16,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class MessageUpdateDto {
     private String action; // EDITED, DELETED, etc.
-    private ChatMessageDtoV2 message;
+    private ChatMessageDto message;
     private LocalDateTime timestamp;
 }

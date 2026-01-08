@@ -16,13 +16,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateCarInquiryChatRequest {
-    
+
     @NotNull(message = "Car ID is required")
     private Long carId;
-    
-    @NotNull(message = "Seller ID is required")
-    private Long sellerId;
-    
+
     @NotBlank(message = "Initial message is required")
     @Size(max = 1000, message = "Message cannot exceed 1000 characters")
     private String message;

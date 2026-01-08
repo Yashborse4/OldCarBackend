@@ -1,16 +1,15 @@
 package com.carselling.oldcar.dto.car;
 
-import com.carselling.oldcar.dto.user.UserSummary;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
- * Car Response DTO with comprehensive car and owner information
+ * Car Response DTO with comprehensive car and dealer information
  */
 @Data
 @NoArgsConstructor
@@ -18,39 +17,48 @@ import java.time.LocalDateTime;
 @Builder
 public class CarResponse {
 
-    private Long id;
+    private String id;
     private String make;
     private String model;
     private Integer year;
-    private BigDecimal price;
-    private String description;
-    private String imageUrl;
-    private UserSummary owner;
-    private Boolean isActive;
-    private Boolean isFeatured;
-    private Boolean isSold;
-    private Long viewCount;
-    private Integer mileage;
-    private String fuelType;
-    private String transmission;
-    private String color;
-    private String vin;
-    private Integer numberOfOwners;
-    private LocalDateTime featuredUntil;
+    private Long price;
+    private Long mileage;
+    private String location;
+    private String condition;
+    private List<String> images;
+    private CarSpecifications specifications;
+    private String dealerId;
+    private String dealerName;
+    private boolean isCoListed;
+    private List<String> coListedIn;
+    private Long views;
+    private Long inquiries;
+    private Long shares;
+    private String status;
+    private boolean featured;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CarSpecifications {
+        private String fuelType;
+        private String transmission;
+        private String color;
+        private String engine;
+        private String driveType;
+        private Integer doors;
+        private Integer seats;
+    }
 
     // Helper methods
     public String getFullName() {
         return year + " " + make + " " + model;
     }
 
-    public boolean isCurrentlyFeatured() {
-        return Boolean.TRUE.equals(isFeatured) && 
-               (featuredUntil == null || featuredUntil.isAfter(LocalDateTime.now()));
-    }
-
     public boolean isAvailable() {
-        return Boolean.TRUE.equals(isActive) && !Boolean.TRUE.equals(isSold);
+        return "Available".equals(status);
     }
 }

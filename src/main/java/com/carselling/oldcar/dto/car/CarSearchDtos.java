@@ -25,7 +25,7 @@ public class CarSearchDtos {
         private String variant;
         private java.util.List<String> fuelTypes;
         private java.util.List<String> transmissions;
-        private String city;
+        private java.util.List<String> cities;
         private Integer minYear;
         private Integer maxYear;
         private BigDecimal minPrice;
@@ -51,6 +51,9 @@ public class CarSearchDtos {
         private Boolean verifiedDealer;
         private String thumbnailUrl;
         private String sellerType;
+        private String ownerName;
+        private String condition;
+        private Integer views;
         private LocalDateTime createdAt;
 
         public static CarSearchHitDto fromDocument(VehicleSearchDocument doc) {
@@ -60,15 +63,21 @@ public class CarSearchDtos {
                     .model(doc.getModel())
                     .variant(doc.getVariant())
                     .year(doc.getYear())
-                    .price(doc.getPrice())
+                    .price(doc.getPrice() != null ? BigDecimal.valueOf(doc.getPrice()) : null)
                     .mileage(doc.getMileage())
                     .city(doc.getCity())
                     .fuelType(doc.getFuelType())
                     .transmission(doc.getTransmission())
-                    .verifiedDealer(doc.getVerifiedDealer())
-                    .thumbnailUrl(doc.getThumbnailUrl())
-                    .sellerType(doc.getSellerType())
-                    .createdAt(doc.getCreatedAt())
+                    .verifiedDealer(doc.isDealerVerified())
+                    .thumbnailUrl(doc.getThumbnailImageUrl())
+                    // Fields not present in VehicleSearchDocument, setting to null/defaults
+                    .sellerType(null)
+                    .ownerName(null)
+                    .condition("Used") // Defaulting to Used as safe assumption for old car platform
+                    .views(doc.getViewCount())
+                    .createdAt(doc.getCreatedAt() != null
+                            ? LocalDateTime.ofInstant(doc.getCreatedAt(), java.time.ZoneId.systemDefault())
+                            : null)
                     .build();
         }
     }

@@ -1,5 +1,6 @@
 package com.carselling.oldcar.dto.auth;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -7,11 +8,12 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * JWT Authentication Response
+ * JWT Authentication Response - Aligned with frontend requirements
  */
 @Data
 @Builder
 @NoArgsConstructor
+@AllArgsConstructor
 public class JwtAuthResponse {
     private String accessToken;
     private String refreshToken;
@@ -22,38 +24,12 @@ public class JwtAuthResponse {
     private String email;
     private String role;
     private String location;
+    private Boolean emailVerified;
+    private Boolean verifiedDealer;
     private LocalDateTime expiresAt;
     private LocalDateTime refreshExpiresAt;
-    private Long expiresIn;        // in seconds
+    private Long expiresIn; // in seconds
     private Long refreshExpiresIn; // in seconds
-
-    // Backward compatibility constructor
-    public JwtAuthResponse(String accessToken, String tokenType, Long userId, String username, String email) {
-        this.accessToken = accessToken;
-        this.tokenType = tokenType;
-        this.userId = userId;
-        this.username = username;
-        this.email = email;
-    }
-
-    // Enhanced constructor
-    public JwtAuthResponse(String accessToken, String refreshToken, String tokenType, 
-                          Long userId, String username, String email, String role, String location,
-                          LocalDateTime expiresAt, LocalDateTime refreshExpiresAt, 
-                          Long expiresIn, Long refreshExpiresIn) {
-        this.accessToken = accessToken;
-        this.refreshToken = refreshToken;
-        this.tokenType = tokenType;
-        this.userId = userId;
-        this.username = username;
-        this.email = email;
-        this.role = role;
-        this.location = location;
-        this.expiresAt = expiresAt;
-        this.refreshExpiresAt = refreshExpiresAt;
-        this.expiresIn = expiresIn;
-        this.refreshExpiresIn = refreshExpiresIn;
-    }
 
     // Helper methods
     public boolean hasRefreshToken() {

@@ -26,5 +26,15 @@ public class TokenValidationResponse {
         private String email;
         private String role;
         private String location;
+
+        /**
+         * Whether the user's email has been verified.
+         */
+        private Boolean emailVerified;
+
+        /**
+         * Whether the user has been verified as a dealer.
+         */
+        private Boolean verifiedDealer;
     }
 }

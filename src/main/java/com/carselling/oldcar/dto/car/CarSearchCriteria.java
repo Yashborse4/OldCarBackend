@@ -25,6 +25,7 @@ public class CarSearchCriteria {
     private Boolean featured;
     private String fuelType;
     private String transmission;
+    private String variant; // Car variant (e.g., LX, EX, Sport, etc.)
     private String bodyType;
     private String color;
     private Integer minSeatingCapacity;
@@ -34,4 +35,10 @@ public class CarSearchCriteria {
     private String dealerId;
     private String sortBy;
     private String sortDirection;
+
+    /**
+     * Optional free-text query for brand/model/city/year search.
+     * Mapped from the `query` request parameter.
+     */
+    private String query;
 }

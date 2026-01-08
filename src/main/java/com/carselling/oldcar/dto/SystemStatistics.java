@@ -1,7 +1,5 @@
 package com.carselling.oldcar.dto;
 
-import com.carselling.oldcar.service.UserService;
-import com.carselling.oldcar.service.CarService;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,23 +14,23 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class SystemStatistics {
-    
-    private UserService.UserStatistics userStatistics;
-    private CarService.CarStatistics carStatistics;
-    
-    public UserService.UserStatistics getUserStatistics() {
+
+    private UserStatistics userStatistics;
+    private CarStatistics carStatistics;
+
+    public UserStatistics getUserStatistics() {
         return userStatistics;
     }
-    
-    public void setUserStatistics(UserService.UserStatistics userStatistics) {
+
+    public void setUserStatistics(UserStatistics userStatistics) {
         this.userStatistics = userStatistics;
     }
-    
-    public CarService.CarStatistics getCarStatistics() {
+
+    public CarStatistics getCarStatistics() {
         return carStatistics;
     }
-    
-    public void setCarStatistics(CarService.CarStatistics carStatistics) {
+
+    public void setCarStatistics(CarStatistics carStatistics) {
         this.carStatistics = carStatistics;
     }
 }
