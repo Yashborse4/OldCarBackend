@@ -1,6 +1,8 @@
 package com.carselling.oldcar.service;
 
 import com.carselling.oldcar.dto.car.*;
+
+import com.carselling.oldcar.dto.CarStatistics;
 import com.carselling.oldcar.dto.user.UserSummary;
 import com.carselling.oldcar.model.Car;
 import com.carselling.oldcar.model.User;
@@ -8,6 +10,8 @@ import com.carselling.oldcar.exception.ResourceNotFoundException;
 import com.carselling.oldcar.exception.UnauthorizedActionException;
 import com.carselling.oldcar.repository.CarRepository;
 import com.carselling.oldcar.repository.UserRepository;
+import com.carselling.oldcar.repository.ChatRoomRepository;
+import com.carselling.oldcar.repository.ChatParticipantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -31,12 +35,14 @@ public class CarService {
 
     private final CarRepository carRepository;
     private final UserRepository userRepository;
+    private final ChatRoomRepository chatRoomRepository;
+    private final ChatParticipantRepository chatParticipantRepository;
     private final AuthService authService;
 
     /**
      * Get all vehicles with pagination
      */
-    public Page<CarResponseV2> getAllVehicles(Pageable pageable) {
+    public Page<CarResponse> getAllVehicles(Pageable pageable) {
         log.debug("Getting all vehicles with pagination: {}", pageable);
 
         Page<Car> cars = carRepository.findAllActiveCars(pageable);
@@ -44,7 +50,7 @@ public class CarService {
         User currentUser = authService.getCurrentUserOrNull();
         boolean isAdmin = currentUser != null && currentUser.getRole() == com.carselling.oldcar.model.Role.ADMIN;
 
-        List<CarResponseV2> carResponses = cars.getContent().stream()
+        List<CarResponse> carResponses = cars.getContent().stream()
                 .filter(car -> isAdmin || isVehicleVisible(car))
                 .map(this::convertToResponseV2)
                 .collect(Collectors.toList());
@@ -56,7 +62,7 @@ public class CarService {
      * Get vehicle by ID
      */
     @Transactional(readOnly = true)
-    public CarResponseV2 getVehicleById(String id) {
+    public CarResponse getVehicleById(String id) {
         log.debug("Getting vehicle by ID: {}", id);
 
         Car car = carRepository.findById(Long.parseLong(id))
@@ -189,7 +195,7 @@ public class CarService {
                 .build();
     }
 
-    public CarResponseV2 createVehicle(CarRequest request, Long currentUserId) {
+    public CarResponse createVehicle(CarRequest request, Long currentUserId) {
         log.debug("Creating new vehicle for user: {}", currentUserId);
 
         User owner = userRepository.findById(currentUserId)
@@ -213,9 +219,16 @@ public class CarService {
                 .isSold(false)
                 .viewCount(0L)
                 .owner(owner)
+                .images(request.getImages() != null ? request.getImages() : new java.util.ArrayList<>())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
+
+        // 1. If imageUrl (Banner) is NOT provided, but we have images, use the first
+        // one as banner
+        if ((car.getImageUrl() == null || car.getImageUrl().isBlank()) && !car.getImages().isEmpty()) {
+            car.setImageUrl(car.getImages().get(0));
+        }
 
         Car savedCar = carRepository.save(car);
         log.info("Created new vehicle with ID: {} for user: {}", savedCar.getId(), currentUserId);
@@ -226,7 +239,7 @@ public class CarService {
     /**
      * Update vehicle
      */
-    public CarResponseV2 updateVehicle(String id, CarRequest request, Long currentUserId) {
+    public CarResponse updateVehicle(String id, CarRequest request, Long currentUserId) {
         log.debug("Updating vehicle: {} by user: {}", id, currentUserId);
 
         Car car = carRepository.findById(Long.parseLong(id))
@@ -250,6 +263,19 @@ public class CarService {
         car.setColor(request.getColor());
         car.setVin(request.getVin());
         car.setNumberOfOwners(request.getNumberOfOwners());
+
+        if (request.getImages() != null) {
+            car.setImages(request.getImages());
+        }
+
+        // banner logic: if explicit imageUrl is null/blank, and we have images, set
+        // first as banner
+        if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
+            car.setImageUrl(request.getImageUrl());
+        } else if ((car.getImageUrl() == null || car.getImageUrl().isBlank()) && !car.getImages().isEmpty()) {
+            car.setImageUrl(car.getImages().get(0));
+        }
+
         car.setUpdatedAt(LocalDateTime.now());
 
         Car updatedCar = carRepository.save(car);
@@ -284,9 +310,17 @@ public class CarService {
     }
 
     /**
+     * Soft delete all cars for a specific user (Admin only internal use)
+     */
+    public void softDeleteUserCars(Long userId) {
+        log.debug("Soft deleting all cars for user: {}", userId);
+        carRepository.softDeleteCarsByOwner(userId);
+    }
+
+    /**
      * Update vehicle status
      */
-    public CarResponseV2 updateVehicleStatus(String id, String status, Long currentUserId) {
+    public CarResponse updateVehicleStatus(String id, String status, Long currentUserId) {
         log.debug("Updating vehicle status: {} to {} by user: {}", id, status, currentUserId);
 
         Car car = carRepository.findById(Long.parseLong(id))
@@ -322,7 +356,7 @@ public class CarService {
     /**
      * Toggle vehicle visibility (Hide/Show)
      */
-    public CarResponseV2 toggleVisibility(String id, boolean visible, Long currentUserId) {
+    public CarResponse toggleVisibility(String id, boolean visible, Long currentUserId) {
         log.debug("Toggling visibility for vehicle: {} to {} by user: {}", id, visible, currentUserId);
 
         Car car = carRepository.findById(Long.parseLong(id))
@@ -345,11 +379,11 @@ public class CarService {
     /**
      * Search vehicles with filters and optional free-text query.
      *
-     * This method is used by /api/v2/cars/search and is the main entry point for
+     * This method is used by /api/cars/search and is the main entry point for
      * the advanced search experience in the mobile app.
      */
     @Transactional(readOnly = true)
-    public Page<CarResponseV2> searchVehicles(CarSearchCriteria criteria, Pageable pageable) {
+    public Page<CarResponse> searchVehicles(CarSearchCriteria criteria, Pageable pageable) {
         log.debug("Searching vehicles with criteria: {} and pageable: {}", criteria, pageable);
 
         Page<Car> cars;
@@ -445,7 +479,7 @@ public class CarService {
                 })
                 .collect(Collectors.toList());
 
-        List<CarResponseV2> carResponses = filteredCars.stream()
+        List<CarResponse> carResponses = filteredCars.stream()
                 .filter(car -> {
                     // Admin can see everything
                     User currentUser = authService.getCurrentUserOrNull();
@@ -463,7 +497,7 @@ public class CarService {
     }
 
     /**
-     * Get vehicle analytics (mock implementation)
+     * Get vehicle analytics
      */
     @Transactional(readOnly = true)
     public CarAnalyticsResponse getVehicleAnalytics(String id, Long currentUserId) {
@@ -477,12 +511,11 @@ public class CarService {
             throw new UnauthorizedActionException("You can only view analytics for your own vehicles");
         }
 
-        // Real analytics data (defaulting to 0 where not tracked yet)
         return CarAnalyticsResponse.builder()
                 .vehicleId(id)
                 .views((long) (car.getViewCount() != null ? car.getViewCount() : 0))
-                .inquiries(0L) // TODO: Implement inquiry tracking
-                .shares(0L) // TODO: Implement share tracking
+                .inquiries((long) (car.getInquiryCount() != null ? car.getInquiryCount() : 0))
+                .shares((long) (car.getShareCount() != null ? car.getShareCount() : 0))
                 .coListings(0L)
                 .avgTimeOnMarket(0)
                 .lastActivity(LocalDateTime.now())
@@ -494,7 +527,7 @@ public class CarService {
     /**
      * Toggle featured status
      */
-    public CarResponseV2 toggleFeatureVehicle(String id, boolean featured, Long currentUserId) {
+    public CarResponse toggleFeatureVehicle(String id, boolean featured, Long currentUserId) {
         log.debug("Toggling feature status for vehicle: {} to {} by user: {}", id, featured, currentUserId);
 
         Car car = carRepository.findById(Long.parseLong(id))
@@ -527,17 +560,28 @@ public class CarService {
     }
 
     /**
+     * Track vehicle inquiry
+     */
+    public void trackVehicleInquiry(String id) {
+        log.debug("Tracking inquiry for vehicle: {}", id);
+
+        Car car = carRepository.findById(Long.parseLong(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
+
+        car.incrementInquiryCount();
+        carRepository.save(car);
+    }
+
+    /**
      * Track vehicle share
      */
     public void trackVehicleShare(String id, String platform) {
         log.debug("Tracking share for vehicle: {} on platform: {}", id, platform);
 
-        // Can be enhanced with actual tracking implementation
         Car car = carRepository.findById(Long.parseLong(id))
                 .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
 
-        // For now, just increment view count as a proxy
-        car.setViewCount(car.getViewCount() != null ? (long) car.getViewCount() + 1L : 1L);
+        car.incrementShareCount();
         carRepository.save(car);
     }
 
@@ -545,7 +589,7 @@ public class CarService {
      * Get similar vehicles (mock implementation)
      */
     @Transactional(readOnly = true)
-    public List<CarResponseV2> getSimilarVehicles(String id, int limit) {
+    public List<CarResponse> getSimilarVehicles(String id, int limit) {
         log.debug("Getting similar vehicles for: {} with limit: {}", id, limit);
 
         Car car = carRepository.findById(Long.parseLong(id))
@@ -566,26 +610,106 @@ public class CarService {
      * Get vehicles by dealer
      */
     @Transactional(readOnly = true)
-    public Page<CarResponseV2> getVehiclesByDealer(String dealerId, String status, Pageable pageable) {
+    public Page<CarResponse> getVehiclesByDealer(String dealerId, String status, Pageable pageable) {
         log.debug("Getting vehicles by dealer: {} with status: {}", dealerId, status);
 
-        Page<Car> cars = carRepository.findByOwnerId(Long.parseLong(dealerId), pageable);
+        Long dealerLongId = Long.parseLong(dealerId);
+        Page<Car> cars = carRepository.findByOwnerId(dealerLongId, pageable);
 
-        // Ensure dealer is verified before showing their cars publicly
-        // Unless we are the dealer ourselves (not passed here, assuming public access)
-        List<CarResponseV2> carResponses = cars.getContent().stream()
-                .filter(this::isVehicleVisible)
+        User currentUser = authService.getCurrentUserOrNull();
+        boolean isDealerOwner = currentUser != null && currentUser.getId().equals(dealerLongId);
+
+        List<Car> filteredCars;
+
+        if (isDealerOwner) {
+            filteredCars = cars.getContent();
+
+            if (status != null && !status.isBlank()) {
+                String normalized = status.trim().toUpperCase();
+                filteredCars = filteredCars.stream().filter(car -> {
+                    if ("SOLD".equals(normalized)) {
+                        return Boolean.TRUE.equals(car.getIsSold());
+                    }
+                    if ("AVAILABLE".equals(normalized) || "ACTIVE".equals(normalized)) {
+                        return Boolean.TRUE.equals(car.getIsActive()) && !Boolean.TRUE.equals(car.getIsSold());
+                    }
+                    if ("INACTIVE".equals(normalized)) {
+                        return !Boolean.TRUE.equals(car.getIsActive());
+                    }
+                    return true;
+                }).collect(Collectors.toList());
+            }
+        } else {
+            filteredCars = cars.getContent().stream()
+                    .filter(this::isVehicleVisible)
+                    .collect(Collectors.toList());
+        }
+
+        List<CarResponse> carResponses = filteredCars.stream()
                 .map(this::convertToResponseV2)
                 .collect(Collectors.toList());
 
         return new PageImpl<>(carResponses, pageable, cars.getTotalElements());
     }
 
+    @Transactional(readOnly = true)
+    public Page<CarResponse> getDealerCarsForOwner(Long dealerId, String status, Pageable pageable) {
+        log.debug("Getting dealer-owned vehicles for user: {} with status: {}", dealerId, status);
+
+        Page<Car> cars = carRepository.findByOwnerId(dealerId, pageable);
+
+        List<Car> filtered = cars.getContent();
+        if (status != null && !status.isBlank()) {
+            String normalized = status.trim().toUpperCase();
+            filtered = filtered.stream().filter(car -> {
+                if ("SOLD".equals(normalized)) {
+                    return Boolean.TRUE.equals(car.getIsSold());
+                }
+                if ("AVAILABLE".equals(normalized) || "ACTIVE".equals(normalized)) {
+                    return Boolean.TRUE.equals(car.getIsActive()) && !Boolean.TRUE.equals(car.getIsSold());
+                }
+                if ("INACTIVE".equals(normalized)) {
+                    return !Boolean.TRUE.equals(car.getIsActive());
+                }
+                return true;
+            }).collect(Collectors.toList());
+        }
+
+        List<CarResponse> carResponses = filtered.stream()
+                .map(this::convertToResponseV2)
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(carResponses, pageable, cars.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public DealerDashboardResponse getDealerDashboard(Long dealerId) {
+        log.debug("Getting dealer dashboard statistics for user: {}", dealerId);
+
+        userRepository.findById(dealerId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", dealerId.toString()));
+
+        long totalCarsAdded = carRepository.countByOwnerId(dealerId);
+        long activeCars = carRepository.countActiveCarsByOwnerId(dealerId);
+        Long totalViewsRaw = carRepository.sumViewCountByOwnerId(dealerId);
+        long totalViews = totalViewsRaw != null ? totalViewsRaw : 0L;
+        long contactRequests = chatRoomRepository.countCarInquiryChatsForSeller(dealerId);
+        long totalUniqueVisitors = chatParticipantRepository.countUniqueInquiryUsersForSeller(dealerId);
+
+        return DealerDashboardResponse.builder()
+                .totalViews(totalViews)
+                .totalUniqueVisitors(totalUniqueVisitors)
+                .totalCarsAdded(totalCarsAdded)
+                .activeCars(activeCars)
+                .contactRequestsReceived(contactRequests)
+                .build();
+    }
+
     // Helper methods
 
-    private CarResponseV2 convertToResponseV2(Car car) {
-        return CarResponseV2.builder()
-                .id(car.getId().toString())
+    private CarResponse convertToResponseV2(Car car) {
+        return CarResponse.builder()
+                .id(String.valueOf(car.getId()))
                 .make(car.getMake())
                 .model(car.getModel())
                 .year(car.getYear())
@@ -593,8 +717,8 @@ public class CarService {
                 .mileage(car.getMileage() != null ? car.getMileage().longValue() : 0L)
                 .location(car.getOwner().getLocation())
                 .condition("Good") // Default value
-                .images(List.of(car.getImageUrl() != null ? car.getImageUrl() : ""))
-                .specifications(CarResponseV2.CarSpecifications.builder()
+                .images(car.getImages() != null ? car.getImages() : new java.util.ArrayList<>())
+                .specifications(CarResponse.CarSpecifications.builder()
                         .fuelType(car.getFuelType())
                         .transmission(car.getTransmission())
                         .color(car.getColor())
@@ -604,8 +728,8 @@ public class CarService {
                 .isCoListed(false)
                 .coListedIn(List.of())
                 .views(car.getViewCount() != null ? (long) car.getViewCount() : 0L)
-                .inquiries(0L)
-                .shares(0L)
+                .inquiries(car.getInquiryCount() != null ? (long) car.getInquiryCount() : 0L)
+                .shares(car.getShareCount() != null ? (long) car.getShareCount() : 0L)
                 .status(getCarStatus(car))
                 .featured(Boolean.TRUE.equals(car.getIsFeatured()) &&
                         (car.getFeaturedUntil() == null || car.getFeaturedUntil().isAfter(LocalDateTime.now())))
@@ -630,21 +754,28 @@ public class CarService {
                 .orElse(false);
     }
 
-    /**
-     * Check if a vehicle should be visible to the public.
-     * Logic:
-     * - USER role: Always visible
-     * - DEALER role: Visible only if verifiedDealer is true
-     * - ADMIN role: Hidden by default (unless we decide otherwise)
-     */
     private boolean isVehicleVisible(Car car) {
         if (car == null || car.getOwner() == null)
             return false;
 
-        // Strict Visibility Rule:
-        // Only VERIFIED DEALER cars are visible to the public.
-        // USER cars are hidden from public lists.
-        return Boolean.TRUE.equals(car.getOwner().getVerifiedDealer());
+        User owner = car.getOwner();
+        com.carselling.oldcar.model.Role role = owner.getRole();
+
+        if (role == com.carselling.oldcar.model.Role.ADMIN) {
+            return true;
+        }
+
+        if (role == com.carselling.oldcar.model.Role.USER) {
+            return Boolean.TRUE.equals(car.getIsActive()) && !Boolean.TRUE.equals(car.getIsSold());
+        }
+
+        if (role == com.carselling.oldcar.model.Role.DEALER) {
+            return owner.canListCarsPublicly()
+                    && Boolean.TRUE.equals(car.getIsActive())
+                    && !Boolean.TRUE.equals(car.getIsSold());
+        }
+
+        return false;
     }
 
     private boolean isDealerOrHigher(Long userId) {
@@ -681,24 +812,6 @@ public class CarService {
                 .newCarsLast7Days(newCarsLast7Days)
                 .lastUpdated(LocalDateTime.now())
                 .build();
-    }
-
-    // Inner class for statistics
-    @lombok.Data
-    @lombok.Builder
-    public static class CarStatistics {
-        private long totalCars;
-        private long activeCars;
-        private long soldCars;
-        private long inactiveCars;
-        private long featuredCars;
-        private long newCarsLast7Days;
-        private LocalDateTime lastUpdated;
-
-        // Helper method to get new cars in last 7 days (placeholder)
-        public long getNewCarsLast7Days() {
-            return newCarsLast7Days;
-        }
     }
 
 }

@@ -31,7 +31,6 @@ public class VehicleServiceEnhanced {
 
     private final CarRepository carRepository;
     private final UserRepository userRepository;
-    private final NotificationService notificationService;
 
     /**
      * Advanced vehicle search with multiple filters
@@ -39,11 +38,11 @@ public class VehicleServiceEnhanced {
     public Page<VehicleSearchResultDto> advancedSearch(VehicleSearchCriteria criteria, Pageable pageable) {
         Specification<Car> spec = createSearchSpecification(criteria);
         Page<Car> carPage = carRepository.findAll(spec, pageable);
-        
+
         List<VehicleSearchResultDto> results = carPage.getContent().stream()
                 .map(this::convertToSearchResultDto)
                 .collect(Collectors.toList());
-        
+
         return new PageImpl<>(results, pageable, carPage.getTotalElements());
     }
 
@@ -56,7 +55,7 @@ public class VehicleServiceEnhanced {
 
         // Get user's search history and preferences (simplified algorithm)
         List<Car> recommendedCars = getRecommendedCars(user, limit);
-        
+
         return recommendedCars.stream()
                 .map(this::convertToRecommendationDto)
                 .collect(Collectors.toList());
@@ -78,8 +77,7 @@ public class VehicleServiceEnhanced {
                 vehicle.getPrice().multiply(BigDecimal.valueOf(0.8)), // 20% below
                 vehicle.getPrice().multiply(BigDecimal.valueOf(1.2)), // 20% above
                 vehicleId,
-                pageable(limit)
-        );
+                pageable(limit));
 
         return similarCars.stream()
                 .map(this::convertToSummaryDto)
@@ -97,8 +95,7 @@ public class VehicleServiceEnhanced {
                 request.getYearFrom(),
                 request.getYearTo(),
                 request.getMileageFrom(),
-                request.getMileageTo()
-        );
+                request.getMileageTo());
 
         if (priceStats.isEmpty()) {
             return VehiclePriceAnalysisDto.builder()
@@ -132,17 +129,17 @@ public class VehicleServiceEnhanced {
     public void addToFavorites(Long userId, Long vehicleId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        
+
         Car car = carRepository.findById(vehicleId)
                 .orElseThrow(() -> new RuntimeException("Vehicle not found"));
 
         if (user.getFavoriteCars() == null) {
             user.setFavoriteCars(new HashSet<>());
         }
-        
+
         user.getFavoriteCars().add(car);
         userRepository.save(user);
-        
+
         log.info("User {} added vehicle {} to favorites", userId, vehicleId);
     }
 
@@ -157,7 +154,7 @@ public class VehicleServiceEnhanced {
             user.getFavoriteCars().removeIf(car -> car.getId().equals(vehicleId));
             userRepository.save(user);
         }
-        
+
         log.info("User {} removed vehicle {} from favorites", userId, vehicleId);
     }
 
@@ -179,7 +176,7 @@ public class VehicleServiceEnhanced {
         // Manual pagination
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), favorites.size());
-        
+
         if (start >= favorites.size()) {
             return new PageImpl<>(Collections.emptyList(), pageable, favorites.size());
         }
@@ -192,7 +189,7 @@ public class VehicleServiceEnhanced {
      */
     public List<VehicleTrendingDto> getTrendingVehicles(int limit) {
         List<Car> trendingCars = carRepository.findTrendingCars(pageable(limit));
-        
+
         return trendingCars.stream()
                 .map(this::convertToTrendingDto)
                 .collect(Collectors.toList());
@@ -203,19 +200,19 @@ public class VehicleServiceEnhanced {
      */
     public Page<VehicleSearchResultDto> getVehiclesByLocation(
             Double latitude, Double longitude, Double radiusKm, Pageable pageable) {
-        
+
         Page<Car> nearbyeCars = carRepository.findNearbyyCars(latitude, longitude, radiusKm, pageable);
-        
+
         List<VehicleSearchResultDto> results = nearbyeCars.getContent().stream()
                 .map(car -> {
                     VehicleSearchResultDto dto = convertToSearchResultDto(car);
                     // Calculate distance (simplified)
-                    dto.setDistanceKm(calculateDistance(latitude, longitude, 
-                                                      car.getLatitude(), car.getLongitude()));
+                    dto.setDistanceKm(calculateDistance(latitude, longitude,
+                            car.getLatitude(), car.getLongitude()));
                     return dto;
                 })
                 .collect(Collectors.toList());
-        
+
         return new PageImpl<>(results, pageable, nearbyeCars.getTotalElements());
     }
 
@@ -226,15 +223,47 @@ public class VehicleServiceEnhanced {
         try {
             Car car = carRepository.findById(vehicleId).orElse(null);
             if (car != null) {
-                car.setViewCount((long) (car.getViewCount() + 1));
+                car.incrementViewCount();
                 car.setLastViewedAt(LocalDateTime.now());
                 carRepository.save(car);
-                
+
                 // Log for analytics
                 log.debug("Vehicle {} viewed by user {}", vehicleId, userId);
             }
         } catch (Exception e) {
             log.error("Error tracking vehicle view: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Track vehicle inquiry (for analytics)
+     */
+    public void trackVehicleInquiry(Long vehicleId, Long userId) {
+        try {
+            Car car = carRepository.findById(vehicleId).orElse(null);
+            if (car != null) {
+                car.incrementInquiryCount();
+                carRepository.save(car);
+                log.debug("Vehicle {} inquiry by user {}", vehicleId, userId);
+            }
+        } catch (Exception e) {
+            log.error("Error tracking vehicle inquiry: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Track vehicle share (for analytics)
+     */
+    public void trackVehicleShare(Long vehicleId, Long userId) {
+        try {
+            Car car = carRepository.findById(vehicleId).orElse(null);
+            if (car != null) {
+                car.incrementShareCount();
+                carRepository.save(car);
+                log.debug("Vehicle {} shared by user {}", vehicleId, userId);
+            }
+        } catch (Exception e) {
+            log.error("Error tracking vehicle share: {}", e.getMessage());
         }
     }
 
@@ -249,13 +278,13 @@ public class VehicleServiceEnhanced {
 
             // Basic filters
             if (criteria.getMake() != null && !criteria.getMake().isEmpty()) {
-                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("make")), 
-                                                  "%" + criteria.getMake().toLowerCase() + "%"));
+                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("make")),
+                        "%" + criteria.getMake().toLowerCase() + "%"));
             }
 
             if (criteria.getModel() != null && !criteria.getModel().isEmpty()) {
-                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("model")), 
-                                                  "%" + criteria.getModel().toLowerCase() + "%"));
+                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("model")),
+                        "%" + criteria.getModel().toLowerCase() + "%"));
             }
 
             if (criteria.getYearFrom() != null) {
@@ -308,11 +337,10 @@ public class VehicleServiceEnhanced {
     private List<Car> getRecommendedCars(User user, int limit) {
         // This is a simplified recommendation algorithm
         // In production, you might use more sophisticated ML algorithms
-        
+
         return carRepository.findRecommendedCars(
                 user.getId(),
-                pageable(limit)
-        );
+                pageable(limit));
     }
 
     /**
@@ -324,8 +352,8 @@ public class VehicleServiceEnhanced {
         }
 
         BigDecimal percentageDiff = currentPrice.subtract(averagePrice)
-                                                .divide(averagePrice, 2, BigDecimal.ROUND_HALF_UP)
-                                                .multiply(BigDecimal.valueOf(100));
+                .divide(averagePrice, 2, java.math.RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100));
 
         if (percentageDiff.compareTo(BigDecimal.valueOf(10)) > 0) {
             return "Price is " + percentageDiff.abs().intValue() + "% above market average. Consider lowering.";
@@ -348,8 +376,8 @@ public class VehicleServiceEnhanced {
         double dLat = Math.toRadians(lat2 - lat1);
         double dLon = Math.toRadians(lon2 - lon1);
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                   Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-                   Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                        Math.sin(dLon / 2) * Math.sin(dLon / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return 6371 * c; // Earth's radius in kilometers
     }
@@ -385,8 +413,7 @@ public class VehicleServiceEnhanced {
                 .year(car.getYear())
                 .price(car.getPrice())
                 .mileage(car.getMileage())
-                .primaryImage(car.getImages() != null && !car.getImages().isEmpty() ? 
-                             car.getImages().get(0) : null)
+                .primaryImage(car.getImages() != null && !car.getImages().isEmpty() ? car.getImages().get(0) : null)
                 .location(car.getLocation())
                 .isAvailable(car.getIsAvailable())
                 .isFeatured(car.getIsFeatured())

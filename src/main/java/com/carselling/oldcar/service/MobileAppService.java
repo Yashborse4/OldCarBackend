@@ -1,7 +1,5 @@
 package com.carselling.oldcar.service;
 
-import com.carselling.oldcar.service.NotificationService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 

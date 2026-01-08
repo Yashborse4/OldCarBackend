@@ -2,11 +2,15 @@ package com.carselling.oldcar.service;
 
 import com.carselling.oldcar.dto.file.FileMetadata;
 import com.carselling.oldcar.dto.file.FileUploadResponse;
+import com.carselling.oldcar.model.ResourceType;
+import com.carselling.oldcar.model.UploadedFile;
+import com.carselling.oldcar.model.User;
+import com.carselling.oldcar.repository.UploadedFileRepository;
+import com.carselling.oldcar.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -21,8 +25,8 @@ import java.util.*;
 public class FileUploadService {
 
     private final FirebaseStorageService firebaseStorageService;
-    private final com.carselling.oldcar.repository.UploadedFileRepository uploadedFileRepository;
-    private final com.carselling.oldcar.repository.UserRepository userRepository;
+    private final UploadedFileRepository uploadedFileRepository;
+    private final UserRepository userRepository;
     private final FileValidationService fileValidationService;
 
     // Validation constants moved to FileUploadConfig/FileValidationService
@@ -30,8 +34,8 @@ public class FileUploadService {
     /**
      * Upload file with strict ownership tracking
      */
-    public FileUploadResponse uploadFile(MultipartFile file, String folder, com.carselling.oldcar.model.User uploader,
-            com.carselling.oldcar.model.ResourceType ownerType, Long ownerId) throws IOException {
+    public FileUploadResponse uploadFile(MultipartFile file, String folder, User uploader,
+            ResourceType ownerType, Long ownerId) throws IOException {
         // Validate file
         // Validate file
         fileValidationService.validateFile(file);
@@ -46,7 +50,7 @@ public class FileUploadService {
             log.info("File uploaded successfully: {} -> {}", file.getOriginalFilename(), fileUrl);
 
             // Save metadata to DB
-            com.carselling.oldcar.model.UploadedFile uploadedFile = com.carselling.oldcar.model.UploadedFile.builder()
+            UploadedFile uploadedFile = UploadedFile.builder()
                     .fileUrl(fileUrl)
                     .fileName(fileName)
                     .originalFileName(file.getOriginalFilename())
@@ -79,19 +83,19 @@ public class FileUploadService {
      * Legacy upload method (Deprecated) - Use strict version instead
      */
     public FileUploadResponse uploadFile(MultipartFile file, String folder, Long userId) throws IOException {
-        com.carselling.oldcar.model.User user = userRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IOException("User not found: " + userId));
 
         // Default to OTHER type if not specified
-        return uploadFile(file, folder, user, com.carselling.oldcar.model.ResourceType.OTHER, userId);
+        return uploadFile(file, folder, user, ResourceType.OTHER, userId);
     }
 
     /**
      * Upload multiple files
      */
     public List<FileUploadResponse> uploadMultipleFiles(List<MultipartFile> files, String folder,
-            com.carselling.oldcar.model.User uploader,
-            com.carselling.oldcar.model.ResourceType ownerType,
+            User uploader,
+            ResourceType ownerType,
             Long ownerId) throws IOException {
         List<FileUploadResponse> responses = new ArrayList<>();
 
@@ -118,10 +122,10 @@ public class FileUploadService {
      */
     public List<FileUploadResponse> uploadMultipleFiles(List<MultipartFile> files, String folder, Long userId)
             throws IOException {
-        com.carselling.oldcar.model.User user = userRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IOException("User not found: " + userId));
 
-        return uploadMultipleFiles(files, folder, user, com.carselling.oldcar.model.ResourceType.OTHER, userId);
+        return uploadMultipleFiles(files, folder, user, ResourceType.OTHER, userId);
     }
 
     /**

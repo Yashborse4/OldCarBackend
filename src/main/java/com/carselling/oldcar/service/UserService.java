@@ -1,23 +1,24 @@
 package com.carselling.oldcar.service;
 
+import com.carselling.oldcar.dto.UserStatistics;
 import com.carselling.oldcar.dto.user.UpdateUserRequest;
 import com.carselling.oldcar.dto.user.UserResponse;
-import com.carselling.oldcar.dto.user.UserSummary;
 import com.carselling.oldcar.exception.InsufficientPermissionException;
 import com.carselling.oldcar.exception.ResourceNotFoundException;
 import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.model.User;
+import com.carselling.oldcar.model.ResourceType;
 import com.carselling.oldcar.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 /**
  * User Service for user management operations
@@ -63,8 +64,13 @@ public class UserService {
         return convertToUserResponse(currentUser);
     }
 
+    public Optional<User> findByEmail(String email) {
+        return userRepository.findByEmail(email);
+    }
+
     /**
      * Update user profile
+     * Note: Email and phone number are NOT editable for security reasons
      */
     public UserResponse updateUserProfile(Long userId, UpdateUserRequest request) {
         log.info("Updating user profile for ID: {}", userId);
@@ -81,13 +87,12 @@ public class UserService {
         // Update user fields
         boolean updated = false;
 
-        if (StringUtils.hasText(request.getEmail()) && !request.getEmail().equals(user.getEmail())) {
-            // Check if email is already in use
-            if (userRepository.existsByEmail(request.getEmail())) {
-                throw new IllegalArgumentException("Email is already in use by another user");
+        if (StringUtils.hasText(request.getUsername()) && !request.getUsername().equals(user.getUsername())) {
+            // Check if username is already in use
+            if (userRepository.existsByUsername(request.getUsername())) {
+                throw new IllegalArgumentException("Username is already in use by another user");
             }
-            user.setEmail(request.getEmail());
-            user.setIsEmailVerified(false); // Reset email verification status
+            user.setUsername(request.getUsername());
             updated = true;
         }
 
@@ -106,8 +111,24 @@ public class UserService {
             updated = true;
         }
 
-        if (StringUtils.hasText(request.getPhoneNumber()) && !request.getPhoneNumber().equals(user.getPhoneNumber())) {
-            user.setPhoneNumber(request.getPhoneNumber());
+        // Handle dealer-specific fields
+        if (StringUtils.hasText(request.getDealerName())) {
+            user.setDealerName(request.getDealerName());
+            updated = true;
+        }
+
+        if (StringUtils.hasText(request.getShowroomName())) {
+            user.setShowroomName(request.getShowroomName());
+            updated = true;
+        }
+
+        if (StringUtils.hasText(request.getAddress())) {
+            user.setAddress(request.getAddress());
+            updated = true;
+        }
+
+        if (StringUtils.hasText(request.getCity())) {
+            user.setCity(request.getCity());
             updated = true;
         }
 
@@ -155,7 +176,9 @@ public class UserService {
         }
 
         currentUser.setRole(Role.DEALER);
-        currentUser.setVerifiedDealer(false); // Validated by Admin later
+        currentUser.updateDealerStatus(
+                com.carselling.oldcar.model.DealerStatus.UNVERIFIED,
+                "Self-service dealer role request");
 
         currentUser = userRepository.save(currentUser);
         log.info("User role upgraded to DEALER (Unverified) for: {}", currentUser.getUsername());
@@ -221,40 +244,38 @@ public class UserService {
     }
 
     /**
-     * Get user statistics (admin only)
-     */
-    @Transactional(readOnly = true)
-    public UserStatistics getUserStatistics() {
-        log.info("Getting user statistics");
-
-        // Check admin permission
-        if (!authService.hasRole(Role.ADMIN)) {
-            throw new InsufficientPermissionException("You don't have permission to view user statistics");
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime thirtyDaysAgo = now.minusDays(30);
-        LocalDateTime sevenDaysAgo = now.minusDays(7);
-
-        return UserStatistics.builder()
-                .totalUsers(userRepository.count())
-                .activeUsers(userRepository.countByIsActive(true))
-                .inactiveUsers(userRepository.countByIsActive(false))
-                .userCount(userRepository.countByRole(Role.USER))
-                .dealerCount(userRepository.countByRole(Role.DEALER))
-                .adminCount(userRepository.countByRole(Role.ADMIN))
-                .newUsersLast30Days(userRepository.countUsersCreatedSince(thirtyDaysAgo))
-                .newUsersLast7Days(userRepository.countUsersCreatedSince(sevenDaysAgo))
-                .build();
-    }
-
-    /**
      * Find user by ID (for internal service use)
      */
     @Transactional(readOnly = true)
     public User findById(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+    }
+
+    /**
+     * Get user statistics for admin dashboard
+     */
+    @Transactional(readOnly = true)
+    public UserStatistics getUserStatistics() {
+        log.info("Getting user statistics for admin dashboard");
+
+        long totalUsers = userRepository.count();
+        // Assuming there are methods to count active, dealer, admin, etc.
+        // If not, we might need to add them to UserRepository or use example queries
+        long activeUsers = userRepository.countByIsActive(true);
+        long dealerCount = userRepository.countByRole(Role.DEALER);
+        long adminCount = userRepository.countByRole(Role.ADMIN);
+
+        LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
+        long newUsersLast7Days = userRepository.countUsersCreatedSince(sevenDaysAgo);
+
+        return UserStatistics.builder()
+                .totalUsers(totalUsers)
+                .activeUsers(activeUsers)
+                .dealerCount(dealerCount)
+                .adminCount(adminCount)
+                .newUsersLast7Days(newUsersLast7Days)
+                .build();
     }
 
     // ... existing constructor ...
@@ -268,6 +289,12 @@ public class UserService {
         log.info("Uploading profile image for current user");
 
         User currentUser = authService.getCurrentUser();
+
+        // Validate file is an image
+        if (!isImageFile(file)) {
+            throw new IllegalArgumentException("Invalid file type. Only image files are allowed.");
+        }
+
         return uploadProfileImageForUser(currentUser.getId(), file);
     }
 
@@ -280,6 +307,11 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
+        // Validate file is an image
+        if (!isImageFile(file)) {
+            throw new IllegalArgumentException("Invalid file type. Only image files are allowed.");
+        }
+
         // Check permission
         User currentUser = authService.getCurrentUser();
         if (!canUpdateUserProfile(currentUser, user)) {
@@ -287,12 +319,10 @@ public class UserService {
         }
 
         try {
-            // Upload to Firebase
             String folder = "users/" + userId + "/profile";
 
-            // Uses strict upload with USER_PROFILE resource type
             com.carselling.oldcar.dto.file.FileUploadResponse response = fileUploadService.uploadFile(
-                    file, folder, currentUser, com.carselling.oldcar.model.ResourceType.USER_PROFILE, userId);
+                    file, folder, currentUser, ResourceType.USER_PROFILE, userId);
 
             // Store URL in database
             user.setProfileImageUrl(response.getFileUrl());
@@ -326,7 +356,7 @@ public class UserService {
 
     // Private helper methods
 
-    private UserResponse convertToUserResponse(User user) {
+    public UserResponse convertToUserResponse(User user) {
         return UserResponse.builder()
                 .id(user.getId())
                 .username(user.getUsername())
@@ -342,6 +372,15 @@ public class UserService {
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .profileImageUrl(user.getProfileImageUrl())
+                // Dealer status fields
+                .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
+                .dealerStatusUpdatedAt(user.getDealerStatusUpdatedAt())
+                .dealerStatusReason(user.getDealerStatusReason())
+                // Dealer profile fields
+                .dealerName(user.getDealerName())
+                .showroomName(user.getShowroomName())
+                .address(user.getAddress())
+                .city(user.getCity())
                 .build();
     }
 
@@ -356,8 +395,8 @@ public class UserService {
             return true;
         }
 
-        // For now, users can view other users' basic profiles
-        return true;
+        // Restrict to Admin or Self
+        return false;
     }
 
     private boolean canUpdateUserProfile(User currentUser, User targetUser) {
@@ -380,17 +419,8 @@ public class UserService {
         return currentUser.getId().equals(targetUser.getId());
     }
 
-    // Inner class for user statistics
-    @lombok.Data
-    @lombok.Builder
-    public static class UserStatistics {
-        private long totalUsers;
-        private long activeUsers;
-        private long inactiveUsers;
-        private long userCount;
-        private long dealerCount;
-        private long adminCount;
-        private long newUsersLast30Days;
-        private long newUsersLast7Days;
+    private boolean isImageFile(org.springframework.web.multipart.MultipartFile file) {
+        String contentType = file.getContentType();
+        return contentType != null && contentType.startsWith("image/");
     }
 }

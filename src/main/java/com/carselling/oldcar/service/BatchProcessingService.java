@@ -23,7 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
- * Service for batch processing operations like bulk imports, exports, and async tasks
+ * Service for batch processing operations like bulk imports, exports, and async
+ * tasks
  */
 @Slf4j
 @Service
@@ -32,13 +33,11 @@ public class BatchProcessingService {
 
     private final VehicleRepository vehicleRepository;
     private final FileUploadService fileUploadService;
-    // TODO: Add EmailService and NotificationService when available
-    // private final EmailService emailService;
-    // private final NotificationService notificationService;
+    private final NotificationService notificationService;
 
     // Track batch job status
     private final Map<String, BatchJobStatus> batchJobs = new ConcurrentHashMap<>();
-    
+
     /**
      * Batch import vehicles from CSV file
      */
@@ -47,57 +46,62 @@ public class BatchProcessingService {
         String jobId = UUID.randomUUID().toString();
         BatchJobStatus status = new BatchJobStatus(jobId, "VEHICLE_IMPORT", "RUNNING");
         batchJobs.put(jobId, status);
-        
+
         try {
             log.info("Starting vehicle batch import for user: {}", user.getEmail());
-            
+
             List<VehicleImportRow> importRows = parseCsvFile(file);
             status.setTotalRecords(importRows.size());
-            
+
             AtomicInteger processedCount = new AtomicInteger(0);
             AtomicInteger successCount = new AtomicInteger(0);
             AtomicInteger errorCount = new AtomicInteger(0);
-            
+
             List<String> errors = new ArrayList<>();
-            
+
             // Process in batches of 50
             int batchSize = 50;
             for (int i = 0; i < importRows.size(); i += batchSize) {
-                List<VehicleImportRow> batch = importRows.subList(i, 
-                    Math.min(i + batchSize, importRows.size()));
-                
+                List<VehicleImportRow> batch = importRows.subList(i,
+                        Math.min(i + batchSize, importRows.size()));
+
                 processBatch(batch, user, processedCount, successCount, errorCount, errors);
-                
+
                 // Update status
                 status.setProcessedRecords(processedCount.get());
                 status.setSuccessCount(successCount.get());
                 status.setErrorCount(errorCount.get());
                 status.setErrors(errors);
-                
+
                 // Small delay to prevent overwhelming the system
                 Thread.sleep(100);
             }
-            
+
             // Complete the job
             status.setStatus("COMPLETED");
             status.setCompletedAt(LocalDateTime.now());
-            
+
             // Send completion notification
-            // TODO: Implement when NotificationService is available
-            log.info("Vehicle Import Completed for user {}: Successfully imported {} out of {} vehicles", 
-                user.getId(), successCount.get(), importRows.size());
-            
-            log.info("Completed vehicle batch import. Success: {}, Errors: {}", 
-                successCount.get(), errorCount.get());
-            
+            String details = String.format("Successfully imported %d out of %d vehicles. Errors: %d",
+                    successCount.get(), importRows.size(), errorCount.get());
+            notificationService.sendBatchJobCompletionNotification(user, "Vehicle Import", "COMPLETED", details);
+
+            log.info("Vehicle Import Completed for user {}: {}", user.getId(), details);
+
+            log.info("Completed vehicle batch import. Success: {}, Errors: {}",
+                    successCount.get(), errorCount.get());
+
             return CompletableFuture.completedFuture(jobId);
-            
+
         } catch (Exception e) {
             log.error("Error during batch vehicle import: {}", e.getMessage(), e);
             status.setStatus("FAILED");
             status.setErrorMessage(e.getMessage());
             status.setCompletedAt(LocalDateTime.now());
-            
+
+            notificationService.sendBatchJobCompletionNotification(user, "Vehicle Import", "FAILED",
+                    "Error: " + e.getMessage());
+
             return CompletableFuture.completedFuture(jobId);
         }
     }
@@ -110,63 +114,64 @@ public class BatchProcessingService {
         String jobId = UUID.randomUUID().toString();
         BatchJobStatus status = new BatchJobStatus(jobId, "VEHICLE_EXPORT", "RUNNING");
         batchJobs.put(jobId, status);
-        
+
         try {
             log.info("Starting vehicle batch export for user: {}", user.getEmail());
-            
+
             // Get vehicles based on filters
             List<Car> vehicles = getVehiclesForExport(filters);
             status.setTotalRecords(vehicles.size());
-            
+
             // Generate CSV content
             StringBuilder csvContent = new StringBuilder();
             csvContent.append("ID,Make,Model,Year,Price,Mileage,FuelType,Transmission,Location,Description\n");
-            
+
             AtomicInteger processedCount = new AtomicInteger(0);
-            
+
             vehicles.forEach(vehicle -> {
                 csvContent.append(String.format("%d,%s,%s,%d,%s,%d,%s,%s,%s,\"%s\"\n",
-                    vehicle.getId(),
-                    vehicle.getMake(),
-                    vehicle.getModel(),
-                    vehicle.getYear(),
-                    vehicle.getPrice(),
-                    vehicle.getMileage(),
-                    vehicle.getFuelType(),
-                    vehicle.getTransmission(),
-                    vehicle.getLocation(),
-                    vehicle.getDescription().replace("\"", "\"\"")
-                ));
-                
+                        vehicle.getId(),
+                        vehicle.getMake(),
+                        vehicle.getModel(),
+                        vehicle.getYear(),
+                        vehicle.getPrice(),
+                        vehicle.getMileage(),
+                        vehicle.getFuelType(),
+                        vehicle.getTransmission(),
+                        vehicle.getLocation(),
+                        vehicle.getDescription().replace("\"", "\"\"")));
+
                 status.setProcessedRecords(processedCount.incrementAndGet());
             });
-            
+
             // Upload CSV file to storage
-            String fileName = String.format("vehicle_export_%s_%s.csv", 
-                user.getId(), LocalDateTime.now().toString().replaceAll("[:\\-.]", "_"));
-            
+
             // In a real implementation, you would upload this to S3 or file storage
             // For now, we'll simulate the process
-            
+
             status.setStatus("COMPLETED");
             status.setDownloadUrl("/api/batch/download/" + jobId);
             status.setCompletedAt(LocalDateTime.now());
-            
+
             // Send completion notification with download link
-            // TODO: Implement when NotificationService is available
-            log.info("Vehicle Export Ready for user {}: Export of {} vehicles ready for download", 
-                user.getId(), vehicles.size());
-            
+            String details = String.format("Export of %d vehicles is ready for download.", vehicles.size());
+            notificationService.sendBatchJobCompletionNotification(user, "Vehicle Export", "COMPLETED", details);
+
+            log.info("Vehicle Export Ready for user {}: {}", user.getId(), details);
+
             log.info("Completed vehicle batch export. Total records: {}", vehicles.size());
-            
+
             return CompletableFuture.completedFuture(jobId);
-            
+
         } catch (Exception e) {
             log.error("Error during batch vehicle export: {}", e.getMessage(), e);
             status.setStatus("FAILED");
             status.setErrorMessage(e.getMessage());
             status.setCompletedAt(LocalDateTime.now());
-            
+
+            notificationService.sendBatchJobCompletionNotification(user, "Vehicle Export", "FAILED",
+                    "Error: " + e.getMessage());
+
             return CompletableFuture.completedFuture(jobId);
         }
     }
@@ -178,34 +183,37 @@ public class BatchProcessingService {
     public CompletableFuture<Void> processVehicleImages(Long vehicleId, List<MultipartFile> images) {
         try {
             log.info("Starting async image processing for vehicle ID: {}", vehicleId);
-            
+
             List<String> processedImageUrls = new ArrayList<>();
-            
+
             for (MultipartFile image : images) {
                 // Resize and optimize images
                 MultipartFile resizedImage = resizeImage(image, 800, 600);
                 MultipartFile thumbnailImage = resizeImage(image, 300, 200);
-                
+
                 // Upload original, resized, and thumbnail versions
-                String originalUrl = fileUploadService.uploadFile(image, "vehicles/" + vehicleId + "/original/", 1L).getFileUrl();
-                String resizedUrl = fileUploadService.uploadFile(resizedImage, "vehicles/" + vehicleId + "/resized/", 1L).getFileUrl();
-                String thumbnailUrl = fileUploadService.uploadFile(thumbnailImage, "vehicles/" + vehicleId + "/thumbnails/", 1L).getFileUrl();
-                
+                String originalUrl = fileUploadService.uploadFile(image, "vehicles/" + vehicleId + "/original/", 1L)
+                        .getFileUrl();
+                String resizedUrl = fileUploadService
+                        .uploadFile(resizedImage, "vehicles/" + vehicleId + "/resized/", 1L).getFileUrl();
+                String thumbnailUrl = fileUploadService
+                        .uploadFile(thumbnailImage, "vehicles/" + vehicleId + "/thumbnails/", 1L).getFileUrl();
+
                 processedImageUrls.add(originalUrl);
-                
-                log.debug("Processed image for vehicle {}: original={}, resized={}, thumbnail={}", 
-                    vehicleId, originalUrl, resizedUrl, thumbnailUrl);
+
+                log.debug("Processed image for vehicle {}: original={}, resized={}, thumbnail={}",
+                        vehicleId, originalUrl, resizedUrl, thumbnailUrl);
             }
-            
+
             // Update vehicle with processed image URLs
             updateVehicleImages(vehicleId, processedImageUrls);
-            
+
             log.info("Completed async image processing for vehicle ID: {}", vehicleId);
-            
+
         } catch (Exception e) {
             log.error("Error during async image processing for vehicle {}: {}", vehicleId, e.getMessage(), e);
         }
-        
+
         return CompletableFuture.completedFuture(null);
     }
 
@@ -215,12 +223,12 @@ public class BatchProcessingService {
     @Scheduled(fixedRate = 3600000) // Run every hour
     public void cleanupCompletedBatchJobs() {
         LocalDateTime cutoff = LocalDateTime.now().minusHours(24);
-        
+
         batchJobs.entrySet().removeIf(entry -> {
             BatchJobStatus status = entry.getValue();
             return status.getCompletedAt() != null && status.getCompletedAt().isBefore(cutoff);
         });
-        
+
         log.info("Cleaned up old batch jobs. Active jobs: {}", batchJobs.size());
     }
 
@@ -244,47 +252,47 @@ public class BatchProcessingService {
 
     private List<VehicleImportRow> parseCsvFile(MultipartFile file) throws IOException {
         List<VehicleImportRow> rows = new ArrayList<>();
-        
+
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
             String line;
             boolean isHeader = true;
-            
+
             while ((line = reader.readLine()) != null) {
                 if (isHeader) {
                     isHeader = false;
                     continue; // Skip header row
                 }
-                
+
                 String[] fields = line.split(",");
                 if (fields.length >= 8) { // Minimum required fields
                     VehicleImportRow row = new VehicleImportRow(
-                        fields[0].trim(), // make
-                        fields[1].trim(), // model
-                        Integer.parseInt(fields[2].trim()), // year
-                        new BigDecimal(fields[3].trim()), // price
-                        Integer.parseInt(fields[4].trim()), // mileage
-                        fields[5].trim(), // fuelType
-                        fields[6].trim(), // transmission
-                        fields[7].trim(), // location
-                        fields.length > 8 ? fields[8].trim() : "" // description
+                            fields[0].trim(), // make
+                            fields[1].trim(), // model
+                            Integer.parseInt(fields[2].trim()), // year
+                            new BigDecimal(fields[3].trim()), // price
+                            Integer.parseInt(fields[4].trim()), // mileage
+                            fields[5].trim(), // fuelType
+                            fields[6].trim(), // transmission
+                            fields[7].trim(), // location
+                            fields.length > 8 ? fields[8].trim() : "" // description
                     );
                     rows.add(row);
                 }
             }
         }
-        
+
         return rows;
     }
 
     @Transactional
-    private void processBatch(List<VehicleImportRow> batch, User user, 
-                            AtomicInteger processedCount, AtomicInteger successCount, 
-                            AtomicInteger errorCount, List<String> errors) {
+    private void processBatch(List<VehicleImportRow> batch, User user,
+            AtomicInteger processedCount, AtomicInteger successCount,
+            AtomicInteger errorCount, List<String> errors) {
         for (VehicleImportRow row : batch) {
             try {
                 // Validate row data
                 validateVehicleImportRow(row);
-                
+
                 // Create vehicle entity
                 Car vehicle = Car.builder()
                         .make(row.getMake())
@@ -298,16 +306,16 @@ public class BatchProcessingService {
                         .owner(user)
                         .isActive(true)
                         .build();
-                
+
                 vehicleRepository.save(vehicle);
                 successCount.incrementAndGet();
-                
+
             } catch (Exception e) {
                 errorCount.incrementAndGet();
                 errors.add(String.format("Row %d: %s", processedCount.get() + 1, e.getMessage()));
                 log.warn("Error processing import row: {}", e.getMessage());
             }
-            
+
             processedCount.incrementAndGet();
         }
     }
@@ -334,7 +342,8 @@ public class BatchProcessingService {
     }
 
     private MultipartFile resizeImage(MultipartFile image, int width, int height) {
-        // In a real implementation, this would use ImageIO or a library like Thumbnailator
+        // In a real implementation, this would use ImageIO or a library like
+        // Thumbnailator
         // to resize the image. For now, we'll return the original image.
         return image;
     }
@@ -350,7 +359,7 @@ public class BatchProcessingService {
     }
 
     // Inner classes for data structures
-    
+
     public static class BatchJobStatus {
         private String jobId;
         private String jobType;
@@ -375,30 +384,97 @@ public class BatchProcessingService {
         }
 
         // Getters and setters
-        public String getJobId() { return jobId; }
-        public String getJobType() { return jobType; }
-        public String getStatus() { return status; }
-        public String getUserId() { return userId; }
-        public LocalDateTime getStartedAt() { return startedAt; }
-        public LocalDateTime getCompletedAt() { return completedAt; }
-        public int getTotalRecords() { return totalRecords; }
-        public int getProcessedRecords() { return processedRecords; }
-        public int getSuccessCount() { return successCount; }
-        public int getErrorCount() { return errorCount; }
-        public List<String> getErrors() { return errors; }
-        public String getErrorMessage() { return errorMessage; }
-        public String getDownloadUrl() { return downloadUrl; }
+        public String getJobId() {
+            return jobId;
+        }
 
-        public void setStatus(String status) { this.status = status; }
-        public void setUserId(String userId) { this.userId = userId; }
-        public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
-        public void setTotalRecords(int totalRecords) { this.totalRecords = totalRecords; }
-        public void setProcessedRecords(int processedRecords) { this.processedRecords = processedRecords; }
-        public void setSuccessCount(int successCount) { this.successCount = successCount; }
-        public void setErrorCount(int errorCount) { this.errorCount = errorCount; }
-        public void setErrors(List<String> errors) { this.errors = errors; }
-        public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
-        public void setDownloadUrl(String downloadUrl) { this.downloadUrl = downloadUrl; }
+        public String getJobType() {
+            return jobType;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public String getUserId() {
+            return userId;
+        }
+
+        public LocalDateTime getStartedAt() {
+            return startedAt;
+        }
+
+        public LocalDateTime getCompletedAt() {
+            return completedAt;
+        }
+
+        public int getTotalRecords() {
+            return totalRecords;
+        }
+
+        public int getProcessedRecords() {
+            return processedRecords;
+        }
+
+        public int getSuccessCount() {
+            return successCount;
+        }
+
+        public int getErrorCount() {
+            return errorCount;
+        }
+
+        public List<String> getErrors() {
+            return errors;
+        }
+
+        public String getErrorMessage() {
+            return errorMessage;
+        }
+
+        public String getDownloadUrl() {
+            return downloadUrl;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
+        }
+
+        public void setUserId(String userId) {
+            this.userId = userId;
+        }
+
+        public void setCompletedAt(LocalDateTime completedAt) {
+            this.completedAt = completedAt;
+        }
+
+        public void setTotalRecords(int totalRecords) {
+            this.totalRecords = totalRecords;
+        }
+
+        public void setProcessedRecords(int processedRecords) {
+            this.processedRecords = processedRecords;
+        }
+
+        public void setSuccessCount(int successCount) {
+            this.successCount = successCount;
+        }
+
+        public void setErrorCount(int errorCount) {
+            this.errorCount = errorCount;
+        }
+
+        public void setErrors(List<String> errors) {
+            this.errors = errors;
+        }
+
+        public void setErrorMessage(String errorMessage) {
+            this.errorMessage = errorMessage;
+        }
+
+        public void setDownloadUrl(String downloadUrl) {
+            this.downloadUrl = downloadUrl;
+        }
     }
 
     public static class VehicleImportRow {
@@ -413,8 +489,8 @@ public class BatchProcessingService {
         private String description;
 
         public VehicleImportRow(String make, String model, Integer year, BigDecimal price,
-                              Integer mileage, String fuelType, String transmission,
-                              String location, String description) {
+                Integer mileage, String fuelType, String transmission,
+                String location, String description) {
             this.make = make;
             this.model = model;
             this.year = year;
@@ -427,14 +503,40 @@ public class BatchProcessingService {
         }
 
         // Getters
-        public String getMake() { return make; }
-        public String getModel() { return model; }
-        public Integer getYear() { return year; }
-        public BigDecimal getPrice() { return price; }
-        public Integer getMileage() { return mileage; }
-        public String getFuelType() { return fuelType; }
-        public String getTransmission() { return transmission; }
-        public String getLocation() { return location; }
-        public String getDescription() { return description; }
+        public String getMake() {
+            return make;
+        }
+
+        public String getModel() {
+            return model;
+        }
+
+        public Integer getYear() {
+            return year;
+        }
+
+        public BigDecimal getPrice() {
+            return price;
+        }
+
+        public Integer getMileage() {
+            return mileage;
+        }
+
+        public String getFuelType() {
+            return fuelType;
+        }
+
+        public String getTransmission() {
+            return transmission;
+        }
+
+        public String getLocation() {
+            return location;
+        }
+
+        public String getDescription() {
+            return description;
+        }
     }
 }

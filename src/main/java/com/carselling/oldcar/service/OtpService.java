@@ -106,6 +106,21 @@ public class OtpService {
      */
     @Transactional
     public boolean validateOtp(String email, String inputOtp, String purpose) {
+        if (email == null || email.trim().isEmpty()) {
+            log.warn("Email is required for OTP validation");
+            return false;
+        }
+
+        if (inputOtp == null || inputOtp.trim().isEmpty()) {
+            log.warn("OTP is required for validation");
+            return false;
+        }
+
+        if (purpose == null || purpose.trim().isEmpty()) {
+            log.warn("Purpose is required for OTP validation");
+            return false;
+        }
+
         // Find latest unused OTP
         Optional<Otp> otpOptional = otpRepository.findTopByEmailAndPurposeAndUsedFalseOrderByCreatedAtDesc(email,
                 purpose);
@@ -152,6 +167,11 @@ public class OtpService {
     }
 
     private void markEmailAsVerified(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            log.warn("Email cannot be null or empty for verification");
+            return;
+        }
+
         // Double check: ensure this is only called when purpose was explicitly
         // EMAIL_VERIFICATION
         // (This contract is enforced by validateOtp, but good to be defensive if moved)

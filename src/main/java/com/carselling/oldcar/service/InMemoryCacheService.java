@@ -21,15 +21,15 @@ public class InMemoryCacheService {
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final Timer cleanupTimer;
-    
+
     // Configuration
     private static final long DEFAULT_TTL_MINUTES = 60;
     private static final long CLEANUP_INTERVAL_MINUTES = 10;
     private static final int MAX_CACHE_SIZE = 10000;
-    
+
     public InMemoryCacheService() {
         log.info("Initializing InMemoryCacheService as Redis fallback");
-        
+
         // Schedule periodic cleanup task
         this.cleanupTimer = new Timer("InMemoryCache-Cleanup", true);
         this.cleanupTimer.scheduleAtFixedRate(new TimerTask() {
@@ -57,10 +57,10 @@ public class InMemoryCacheService {
             if (cache.size() >= MAX_CACHE_SIZE) {
                 evictLeastRecentlyUsed();
             }
-            
+
             LocalDateTime expiryTime = LocalDateTime.now().plus(ttlMinutes, ChronoUnit.MINUTES);
             cache.put(key, new CacheEntry(value, expiryTime, LocalDateTime.now()));
-            
+
             log.debug("Cached value for key: {} with TTL: {} minutes", key, ttlMinutes);
         } finally {
             lock.writeLock().unlock();
@@ -151,7 +151,7 @@ public class InMemoryCacheService {
             long expiredEntries = cache.values().stream()
                     .mapToLong(entry -> entry.isExpired() ? 1 : 0)
                     .sum();
-            
+
             return new CacheStatistics(totalEntries, totalEntries - expiredEntries, expiredEntries);
         } finally {
             lock.readLock().unlock();
@@ -173,7 +173,7 @@ public class InMemoryCacheService {
         try {
             CacheEntry entry = cache.get(key);
             long newValue;
-            
+
             if (entry == null || entry.isExpired()) {
                 newValue = delta;
             } else {
@@ -185,10 +185,10 @@ public class InMemoryCacheService {
                     newValue = delta;
                 }
             }
-            
+
             LocalDateTime expiryTime = LocalDateTime.now().plus(DEFAULT_TTL_MINUTES, ChronoUnit.MINUTES);
             cache.put(key, new CacheEntry(newValue, expiryTime, LocalDateTime.now()));
-            
+
             log.debug("Incremented key: {} by {} to value: {}", key, delta, newValue);
             return newValue;
         } finally {
@@ -204,22 +204,24 @@ public class InMemoryCacheService {
         try {
             CacheEntry entry = cache.get(key);
             Set<Object> set;
-            
+
             if (entry == null || entry.isExpired()) {
                 set = new HashSet<>();
             } else {
                 Object value = entry.getValue();
                 if (value instanceof Set) {
-                    set = (Set<Object>) value;
+                    @SuppressWarnings("unchecked")
+                    Set<Object> castSet = (Set<Object>) value;
+                    set = castSet;
                 } else {
                     set = new HashSet<>();
                 }
             }
-            
+
             set.add(member);
             LocalDateTime expiryTime = LocalDateTime.now().plus(DEFAULT_TTL_MINUTES, ChronoUnit.MINUTES);
             cache.put(key, new CacheEntry(set, expiryTime, LocalDateTime.now()));
-            
+
             log.debug("Added member to set for key: {}", key);
         } finally {
             lock.writeLock().unlock();
@@ -236,20 +238,21 @@ public class InMemoryCacheService {
             if (entry == null || entry.isExpired()) {
                 return false;
             }
-            
+
             Object value = entry.getValue();
             if (value instanceof Set) {
+                @SuppressWarnings("unchecked")
                 Set<Object> set = (Set<Object>) value;
                 boolean removed = set.remove(member);
-                
+
                 if (removed) {
                     entry.setLastAccessed(LocalDateTime.now());
                     log.debug("Removed member from set for key: {}", key);
                 }
-                
+
                 return removed;
             }
-            
+
             return false;
         } finally {
             lock.writeLock().unlock();
@@ -266,13 +269,15 @@ public class InMemoryCacheService {
             if (entry == null || entry.isExpired()) {
                 return new HashSet<>();
             }
-            
+
             Object value = entry.getValue();
             if (value instanceof Set) {
                 entry.setLastAccessed(LocalDateTime.now());
-                return new HashSet<>((Set<Object>) value); // Return copy
+                @SuppressWarnings("unchecked")
+                Set<Object> set = (Set<Object>) value;
+                return new HashSet<>(set); // Return copy
             }
-            
+
             return new HashSet<>();
         } finally {
             lock.readLock().unlock();
@@ -287,22 +292,24 @@ public class InMemoryCacheService {
         try {
             CacheEntry entry = cache.get(key);
             Map<String, Object> hash;
-            
+
             if (entry == null || entry.isExpired()) {
                 hash = new HashMap<>();
             } else {
                 Object entryValue = entry.getValue();
                 if (entryValue instanceof Map) {
-                    hash = (Map<String, Object>) entryValue;
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> castMap = (Map<String, Object>) entryValue;
+                    hash = castMap;
                 } else {
                     hash = new HashMap<>();
                 }
             }
-            
+
             hash.put(field, value);
             LocalDateTime expiryTime = LocalDateTime.now().plus(DEFAULT_TTL_MINUTES, ChronoUnit.MINUTES);
             cache.put(key, new CacheEntry(hash, expiryTime, LocalDateTime.now()));
-            
+
             log.debug("Put hash field {} for key: {}", field, key);
         } finally {
             lock.writeLock().unlock();
@@ -319,14 +326,15 @@ public class InMemoryCacheService {
             if (entry == null || entry.isExpired()) {
                 return null;
             }
-            
+
             Object value = entry.getValue();
             if (value instanceof Map) {
+                @SuppressWarnings("unchecked")
                 Map<String, Object> hash = (Map<String, Object>) value;
                 entry.setLastAccessed(LocalDateTime.now());
                 return hash.get(field);
             }
-            
+
             return null;
         } finally {
             lock.readLock().unlock();
@@ -343,13 +351,15 @@ public class InMemoryCacheService {
             if (entry == null || entry.isExpired()) {
                 return new HashMap<>();
             }
-            
+
             Object value = entry.getValue();
             if (value instanceof Map) {
                 entry.setLastAccessed(LocalDateTime.now());
-                return new HashMap<>((Map<String, Object>) value); // Return copy
+                @SuppressWarnings("unchecked")
+                Map<String, Object> map = (Map<String, Object>) value;
+                return new HashMap<>(map); // Return copy
             }
-            
+
             return new HashMap<>();
         } finally {
             lock.readLock().unlock();
@@ -365,7 +375,7 @@ public class InMemoryCacheService {
             int initialSize = cache.size();
             cache.entrySet().removeIf(entry -> entry.getValue().isExpired());
             int removedCount = initialSize - cache.size();
-            
+
             if (removedCount > 0) {
                 log.debug("Cleaned up {} expired cache entries", removedCount);
             }
@@ -386,7 +396,7 @@ public class InMemoryCacheService {
                         Comparator.comparing(CacheEntry::getLastAccessed)))
                 .map(Map.Entry::getKey)
                 .orElse(null);
-        
+
         if (oldestKey != null) {
             cache.remove(oldestKey);
             log.debug("Evicted LRU cache entry: {}", oldestKey);
@@ -420,10 +430,6 @@ public class InMemoryCacheService {
 
         public Object getValue() {
             return value;
-        }
-
-        public LocalDateTime getExpiryTime() {
-            return expiryTime;
         }
 
         public LocalDateTime getLastAccessed() {
@@ -467,7 +473,7 @@ public class InMemoryCacheService {
 
         @Override
         public String toString() {
-            return String.format("CacheStatistics{total=%d, active=%d, expired=%d}", 
+            return String.format("CacheStatistics{total=%d, active=%d, expired=%d}",
                     totalEntries, activeEntries, expiredEntries);
         }
     }

@@ -60,15 +60,14 @@ public class InternationalizationService {
      */
     public Map<String, String> getValidationMessages(Locale locale) {
         return Map.of(
-            "user.email.required", getMessage("validation.user.email.required", null, locale),
-            "user.email.invalid", getMessage("validation.user.email.invalid", null, locale),
-            "user.password.required", getMessage("validation.user.password.required", null, locale),
-            "user.password.minLength", getMessage("validation.user.password.minLength", null, locale),
-            "vehicle.make.required", getMessage("validation.vehicle.make.required", null, locale),
-            "vehicle.model.required", getMessage("validation.vehicle.model.required", null, locale),
-            "vehicle.price.required", getMessage("validation.vehicle.price.required", null, locale),
-            "vehicle.price.positive", getMessage("validation.vehicle.price.positive", null, locale)
-        );
+                "user.email.required", getMessage("validation.user.email.required", null, locale),
+                "user.email.invalid", getMessage("validation.user.email.invalid", null, locale),
+                "user.password.required", getMessage("validation.user.password.required", null, locale),
+                "user.password.minLength", getMessage("validation.user.password.minLength", null, locale),
+                "vehicle.make.required", getMessage("validation.vehicle.make.required", null, locale),
+                "vehicle.model.required", getMessage("validation.vehicle.model.required", null, locale),
+                "vehicle.price.required", getMessage("validation.vehicle.price.required", null, locale),
+                "vehicle.price.positive", getMessage("validation.vehicle.price.positive", null, locale));
     }
 
     /**
@@ -76,13 +75,12 @@ public class InternationalizationService {
      */
     public Map<String, String> getErrorMessages(Locale locale) {
         return Map.of(
-            "user.notFound", getMessage("error.user.notFound", null, locale),
-            "user.unauthorized", getMessage("error.user.unauthorized", null, locale),
-            "vehicle.notFound", getMessage("error.vehicle.notFound", null, locale),
-            "server.internal", getMessage("error.server.internal", null, locale),
-            "rate.limit.exceeded", getMessage("error.rate.limit.exceeded", null, locale),
-            "file.upload.failed", getMessage("error.file.upload.failed", null, locale)
-        );
+                "user.notFound", getMessage("error.user.notFound", null, locale),
+                "user.unauthorized", getMessage("error.user.unauthorized", null, locale),
+                "vehicle.notFound", getMessage("error.vehicle.notFound", null, locale),
+                "server.internal", getMessage("error.server.internal", null, locale),
+                "rate.limit.exceeded", getMessage("error.rate.limit.exceeded", null, locale),
+                "file.upload.failed", getMessage("error.file.upload.failed", null, locale));
     }
 
     /**
@@ -90,13 +88,12 @@ public class InternationalizationService {
      */
     public Map<String, String> getEmailTemplates(Locale locale) {
         return Map.of(
-            "welcome.subject", getMessage("email.welcome.subject", null, locale),
-            "welcome.body", getMessage("email.welcome.body", null, locale),
-            "verification.subject", getMessage("email.verification.subject", null, locale),
-            "verification.body", getMessage("email.verification.body", null, locale),
-            "password.reset.subject", getMessage("email.password.reset.subject", null, locale),
-            "password.reset.body", getMessage("email.password.reset.body", null, locale)
-        );
+                "welcome.subject", getMessage("email.welcome.subject", null, locale),
+                "welcome.body", getMessage("email.welcome.body", null, locale),
+                "verification.subject", getMessage("email.verification.subject", null, locale),
+                "verification.body", getMessage("email.verification.body", null, locale),
+                "password.reset.subject", getMessage("email.password.reset.subject", null, locale),
+                "password.reset.body", getMessage("email.password.reset.body", null, locale));
     }
 
     /**
@@ -104,11 +101,10 @@ public class InternationalizationService {
      */
     public Map<String, String> getNotificationMessages(Locale locale) {
         return Map.of(
-            "vehicle.new.inquiry", getMessage("notification.vehicle.new.inquiry", null, locale),
-            "vehicle.price.drop", getMessage("notification.vehicle.price.drop", null, locale),
-            "chat.new.message", getMessage("notification.chat.new.message", null, locale),
-            "system.maintenance", getMessage("notification.system.maintenance", null, locale)
-        );
+                "vehicle.new.inquiry", getMessage("notification.vehicle.new.inquiry", null, locale),
+                "vehicle.price.drop", getMessage("notification.vehicle.price.drop", null, locale),
+                "chat.new.message", getMessage("notification.chat.new.message", null, locale),
+                "system.maintenance", getMessage("notification.system.maintenance", null, locale));
     }
 
     /**
@@ -137,26 +133,22 @@ public class InternationalizationService {
      */
     public Map<String, Object> getLocalizedVehicleAttributes(Locale locale) {
         return Map.of(
-            "fuelTypes", Map.of(
-                "PETROL", getMessage("vehicle.fuelType.petrol", null, locale),
-                "DIESEL", getMessage("vehicle.fuelType.diesel", null, locale),
-                "ELECTRIC", getMessage("vehicle.fuelType.electric", null, locale),
-                "HYBRID", getMessage("vehicle.fuelType.hybrid", null, locale)
-            ),
-            "transmissions", Map.of(
-                "MANUAL", getMessage("vehicle.transmission.manual", null, locale),
-                "AUTOMATIC", getMessage("vehicle.transmission.automatic", null, locale),
-                "CVT", getMessage("vehicle.transmission.cvt", null, locale),
-                "SEMI_AUTOMATIC", getMessage("vehicle.transmission.semiAutomatic", null, locale)
-            ),
-            "conditions", Map.of(
-                "NEW", getMessage("vehicle.condition.new", null, locale),
-                "EXCELLENT", getMessage("vehicle.condition.excellent", null, locale),
-                "GOOD", getMessage("vehicle.condition.good", null, locale),
-                "FAIR", getMessage("vehicle.condition.fair", null, locale),
-                "POOR", getMessage("vehicle.condition.poor", null, locale)
-            )
-        );
+                "fuelTypes", Map.of(
+                        "PETROL", getMessage("vehicle.fuelType.petrol", null, locale),
+                        "DIESEL", getMessage("vehicle.fuelType.diesel", null, locale),
+                        "ELECTRIC", getMessage("vehicle.fuelType.electric", null, locale),
+                        "HYBRID", getMessage("vehicle.fuelType.hybrid", null, locale)),
+                "transmissions", Map.of(
+                        "MANUAL", getMessage("vehicle.transmission.manual", null, locale),
+                        "AUTOMATIC", getMessage("vehicle.transmission.automatic", null, locale),
+                        "CVT", getMessage("vehicle.transmission.cvt", null, locale),
+                        "SEMI_AUTOMATIC", getMessage("vehicle.transmission.semiAutomatic", null, locale)),
+                "conditions", Map.of(
+                        "NEW", getMessage("vehicle.condition.new", null, locale),
+                        "EXCELLENT", getMessage("vehicle.condition.excellent", null, locale),
+                        "GOOD", getMessage("vehicle.condition.good", null, locale),
+                        "FAIR", getMessage("vehicle.condition.fair", null, locale),
+                        "POOR", getMessage("vehicle.condition.poor", null, locale)));
     }
 
     /**
@@ -164,13 +156,12 @@ public class InternationalizationService {
      */
     public Map<String, String> getApiResponseMessages(Locale locale) {
         return Map.of(
-            "success.user.created", getMessage("api.success.user.created", null, locale),
-            "success.user.updated", getMessage("api.success.user.updated", null, locale),
-            "success.vehicle.created", getMessage("api.success.vehicle.created", null, locale),
-            "success.vehicle.updated", getMessage("api.success.vehicle.updated", null, locale),
-            "success.message.sent", getMessage("api.success.message.sent", null, locale),
-            "success.file.uploaded", getMessage("api.success.file.uploaded", null, locale)
-        );
+                "success.user.created", getMessage("api.success.user.created", null, locale),
+                "success.user.updated", getMessage("api.success.user.updated", null, locale),
+                "success.vehicle.created", getMessage("api.success.vehicle.created", null, locale),
+                "success.vehicle.updated", getMessage("api.success.vehicle.updated", null, locale),
+                "success.message.sent", getMessage("api.success.message.sent", null, locale),
+                "success.file.uploaded", getMessage("api.success.file.uploaded", null, locale));
     }
 
     /**
@@ -207,12 +198,12 @@ public class InternationalizationService {
         if (localeString == null || localeString.isEmpty()) {
             return Locale.US;
         }
-        
+
         String[] parts = localeString.split("[_-]");
         return switch (parts.length) {
-            case 1 -> new Locale(parts[0]);
-            case 2 -> new Locale(parts[0], parts[1]);
-            case 3 -> new Locale(parts[0], parts[1], parts[2]);
+            case 1 -> Locale.of(parts[0]);
+            case 2 -> Locale.of(parts[0], parts[1]);
+            case 3 -> Locale.of(parts[0], parts[1], parts[2]);
             default -> Locale.US;
         };
     }
@@ -238,15 +229,15 @@ public class InternationalizationService {
         if (acceptedLocales == null || acceptedLocales.isEmpty()) {
             return Locale.US;
         }
-        
+
         // Return first supported locale
         for (Locale locale : acceptedLocales) {
-            if (isLocaleSupported(locale.toString()) || 
-                isLocaleSupported(locale.getLanguage())) {
+            if (isLocaleSupported(locale.toString()) ||
+                    isLocaleSupported(locale.getLanguage())) {
                 return locale;
             }
         }
-        
+
         return Locale.US; // Fallback to English
     }
 }

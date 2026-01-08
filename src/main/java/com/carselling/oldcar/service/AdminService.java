@@ -3,20 +3,27 @@ package com.carselling.oldcar.service;
 import com.carselling.oldcar.dto.admin.ChangeRoleRequest;
 import com.carselling.oldcar.dto.user.UserResponse;
 import com.carselling.oldcar.dto.SystemStatistics;
+import com.carselling.oldcar.dto.UserStatistics;
+import com.carselling.oldcar.dto.CarStatistics;
 import com.carselling.oldcar.exception.InsufficientPermissionException;
 import com.carselling.oldcar.exception.InvalidInputException;
 import com.carselling.oldcar.exception.ResourceNotFoundException;
+import com.carselling.oldcar.model.DealerStatus;
 import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.UserRepository;
+import com.carselling.oldcar.model.UserActivityLog;
+import com.carselling.oldcar.repository.UserActivityLogRepository;
+import com.carselling.oldcar.dto.admin.DealerStatusRequest;
+import com.carselling.oldcar.event.DealerUpgradedEvent;
+import com.carselling.oldcar.event.DealerStatusChangedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import lombok.Data;
-import lombok.Builder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,7 +43,10 @@ public class AdminService {
     private final AuthService authService;
     private final UserService userService;
     private final CarService carService;
+
+    private final UserActivityLogRepository userActivityLogRepository;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * Get all users with pagination and filtering (admin only)
@@ -92,29 +102,35 @@ public class AdminService {
         // Auto-verify if promoted to DEALER - DISABLED per new requirement
         // Users promoted to DEALER must be manually verified.
 
-        // If demoted to USER, ensure verifiedDealer is false
+        // If demoted to USER, clear dealer status
         if (newRole == Role.USER) {
-            user.setVerifiedDealer(false);
+            user.setDealerStatus(null);
+            user.setDealerStatusReason(null);
+        } else if (newRole == Role.DEALER && user.getDealerStatus() == null) {
+            // New dealer starts as UNVERIFIED
+            user.updateDealerStatus(DealerStatus.UNVERIFIED, "Promoted to dealer role");
         }
 
         user = userRepository.save(user);
 
-        log.info("User role changed successfully for user: {} from {} to {} by admin: {}",
-                user.getUsername(), oldRole, newRole, currentAdmin.getUsername());
+        logActivity(currentAdmin, user, "CHANGE_ROLE",
+                "Changed role from " + oldRole + " to " + newRole);
 
         if (newRole == Role.DEALER) {
             // Publish event for email/notification
-            eventPublisher.publishEvent(new com.carselling.oldcar.event.DealerUpgradedEvent(this, user));
+            eventPublisher.publishEvent(new DealerUpgradedEvent(this, user));
         }
 
         return userService.getUserProfile(user.getId());
     }
 
     /**
-     * Verify/Unverify a Dealer (admin only)
+     * Update dealer status (admin only)
+     * Supports transitions: UNVERIFIED→VERIFIED, VERIFIED→SUSPENDED,
+     * SUSPENDED→VERIFIED, any→REJECTED
      */
-    public UserResponse verifyDealer(Long userId, boolean verified) {
-        log.info("Admin setting dealer verification for user ID: {} to: {}", userId, verified);
+    public UserResponse updateDealerStatus(Long userId, DealerStatusRequest request) {
+        log.info("Admin updating dealer status for user ID: {} to: {}", userId, request.getStatus());
 
         // Check admin permission
         ensureAdminPermission();
@@ -124,18 +140,64 @@ public class AdminService {
 
         // Ensure user is actually a dealer
         if (user.getRole() != Role.DEALER) {
-            throw new InvalidInputException("User is not a dealer. Only dealers can be verified.");
+            throw new InvalidInputException("User is not a dealer. Only dealers can have their status updated.");
         }
 
-        user.setVerifiedDealer(verified);
+        DealerStatus currentStatus = user.getDealerStatus();
+        DealerStatus newStatus = request.getStatus();
+
+        // Validate status transition
+        if (currentStatus != null && !currentStatus.canTransitionTo(newStatus)) {
+            throw new InvalidInputException(
+                    String.format("Cannot transition from %s to %s", currentStatus, newStatus));
+        }
+
+        // Require reason for SUSPENDED and REJECTED
+        if ((newStatus == DealerStatus.SUSPENDED || newStatus == DealerStatus.REJECTED)
+                && (request.getReason() == null || request.getReason().isBlank())) {
+            throw new InvalidInputException("Reason is required when suspending or rejecting a dealer");
+        }
+
+        // Update status
+        user.updateDealerStatus(newStatus, request.getReason());
         user = userRepository.save(user);
 
-        log.info("Dealer verification updated: {} for user: {}", verified, user.getUsername());
+        logActivity(authService.getCurrentUser(), user, "UPDATE_DEALER_STATUS",
+                String.format("Changed dealer status from %s to %s. Reason: %s",
+                        currentStatus, newStatus, request.getReason()));
 
         // Publish event for notification
-        eventPublisher.publishEvent(new com.carselling.oldcar.event.DealerVerifiedEvent(this, user, verified));
+        eventPublisher.publishEvent(new DealerStatusChangedEvent(
+                this, user, currentStatus, newStatus, request.getReason()));
 
         return userService.getUserProfile(user.getId());
+    }
+
+    /**
+     * Get dealers by status (admin only)
+     */
+    @Transactional(readOnly = true)
+    public Page<UserResponse> getDealersByStatus(DealerStatus status, Pageable pageable) {
+        log.info("Admin retrieving dealers with status: {}", status);
+
+        ensureAdminPermission();
+
+        return userRepository.findDealersByStatus(status, pageable)
+                .map(userService::convertToUserResponse);
+    }
+
+    /**
+     * @deprecated Use {@link #updateDealerStatus(Long, DealerStatusRequest)}
+     *             instead.
+     *             Kept for backward compatibility.
+     */
+    @Deprecated
+    public UserResponse verifyDealer(Long userId, boolean verified) {
+        DealerStatusRequest request = DealerStatusRequest.builder()
+                .status(verified ? DealerStatus.VERIFIED : DealerStatus.UNVERIFIED)
+                .reason(verified ? "Verified by admin" : "Unverified by admin")
+                .build();
+        return updateDealerStatus(userId, request);
     }
 
     /**
@@ -177,6 +239,10 @@ public class AdminService {
         }
 
         user = userRepository.save(user);
+
+        logActivity(currentAdmin, user, ban ? "BAN_USER" : "UNBAN_USER",
+                (ban ? "Banned" : "Unbanned") + ". Reason: " + reason);
+
         return userService.getUserProfile(user.getId());
     }
 
@@ -208,15 +274,18 @@ public class AdminService {
             if (hardDelete) {
                 // Hard delete - remove from database completely
                 // First, soft delete all user's cars
-                // Note: In a real application, you might want to transfer ownership or handle
-                // this differently
+                carService.softDeleteUserCars(userId);
+
                 userRepository.delete(user);
                 log.info("User hard deleted: {} by admin: {}", user.getUsername(), currentAdmin.getUsername());
+                logActivity(currentAdmin, null, "DELETE_USER",
+                        "Hard deleted user ID: " + userId + " (" + user.getUsername() + ")");
             } else {
                 // Soft delete - deactivate account
                 user.setIsActive(false);
                 userRepository.save(user);
                 log.info("User soft deleted: {} by admin: {}", user.getUsername(), currentAdmin.getUsername());
+                logActivity(currentAdmin, user, "SOFT_DELETE_USER", "Soft deleted user");
             }
         } catch (Exception e) {
             log.error("Error deleting user: {} by admin: {}", user.getUsername(), currentAdmin.getUsername(), e);
@@ -234,8 +303,8 @@ public class AdminService {
         // Check admin permission
         ensureAdminPermission();
 
-        UserService.UserStatistics userStats = userService.getUserStatistics();
-        CarService.CarStatistics carStats = carService.getCarStatistics();
+        UserStatistics userStats = userService.getUserStatistics();
+        CarStatistics carStats = carService.getCarStatistics();
 
         return SystemStatistics.builder()
                 .userStatistics(userStats)
@@ -253,9 +322,7 @@ public class AdminService {
         // Check admin permission
         ensureAdminPermission();
 
-        // In a real application, you would have an activity log table
-        // For now, return an empty list until implemented
-        return List.of();
+        return userActivityLogRepository.findByUserIdOrderByTimestampDesc(userId);
     }
 
     /**
@@ -273,13 +340,14 @@ public class AdminService {
         User currentAdmin = authService.getCurrentUser();
 
         // Encode and set new password
-        user.setPassword(newPassword); // This should be encoded in the service layer
+        user.setPassword(passwordEncoder.encode(newPassword));
         // Reset failed login attempts
         user.resetFailedLoginAttempts();
 
         userRepository.save(user);
 
         log.info("Password reset for user: {} by admin: {}", user.getUsername(), currentAdmin.getUsername());
+        logActivity(currentAdmin, user, "RESET_PASSWORD", "Reset user password");
     }
 
     /**
@@ -317,14 +385,22 @@ public class AdminService {
         switch (action.toUpperCase()) {
             case "BAN" -> {
                 for (Long userId : userIds) {
-                    if (!userId.equals(currentAdmin.getId())) {
-                        banUser(userId, true, "Bulk ban operation");
+                    try {
+                        if (!userId.equals(currentAdmin.getId())) {
+                            banUser(userId, true, "Bulk ban operation");
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to ban user ID {} during bulk operation: {}", userId, e.getMessage());
                     }
                 }
             }
             case "UNBAN" -> {
                 for (Long userId : userIds) {
-                    banUser(userId, false, "Bulk unban operation");
+                    try {
+                        banUser(userId, false, "Bulk unban operation");
+                    } catch (Exception e) {
+                        log.error("Failed to unban user ID {} during bulk operation: {}", userId, e.getMessage());
+                    }
                 }
             }
             case "CHANGE_ROLE" -> {
@@ -333,8 +409,13 @@ public class AdminService {
                         .newRole(newRole)
                         .build();
                 for (Long userId : userIds) {
-                    if (!userId.equals(currentAdmin.getId())) {
-                        changeUserRole(userId, roleRequest);
+                    try {
+                        if (!userId.equals(currentAdmin.getId())) {
+                            changeUserRole(userId, roleRequest);
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to change role for user ID {} during bulk operation: {}", userId,
+                                e.getMessage());
                     }
                 }
             }
@@ -342,6 +423,22 @@ public class AdminService {
         }
 
         log.info("Bulk operation {} completed by admin: {}", action, currentAdmin.getUsername());
+    }
+
+    private void logActivity(User admin, User targetUser, String action, String details) {
+        try {
+            UserActivityLog log = UserActivityLog.builder()
+                    .admin(admin)
+                    .user(targetUser)
+                    .action(action)
+                    .details(details)
+                    .timestamp(LocalDateTime.now())
+                    // .ipAddress() // Could be passed down from controller if needed
+                    .build();
+            userActivityLogRepository.save(log);
+        } catch (Exception e) {
+            log.error("Failed to save activity log", e);
+        }
     }
 
     // Private helper methods
@@ -352,22 +449,7 @@ public class AdminService {
         }
     }
 
-    private String getSystemUptime() {
-        // This would typically return actual system uptime
-        // For now, return a placeholder
-        return "72 hours, 15 minutes";
-    }
-
     // Inner classes for response DTOs
+    // Removed unused UserActivityLog inner class as we now have a real Entity
 
-    @Data
-    @Builder
-    public static class UserActivityLog {
-        private Long userId;
-        private String action;
-        private LocalDateTime timestamp;
-        private String ipAddress;
-        private String userAgent;
-        private String details;
-    }
 }
