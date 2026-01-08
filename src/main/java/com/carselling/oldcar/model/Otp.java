@@ -1,25 +1,24 @@
 package com.carselling.oldcar.model;
 
 import jakarta.persistence.*;
+
+
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
 /**
- * OTP (One Time Password) entity for secure password reset functionality
+ * Entity for storing One-Time Passwords (OTPs) securely
  */
 @Entity
 @Table(name = "otps", indexes = {
-    @Index(name = "idx_otp_username", columnList = "username"),
-    @Index(name = "idx_otp_code", columnList = "otp_code"),
-    @Index(name = "idx_otp_expires_at", columnList = "expires_at")
+        @Index(name = "idx_otp_email_purpose", columnList = "email, purpose")
 })
 @Data
 @NoArgsConstructor
@@ -31,62 +30,71 @@ public class Otp {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
-    
-    @NotBlank(message = "Username is required")
-    @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
-    @Column(nullable = false, length = 50)
+    @NotBlank
+    @Column(nullable = false, length = 100)
+    private String email;
+
+    @Column(name = "username", nullable = true)
     private String username;
 
-    @NotBlank(message = "OTP code is required")
-    @Size(min = 5, max = 6, message = "OTP code must be 5-6 digits")
-    @Column(name = "otp_code", nullable = false, length = 6)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    /**
+     * Hashed OTP for secure storage
+     * This is the ONLY field that should be persisted for security
+     */
+    @NotBlank
+    @Column(name = "otp_hash", nullable = false, length = 255)
+    private String otpHash;
+
+    /**
+     * Plain OTP code - DEPRECATED, should not be stored
+     * Kept as nullable for backward compatibility during migration
+     * 
+     * @deprecated Use otpHash instead for security
+     */
+    @Deprecated
+    @Column(name = "otp_code", nullable = true, length = 10)
     private String otpCode;
 
-    @NotNull(message = "Expiration time is required")
+    @NotBlank
+    @Column(nullable = false, length = 50)
+    private String purpose; // EMAIL_VERIFICATION, PASSWORD_RESET
+
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
-    @Column(name = "is_used")
     @Builder.Default
-    private Boolean isUsed = false;
+    @Column(nullable = false)
+    private Integer attempts = 0;
 
-    @Column(name = "used_at")
-    private LocalDateTime usedAt;
+    @Builder.Default
+    @Column(name = "max_attempts", nullable = false)
+    private Integer maxAttempts = 5;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean used = false;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // Helper methods
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiresAt);
     }
 
-    public boolean isValid() {
-        return !Boolean.TRUE.equals(isUsed) && !isExpired();
+    public boolean isBlocked() {
+        return attempts >= maxAttempts;
     }
 
-    public void markAsUsed() {
-        this.isUsed = true;
-        this.usedAt = LocalDateTime.now();
-    }
-    
-    // Convenience methods for backward compatibility
-    public LocalDateTime getExpiryTime() {
-        return this.expiresAt;
-    }
-    
-    public String getOtpValue() {
-        return this.otpCode;
-    }
-    
-    public void setUsed(boolean used) {
-        this.isUsed = used;
-        if (used) {
-            this.usedAt = LocalDateTime.now();
-        }
+    public void incrementAttempts() {
+        this.attempts++;
     }
 }

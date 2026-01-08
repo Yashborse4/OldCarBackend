@@ -10,6 +10,10 @@ type Query {
     
     # Admin Endpoints
     listAllUsers(page: Int, size: Int, sortBy: String, sortDir: String): UserPage!
+    
+    # Search
+    searchCars(input: CarSearchInput!): CarSearchPagePayload!
+    searchCarSuggestions(prefix: String!, limit: Int): [String!]!
 }
 
 type Mutation {
@@ -106,4 +110,49 @@ type UserPage {
     totalElements: Int!
     pageNumber: Int!
     pageSize: Int!
+}
+
+input CarSearchInput {
+    keyword: String
+    brands: [String]
+    models: [String]
+    variant: String
+    fuelTypes: [String]
+    transmissions: [String]
+    cities: [String]
+    minYear: Int
+    maxYear: Int
+    minPrice: Float
+    maxPrice: Float
+    verifiedDealer: Boolean
+    page: Int
+    size: Int
+}
+
+type CarSearchPagePayload {
+    content: [CarSearchHit!]!
+    totalPages: Int!
+    totalElements: Int!
+    pageNumber: Int!
+    pageSize: Int!
+}
+
+type CarSearchHit {
+    id: ID!
+    brand: String
+    model: String
+    variant: String
+    year: Int
+    price: Float
+    mileage: Int
+    city: String
+    fuelType: String
+    transmission: String
+    verifiedDealer: Boolean
+    thumbnailUrl: String
+    sellerType: String
+    ownerName: String
+    condition: String
+    views: Int
+    createdAt: DateTime
 }

@@ -71,7 +71,7 @@ public interface MessageReadRepository extends JpaRepository<MessageRead, Long> 
      */
     @Modifying
     @Query("INSERT INTO MessageRead (message, user, readAt) " +
-           "SELECT m, u, :readAt FROM ChatMessageV2 m, User u " +
+           "SELECT m, u, :readAt FROM ChatMessage m, User u " +
            "WHERE m.id IN :messageIds " +
            "AND u.id = :userId " +
            "AND NOT EXISTS (SELECT 1 FROM MessageRead mr WHERE mr.message.id = m.id AND mr.user.id = u.id)")
@@ -112,7 +112,7 @@ public interface MessageReadRepository extends JpaRepository<MessageRead, Long> 
     /**
      * Find unread messages for user in chat room (messages that exist but no read record)
      */
-    @Query("SELECT m.id FROM ChatMessageV2 m " +
+    @Query("SELECT m.id FROM ChatMessage m " +
            "WHERE m.chatRoom.id = :chatRoomId " +
            "AND m.sender.id != :userId " +
            "AND m.isDeleted = false " +
@@ -125,7 +125,7 @@ public interface MessageReadRepository extends JpaRepository<MessageRead, Long> 
      */
     @Modifying
     @Query("INSERT INTO MessageRead (message, user, readAt) " +
-           "SELECT m, u, :readAt FROM ChatMessageV2 m, User u " +
+           "SELECT m, u, :readAt FROM ChatMessage m, User u " +
            "WHERE m.chatRoom.id = :chatRoomId " +
            "AND m.id <= :lastMessageId " +
            "AND m.sender.id != :userId " +

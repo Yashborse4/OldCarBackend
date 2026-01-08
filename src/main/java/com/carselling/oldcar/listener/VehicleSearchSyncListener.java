@@ -3,6 +3,7 @@ package com.carselling.oldcar.listener;
 import com.carselling.oldcar.service.AdvancedSearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -13,6 +14,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * Event listener for synchronizing vehicle changes with Elasticsearch
  */
 @Component
+@ConditionalOnProperty(name = "elasticsearch.enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 @Slf4j
 public class VehicleSearchSyncListener {
@@ -59,7 +61,7 @@ public class VehicleSearchSyncListener {
                 default -> log.warn("Unknown action {} for vehicle {}", event.getAction(), event.getVehicleId());
             }
         } catch (Exception e) {
-            log.error("Error syncing vehicle {} with Elasticsearch: {}", 
+            log.error("Error syncing vehicle {} with Elasticsearch: {}",
                     event.getVehicleId(), e.getMessage(), e);
             // Consider adding retry mechanism or dead letter queue here
         }

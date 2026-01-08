@@ -16,8 +16,8 @@ import java.util.Optional;
 /**
  * Repository for ChatParticipant entity with enhanced query methods
  */
-@Repository
-public interface ChatParticipantRepository extends JpaRepository<ChatParticipant, Long> {
+    @Repository
+    public interface ChatParticipantRepository extends JpaRepository<ChatParticipant, Long> {
 
     /**
      * Find all active participants in a chat room
@@ -195,4 +195,12 @@ public interface ChatParticipantRepository extends JpaRepository<ChatParticipant
            "AND p.user.id = :userId " +
            "AND p.isActive = true")
     Optional<ChatParticipant> findByChatRoomIdAndUserIdAndIsActiveTrue(@Param("chatRoomId") Long chatRoomId, @Param("userId") Long userId);
+
+    @Query("SELECT COUNT(DISTINCT p.user.id) FROM ChatParticipant p " +
+           "JOIN p.chatRoom r " +
+           "JOIN r.car c " +
+           "WHERE r.type = com.carselling.oldcar.model.ChatRoom$ChatType.CAR_INQUIRY " +
+           "AND c.owner.id = :sellerId " +
+           "AND p.user.id <> :sellerId")
+    long countUniqueInquiryUsersForSeller(@Param("sellerId") Long sellerId);
 }

@@ -2,10 +2,12 @@ package com.carselling.oldcar;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
+@EnableAsync // Enable @Async processing for EmailService
 public class OldCarApplication {
 
     public static void main(String[] args) {

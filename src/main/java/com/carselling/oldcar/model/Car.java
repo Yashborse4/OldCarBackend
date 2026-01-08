@@ -18,16 +18,26 @@ import java.util.List;
  * Car entity representing car listings in the system
  */
 @Entity
-@Table(name = "cars", indexes = {
-    @Index(name = "idx_car_make", columnList = "make"),
-    @Index(name = "idx_car_model", columnList = "model"),
-    @Index(name = "idx_car_year", columnList = "year"),
-    @Index(name = "idx_car_price", columnList = "price"),
-    @Index(name = "idx_car_owner", columnList = "owner_id"),
-    @Index(name = "idx_car_created_at", columnList = "created_at"),
-    @Index(name = "idx_car_is_active", columnList = "is_active"),
-    @Index(name = "idx_car_featured", columnList = "is_featured")
-})
+@Table(name = "cars"/*
+                     * , indexes = {
+                     * 
+                     * @Index(name = "idx_car_make", columnList = "make"),
+                     * 
+                     * @Index(name = "idx_car_model", columnList = "model"),
+                     * 
+                     * @Index(name = "idx_car_year", columnList = "year"),
+                     * 
+                     * @Index(name = "idx_car_price", columnList = "price"),
+                     * 
+                     * @Index(name = "idx_car_owner", columnList = "owner_id"),
+                     * 
+                     * @Index(name = "idx_car_created_at", columnList = "created_at"),
+                     * 
+                     * @Index(name = "idx_car_is_active", columnList = "is_active"),
+                     * 
+                     * @Index(name = "idx_car_featured", columnList = "is_featured")
+                     * }
+                     */)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -66,8 +76,7 @@ public class Car {
     private String description;
 
     @Size(max = 500, message = "Image URL must not exceed 500 characters")
-    @Pattern(regexp = "^(https?://.*\\.(jpg|jpeg|png|gif|webp))$|^$", 
-             message = "Please provide a valid image URL")
+    @Pattern(regexp = "^(https?://.*\\.(jpg|jpeg|png|gif|webp))$|^$", message = "Please provide a valid image URL")
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
@@ -87,9 +96,21 @@ public class Car {
     @Builder.Default
     private Boolean isSold = false;
 
+    @Column(name = "is_approved")
+    @Builder.Default
+    private Boolean isApproved = false; // For moderation
+
     @Column(name = "view_count")
     @Builder.Default
     private Long viewCount = 0L;
+
+    @Column(name = "inquiry_count")
+    @Builder.Default
+    private Long inquiryCount = 0L;
+
+    @Column(name = "share_count")
+    @Builder.Default
+    private Long shareCount = 0L;
 
     @Column(name = "mileage")
     @Min(value = 0, message = "Mileage cannot be negative")
@@ -144,6 +165,7 @@ public class Car {
 
     @ElementCollection
     @CollectionTable(name = "car_images", joinColumns = @JoinColumn(name = "car_id"))
+    @OrderColumn(name = "image_order")
     @Column(name = "image_url")
     @Builder.Default
     private List<String> images = new ArrayList<>();
@@ -180,7 +202,7 @@ public class Car {
     public Long getViewCount() {
         return (long) (this.viewCount != null ? this.viewCount.intValue() : 0);
     }
-    
+
     public Long getViewCountLong() {
         return this.viewCount;
     }
@@ -201,9 +223,17 @@ public class Car {
         this.viewCount = this.viewCount == null ? 1 : this.viewCount + 1;
     }
 
+    public void incrementInquiryCount() {
+        this.inquiryCount = this.inquiryCount == null ? 1 : this.inquiryCount + 1;
+    }
+
+    public void incrementShareCount() {
+        this.shareCount = this.shareCount == null ? 1 : this.shareCount + 1;
+    }
+
     public boolean isCurrentlyFeatured() {
-        return Boolean.TRUE.equals(isFeatured) && 
-               (featuredUntil == null || featuredUntil.isAfter(LocalDateTime.now()));
+        return Boolean.TRUE.equals(isFeatured) &&
+                (featuredUntil == null || featuredUntil.isAfter(LocalDateTime.now()));
     }
 
     public void setFeatured(boolean featured, int daysToFeature) {

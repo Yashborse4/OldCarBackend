@@ -35,9 +35,9 @@ public class ChatWebSocketController {
      */
     @MessageMapping("/chat/{chatRoomId}/send")
     public void sendMessage(@DestinationVariable Long chatRoomId,
-                           @Payload SendMessageRequestV2 messageRequest,
-                           SimpMessageHeaderAccessor headerAccessor,
-                           Principal principal) {
+            @Payload SendMessageRequest messageRequest,
+            SimpMessageHeaderAccessor headerAccessor,
+            Principal principal) {
         try {
             if (principal == null) {
                 log.warn("Unauthorized WebSocket message attempt");
@@ -48,7 +48,7 @@ public class ChatWebSocketController {
             log.debug("User {} sending message to chat room {}", userId, chatRoomId);
 
             // Send message through service
-            ChatMessageDtoV2 message = ChatService.sendMessage(messageRequest, userId);
+            ChatMessageDto message = ChatService.sendMessage(messageRequest, userId);
 
             // Broadcast message to all participants in the chat room
             broadcastMessageToChatRoom(chatRoomId, message);
@@ -58,7 +58,9 @@ public class ChatWebSocketController {
 
         } catch (Exception e) {
             log.error("Error sending WebSocket message: {}", e.getMessage(), e);
-            sendErrorToUser(principal.getName(), "Failed to send message: " + e.getMessage());
+            if (principal != null) {
+                sendErrorToUser(principal.getName(), "Failed to send message: " + e.getMessage());
+            }
         }
     }
 
@@ -67,8 +69,8 @@ public class ChatWebSocketController {
      */
     @MessageMapping("/chat/message/{messageId}/edit")
     public void editMessage(@DestinationVariable Long messageId,
-                           @Payload EditMessageRequest editRequest,
-                           Principal principal) {
+            @Payload EditMessageRequest editRequest,
+            Principal principal) {
         try {
             if (principal == null) {
                 log.warn("Unauthorized WebSocket edit attempt");
@@ -76,7 +78,7 @@ public class ChatWebSocketController {
             }
 
             Long userId = Long.valueOf(principal.getName());
-            ChatMessageDtoV2 updatedMessage = ChatService.editMessage(messageId, editRequest.getNewContent(), userId);
+            ChatMessageDto updatedMessage = ChatService.editMessage(messageId, editRequest.getNewContent(), userId);
 
             // Create message update DTO
             MessageUpdateDto updateDto = MessageUpdateDto.builder()
@@ -90,7 +92,9 @@ public class ChatWebSocketController {
 
         } catch (Exception e) {
             log.error("Error editing WebSocket message: {}", e.getMessage(), e);
-            sendErrorToUser(principal.getName(), "Failed to edit message: " + e.getMessage());
+            if (principal != null) {
+                sendErrorToUser(principal.getName(), "Failed to edit message: " + e.getMessage());
+            }
         }
     }
 
@@ -106,15 +110,15 @@ public class ChatWebSocketController {
             }
 
             Long userId = Long.valueOf(principal.getName());
-            
+
             // Get message details before deletion
-            ChatMessageDtoV2 messageToDelete = ChatService.getChatMessage(messageId, userId);
+            ChatMessageDto messageToDelete = ChatService.getChatMessage(messageId, userId);
             Long chatRoomId = messageToDelete.getChatRoomId();
-            
+
             // Delete the message
             ChatService.deleteMessage(messageId, userId);
 
-            // Create message update DTO  
+            // Create message update DTO
             MessageUpdateDto updateDto = MessageUpdateDto.builder()
                     .action("DELETE")
                     .message(null) // No message content for delete
@@ -126,7 +130,9 @@ public class ChatWebSocketController {
 
         } catch (Exception e) {
             log.error("Error deleting WebSocket message: {}", e.getMessage(), e);
-            sendErrorToUser(principal.getName(), "Failed to delete message: " + e.getMessage());
+            if (principal != null) {
+                sendErrorToUser(principal.getName(), "Failed to delete message: " + e.getMessage());
+            }
         }
     }
 
@@ -135,8 +141,8 @@ public class ChatWebSocketController {
      */
     @MessageMapping("/chat/{chatRoomId}/typing")
     public void handleTyping(@DestinationVariable Long chatRoomId,
-                           @Payload Map<String, Boolean> typingStatus,
-                           Principal principal) {
+            @Payload Map<String, Boolean> typingStatus,
+            Principal principal) {
         try {
             if (principal == null) {
                 return;
@@ -150,7 +156,7 @@ public class ChatWebSocketController {
 
             // Get user details
             User user = userService.findById(userId);
-            
+
             // Create typing indicator DTO
             TypingIndicatorDto typingIndicator = TypingIndicatorDto.builder()
                     .chatId(chatRoomId)
@@ -162,9 +168,8 @@ public class ChatWebSocketController {
 
             // Broadcast typing indicator to all participants except sender
             messagingTemplate.convertAndSend(
-                "/topic/chat/" + chatRoomId + "/typing", 
-                typingIndicator
-            );
+                    "/topic/chat/" + chatRoomId + "/typing",
+                    typingIndicator);
 
         } catch (Exception e) {
             log.error("Error handling typing indicator: {}", e.getMessage(), e);
@@ -176,8 +181,8 @@ public class ChatWebSocketController {
      */
     @MessageMapping("/chat/{chatRoomId}/read")
     public void markMessagesAsRead(@DestinationVariable Long chatRoomId,
-                                  @Payload MarkMessagesReadRequest readRequest,
-                                  Principal principal) {
+            @Payload MarkMessagesReadRequest readRequest,
+            Principal principal) {
         try {
             if (principal == null) {
                 return;
@@ -193,16 +198,17 @@ public class ChatWebSocketController {
             readReceipt.setMessageIds(readRequest.getMessageIds());
 
             messagingTemplate.convertAndSend(
-                "/topic/chat/" + chatRoomId + "/read", 
-                readReceipt
-            );
+                    "/topic/chat/" + chatRoomId + "/read",
+                    readReceipt);
 
             // Update unread counts for the user
             sendUnreadCountUpdate(userId);
 
         } catch (Exception e) {
             log.error("Error marking messages as read: {}", e.getMessage(), e);
-            sendErrorToUser(principal.getName(), "Failed to mark messages as read: " + e.getMessage());
+            if (principal != null) {
+                sendErrorToUser(principal.getName(), "Failed to mark messages as read: " + e.getMessage());
+            }
         }
     }
 
@@ -219,18 +225,20 @@ public class ChatWebSocketController {
             }
 
             Long userId = Long.valueOf(principal.getName());
-            
+
             // Verify user has access to this chat room
             ChatService.getChatRoom(chatRoomId, userId);
-            
+
             // Register user session for this chat room
             sessionManager.addUserToChat(userId, chatRoomId);
-            
+
             log.debug("User {} subscribed to chat room {}", userId, chatRoomId);
 
         } catch (Exception e) {
             log.error("Error subscribing to chat room: {}", e.getMessage(), e);
-            sendErrorToUser(principal.getName(), "Failed to subscribe to chat room");
+            if (principal != null) {
+                sendErrorToUser(principal.getName(), "Failed to subscribe to chat room");
+            }
         }
     }
 
@@ -246,7 +254,7 @@ public class ChatWebSocketController {
 
             Long userId = Long.valueOf(principal.getName());
             sessionManager.setUserOnline(userId);
-            
+
             log.debug("User {} subscribed to presence updates", userId);
 
         } catch (Exception e) {
@@ -259,7 +267,7 @@ public class ChatWebSocketController {
     /**
      * Broadcast message to all participants in a chat room
      */
-    private void broadcastMessageToChatRoom(Long chatRoomId, ChatMessageDtoV2 message) {
+    private void broadcastMessageToChatRoom(Long chatRoomId, ChatMessageDto message) {
         messagingTemplate.convertAndSend("/topic/chat/" + chatRoomId + "/messages", message);
         log.debug("Broadcasted message {} to chat room {}", message.getId(), chatRoomId);
     }
@@ -279,12 +287,12 @@ public class ChatWebSocketController {
         try {
             // Get all participants
             var participants = ChatService.getChatRoomParticipants(chatRoomId, senderId);
-            
+
             // Send unread count updates to each participant (except sender)
             participants.stream()
-                .filter(p -> !p.getUserId().equals(senderId))
-                .forEach(participant -> sendUnreadCountUpdate(participant.getUserId()));
-                
+                    .filter(p -> !p.getUserId().equals(senderId))
+                    .forEach(participant -> sendUnreadCountUpdate(participant.getUserId()));
+
         } catch (Exception e) {
             log.error("Error updating unread counts: {}", e.getMessage());
         }
@@ -297,10 +305,9 @@ public class ChatWebSocketController {
         try {
             UnreadCountResponse unreadCount = ChatService.getUnreadMessageCount(userId);
             messagingTemplate.convertAndSendToUser(
-                userId.toString(), 
-                "/queue/unread-count", 
-                unreadCount
-            );
+                    userId.toString(),
+                    "/queue/unread-count",
+                    unreadCount);
         } catch (Exception e) {
             log.error("Error sending unread count update to user {}: {}", userId, e.getMessage());
         }
@@ -311,9 +318,8 @@ public class ChatWebSocketController {
      */
     private void sendErrorToUser(String userId, String errorMessage) {
         messagingTemplate.convertAndSendToUser(
-            userId, 
-            "/queue/errors", 
-            Map.of("error", errorMessage, "timestamp", System.currentTimeMillis())
-        );
+                userId,
+                "/queue/errors",
+                Map.of("error", errorMessage, "timestamp", System.currentTimeMillis()));
     }
 }

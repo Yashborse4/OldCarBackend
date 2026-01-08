@@ -29,6 +29,8 @@ services:
       - IPC_LOCK
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
+      - ./index-template.json:/docker-entrypoint-initdb.d/index-template.json:ro
+      - ./init-elasticsearch.sh:/docker-entrypoint-initdb.d/init-elasticsearch.sh:ro
     ports:
       - "9200:9200"
       - "9300:9300"
@@ -40,6 +42,21 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+
+  # Init container to apply index template
+  elasticsearch-init:
+    image: curlimages/curl:latest
+    container_name: car-search-elasticsearch-init
+    command: sh /scripts/init-elasticsearch.sh
+    volumes:
+      - ./init-elasticsearch.sh:/scripts/init-elasticsearch.sh:ro
+      - ./index-template.json:/scripts/index-template.json:ro
+    networks:
+      - car-search-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: "no"
 
   kibana:
     image: docker.elastic.co/kibana/kibana:7.17.9

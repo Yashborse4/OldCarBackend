@@ -32,7 +32,7 @@ public class User {
 
     @NotBlank(message = "Username is required")
     @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
-    @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "Username can only contain letters, numbers, and underscores")
+    @Pattern(regexp = "^[a-zA-Z0-9_.@-]+$", message = "Username can only contain letters, numbers, underscores, dots, hyphens, and @")
     @Column(unique = true, nullable = false, length = 50)
     private String username;
 
@@ -58,7 +58,36 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    private Role role = Role.VIEWER;
+    private Role role = Role.USER;
+
+    // Dealer status for verification workflow (only relevant for DEALER role)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "dealer_status", length = 20)
+    private DealerStatus dealerStatus;
+
+    @Column(name = "dealer_status_updated_at")
+    private LocalDateTime dealerStatusUpdatedAt;
+
+    @Size(max = 500, message = "Dealer status reason must not exceed 500 characters")
+    @Column(name = "dealer_status_reason", length = 500)
+    private String dealerStatusReason;
+
+    // Dealer profile fields
+    @Size(max = 100, message = "Dealer name must not exceed 100 characters")
+    @Column(name = "dealer_name", length = 100)
+    private String dealerName;
+
+    @Size(max = 100, message = "Showroom name must not exceed 100 characters")
+    @Column(name = "showroom_name", length = 100)
+    private String showroomName;
+
+    @Size(max = 255, message = "Address must not exceed 255 characters")
+    @Column(name = "address", length = 255)
+    private String address;
+
+    @Size(max = 100, message = "City must not exceed 100 characters")
+    @Column(name = "city", length = 100)
+    private String city;
 
     @Size(max = 100, message = "Location must not exceed 100 characters")
     @Column(length = 100)
@@ -76,6 +105,9 @@ public class User {
     @Builder.Default
     private Boolean isEmailVerified = false;
 
+    @Column(name = "email_verified_at")
+    private LocalDateTime emailVerifiedAt;
+
     @Column(name = "failed_login_attempts")
     @Builder.Default
     private Integer failedLoginAttempts = 0;
@@ -85,19 +117,22 @@ public class User {
 
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
-    
+
     @Column(name = "is_account_non_locked")
     @Builder.Default
     private Boolean isAccountNonLocked = true;
-    
+
     @Column(name = "account_locked_at")
     private LocalDateTime accountLockedAt;
-    
+
     @Column(name = "last_login_device")
     private String lastLoginDevice;
 
     @Column(name = "fcm_token", length = 500)
     private String fcmToken; // Firebase Cloud Messaging token for push notifications
+
+    @Column(name = "profile_image_url", length = 500)
+    private String profileImageUrl; // Profile image URL from storage service
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -113,11 +148,7 @@ public class User {
     private List<Car> cars = new ArrayList<>();
 
     @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-        name = "user_favorite_cars",
-        joinColumns = @JoinColumn(name = "user_id"),
-        inverseJoinColumns = @JoinColumn(name = "car_id")
-    )
+    @JoinTable(name = "user_favorite_cars", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "car_id"))
     @Builder.Default
     private Set<Car> favoriteCars = new HashSet<>();
 
@@ -127,6 +158,10 @@ public class User {
             return false;
         }
         return lockedUntil == null || lockedUntil.isBefore(LocalDateTime.now());
+    }
+
+    public boolean isActive() {
+        return Boolean.TRUE.equals(isActive);
     }
 
     public boolean hasRole(Role role) {
@@ -170,6 +205,71 @@ public class User {
 
     public String getFullName() {
         return getDisplayName();
+    }
+
+    // Dealer status helper methods
+
+    /**
+     * Check if this user is a verified dealer.
+     * A dealer is considered verified only if they have DEALER role and VERIFIED
+     * status.
+     */
+    public boolean isDealerVerified() {
+        return this.role == Role.DEALER && this.dealerStatus == DealerStatus.VERIFIED;
+    }
+
+    /**
+     * Check if this dealer's listings should be publicly visible.
+     * Only VERIFIED dealers have public visibility for their car listings.
+     */
+    public boolean canListCarsPublicly() {
+        if (this.role != Role.DEALER) {
+            return true; // Regular users always have public visibility
+        }
+        return this.dealerStatus != null && this.dealerStatus.isPubliclyVisible();
+    }
+
+    /**
+     * Check if this dealer can perform business operations (CRUD on listings).
+     * UNVERIFIED and VERIFIED dealers can operate, SUSPENDED and REJECTED cannot.
+     */
+    public boolean canOperateDealerBusiness() {
+        if (this.role != Role.DEALER) {
+            return true; // Regular users are not restricted
+        }
+        return this.dealerStatus != null && this.dealerStatus.canOperateBusiness();
+    }
+
+    /**
+     * Update dealer status with reason and timestamp.
+     */
+    public void updateDealerStatus(DealerStatus newStatus, String reason) {
+        this.dealerStatus = newStatus;
+        this.dealerStatusReason = reason;
+        this.dealerStatusUpdatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * @deprecated Use {@link #isDealerVerified()} instead.
+     *             Kept for backward compatibility.
+     */
+    @Deprecated
+    public Boolean getVerifiedDealer() {
+        return isDealerVerified();
+    }
+
+    /**
+     * @deprecated Use {@link #updateDealerStatus(DealerStatus, String)} instead.
+     *             Kept for backward compatibility.
+     */
+    @Deprecated
+    public void setVerifiedDealer(Boolean verified) {
+        if (Boolean.TRUE.equals(verified)) {
+            this.dealerStatus = DealerStatus.VERIFIED;
+        } else if (this.dealerStatus == DealerStatus.VERIFIED) {
+            this.dealerStatus = DealerStatus.UNVERIFIED;
+        }
+        this.dealerStatusUpdatedAt = LocalDateTime.now();
     }
 
     // Security method to exclude password from toString

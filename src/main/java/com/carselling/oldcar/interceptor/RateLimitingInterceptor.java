@@ -1,5 +1,6 @@
 package com.carselling.oldcar.interceptor;
 
+import com.carselling.oldcar.annotation.RateLimit;
 import com.carselling.oldcar.config.RateLimitingConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.io.IOException;
@@ -27,10 +29,11 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
 
     private final RateLimitingConfig rateLimitingConfig;
     private final RateLimitingConfig.RateLimitService rateLimitService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
+            throws Exception {
         if (!rateLimitingConfig.isRateLimitingEnabled()) {
             log.debug("Rate limiting is disabled");
             return true;
@@ -41,34 +44,51 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
         String requestPath = request.getRequestURI();
 
         try {
+            // Check for @RateLimit annotation on the handler method
+            RateLimit rateLimitAnnotation = getRateLimitAnnotation(handler);
+
+            // Generate bucket key based on annotation presence to allow separate buckets
+            // for sensitive endpoints
+            if (rateLimitAnnotation != null) {
+                bucketKey += "_" + requestPath; // Specific bucket for this endpoint
+            }
+
             // Check if this request is allowed using our custom rate limiting service
-            boolean isAllowed = rateLimitService.isAllowed(bucketKey);
-            
+            boolean isAllowed;
+
+            if (rateLimitAnnotation != null) {
+                isAllowed = rateLimitService.isAllowed(bucketKey, rateLimitAnnotation.capacity(),
+                        rateLimitAnnotation.refill(), rateLimitAnnotation.refillPeriod());
+            } else {
+                isAllowed = rateLimitService.isAllowed(bucketKey);
+            }
+
             if (isAllowed) {
                 // Request allowed - add rate limit headers
                 long remainingTokens = rateLimitService.getRemainingTokens(bucketKey);
                 response.setHeader("X-Rate-Limit-Remaining", String.valueOf(remainingTokens));
-                response.setHeader("X-Rate-Limit-Reset", String.valueOf(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(1)));
-                
-                log.debug("Rate limit check passed for client: {} on path: {} (remaining: {})", 
-                         clientId, requestPath, remainingTokens);
+                response.setHeader("X-Rate-Limit-Reset",
+                        String.valueOf(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(1)));
+
+                log.debug("Rate limit check passed for client: {} on path: {} (remaining: {})",
+                        clientId, requestPath, remainingTokens);
                 return true;
             } else {
                 // Rate limit exceeded
                 long retryAfterSeconds = 60; // Default 1 minute retry
-                
+
                 // Set rate limit headers
                 response.setHeader("X-Rate-Limit-Retry-After", String.valueOf(retryAfterSeconds));
                 response.setHeader("X-Rate-Limit-Remaining", "0");
-                
+
                 // Send error response
                 sendRateLimitExceededResponse(response, clientId, retryAfterSeconds);
-                
-                log.warn("Rate limit exceeded for client: {} on path: {} (retry after: {}s)", 
+
+                log.warn("Rate limit exceeded for client: {} on path: {} (retry after: {}s)",
                         clientId, requestPath, retryAfterSeconds);
                 return false;
             }
-            
+
         } catch (Exception e) {
             log.error("Error checking rate limit for client: {} on path: {}", clientId, requestPath, e);
             // Fail open - allow request to proceed if rate limiting encounters an error
@@ -85,17 +105,17 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-            
+
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("error", "Rate limit exceeded");
             errorResponse.put("message", "Too many requests. Please try again later.");
             errorResponse.put("retryAfter", retryAfterSeconds);
             errorResponse.put("timestamp", System.currentTimeMillis());
-            
+
             String jsonResponse = objectMapper.writeValueAsString(errorResponse);
             response.getWriter().write(jsonResponse);
             response.getWriter().flush();
-            
+
         } catch (IOException e) {
             log.error("Failed to write rate limit exceeded response for client: {}", clientId, e);
             // Fallback to simple text response
@@ -106,7 +126,18 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
             }
         }
     }
-    
+
+    /**
+     * Helper to extract RateLimit annotation from handler method
+     */
+    private RateLimit getRateLimitAnnotation(Object handler) {
+        if (handler instanceof HandlerMethod) {
+            HandlerMethod handlerMethod = (HandlerMethod) handler;
+            return handlerMethod.getMethodAnnotation(RateLimit.class);
+        }
+        return null;
+    }
+
     /**
      * Extract client identifier from request headers and remote address
      * Prioritizes real client IP over proxy addresses
@@ -121,19 +152,19 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
                 return clientIp;
             }
         }
-        
+
         // Check for X-Real-IP header (common with Nginx)
         String realIp = request.getHeader("X-Real-IP");
         if (realIp != null && !realIp.trim().isEmpty() && !"unknown".equalsIgnoreCase(realIp)) {
             return realIp;
         }
-        
+
         // Check for Cloudflare specific header
         String cfConnectingIp = request.getHeader("CF-Connecting-IP");
         if (cfConnectingIp != null && !cfConnectingIp.trim().isEmpty()) {
             return cfConnectingIp;
         }
-        
+
         // Fall back to remote address
         String remoteAddr = request.getRemoteAddr();
         return remoteAddr != null ? remoteAddr : "unknown";

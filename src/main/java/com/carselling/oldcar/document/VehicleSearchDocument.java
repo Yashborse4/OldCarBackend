@@ -1,51 +1,62 @@
 package com.carselling.oldcar.document;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.elasticsearch.annotations.*;
+import java.time.Instant;
+import java.util.List;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.List;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.elasticsearch.annotations.Document;
+import org.springframework.data.elasticsearch.annotations.Field;
+import org.springframework.data.elasticsearch.annotations.FieldType;
+import org.springframework.data.elasticsearch.annotations.GeoPointField;
 
 /**
- * Elasticsearch document for vehicle search
+ * Elasticsearch Search Document
+ *
+ * This document is optimized ONLY for search.
+ * It must NOT be used as:
+ * - JPA Entity
+ * - API Request/Response DTO
  */
 @Data
 @Builder
-@NoArgsConstructor
 @AllArgsConstructor
-@Document(indexName = "vehicles")
-@Setting(settingPath = "/elasticsearch/vehicle-settings.json")
-@Mapping(mappingPath = "/elasticsearch/vehicle-mapping.json")
+@NoArgsConstructor // Replaces explicit empty constructor
+@Document(indexName = "vehicle_search_v1")
 public class VehicleSearchDocument {
 
-    @Id
-    private String id;
+    /*
+     * ============================================================
+     * Core Identifiers
+     * ============================================================
+     */
 
-    @Field(type = FieldType.Long)
-    private Long vehicleId;
+    @Id
+    private String id; // ES document ID
+    private Long carId; // Reference to DB car table
+    private Long dealerId; // Reference to dealer/user table
+
+    /*
+     * ============================================================
+     * Primary Searchable Text Fields
+     * ============================================================
+     */
 
     @Field(type = FieldType.Text, analyzer = "standard")
-    private String title;
+    private String brand;
 
-    @Field(type = FieldType.Keyword)
-    private String make;
-
-    @Field(type = FieldType.Keyword)
+    @Field(type = FieldType.Text, analyzer = "standard")
     private String model;
 
-    @Field(type = FieldType.Integer)
-    private Integer year;
+    @Field(type = FieldType.Text, analyzer = "standard")
+    private String variant;
 
-    @Field(type = FieldType.Double)
-    private BigDecimal price;
-
-    @Field(type = FieldType.Integer)
-    private Integer mileage;
+    @Field(type = FieldType.Text, analyzer = "standard")
+    private String city;
 
     @Field(type = FieldType.Keyword)
     private String fuelType;
@@ -53,198 +64,93 @@ public class VehicleSearchDocument {
     @Field(type = FieldType.Keyword)
     private String transmission;
 
-    @Field(type = FieldType.Keyword)
-    private String bodyType;
+    /*
+     * ============================================================
+     * Normalized Fields (for partial & typo tolerance)
+     * ============================================================
+     */
 
     @Field(type = FieldType.Keyword)
-    private String condition;
-
-    @Field(type = FieldType.Text, analyzer = "standard")
-    private String description;
+    private String normalizedBrand; // e.g. "hyundai"
 
     @Field(type = FieldType.Keyword)
-    private String color;
-
-    @Field(type = FieldType.Text)
-    private String location;
+    private String normalizedModel; // e.g. "i20"
 
     @Field(type = FieldType.Keyword)
-    private String city;
+    private String normalizedVariant;
 
     @Field(type = FieldType.Keyword)
-    private String state;
+    private String normalizedCity;
 
-    @Field(type = FieldType.Keyword)
-    private String country;
+    /*
+     * ============================================================
+     * Numeric & Range Filter Fields
+     * ============================================================
+     */
 
-    // Geographic location for geo-spatial search
+    @Field(type = FieldType.Integer)
+    private Integer year;
+
+    @Field(type = FieldType.Double)
+    private Double price;
+
+    @Field(type = FieldType.Integer)
+    private Integer mileage;
+
+    /*
+     * ============================================================
+     * Dealer & Approval Controls (BUSINESS RULES)
+     * ============================================================
+     */
+
+    @Field(type = FieldType.Boolean)
+    private boolean dealerVerified; // Dealer approved by admin
+
+    @Field(type = FieldType.Boolean)
+    private boolean carApproved; // Car approved by admin
+
+    @Field(type = FieldType.Boolean)
+    private boolean active; // Soft delete support
+
+    /*
+     * ============================================================
+     * Ranking & Boosting Fields
+     * ============================================================
+     */
+
+    @Field(type = FieldType.Date)
+    private Instant createdAt; // Boost recent cars
+
+    @Field(type = FieldType.Integer)
+    private Integer viewCount; // Popularity boost
+
+    @Field(type = FieldType.Integer)
+    private Integer leadCount; // Engagement score
+
+    /*
+     * ============================================================
+     * Geo Location (Future Proofing)
+     * ============================================================
+     */
+
     @GeoPointField
-    private String geoLocation; // Format: "lat,lon"
+    private String location; // "lat,lon"
 
-    @Field(type = FieldType.Nested)
-    private List<String> features;
-
-    @Field(type = FieldType.Nested)
-    private List<String> images;
-
-    @Field(type = FieldType.Nested)
-    private List<String> tags;
-
-    // Owner information
-    @Field(type = FieldType.Long)
-    private Long ownerId;
-
-    @Field(type = FieldType.Keyword)
-    private String ownerType; // INDIVIDUAL, DEALER
-
-    @Field(type = FieldType.Text)
-    private String ownerName;
-
-    // Vehicle specifications
-    @Field(type = FieldType.Keyword)
-    private String engineSize;
-
-    @Field(type = FieldType.Integer)
-    private Integer numberOfDoors;
-
-    @Field(type = FieldType.Integer)
-    private Integer numberOfSeats;
-
-    @Field(type = FieldType.Keyword)
-    private String driveType; // FWD, RWD, AWD, 4WD
-
-    // Market analysis fields
-    @Field(type = FieldType.Double)
-    private BigDecimal marketValue;
-
-    @Field(type = FieldType.Double)
-    private BigDecimal priceScore; // Price competitiveness score
-
-    @Field(type = FieldType.Integer)
-    private Integer popularity; // Number of views/likes
-
-    @Field(type = FieldType.Integer)
-    private Integer inquiryCount;
-
-    // Status and metadata
-    @Field(type = FieldType.Keyword)
-    private String status; // ACTIVE, SOLD, PENDING
-
-    @Field(type = FieldType.Boolean)
-    private Boolean isVerified;
-
-    @Field(type = FieldType.Boolean)
-    private Boolean isFeatured;
-
-    @Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second)
-    private LocalDateTime createdAt;
-
-    @Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second)
-    private LocalDateTime updatedAt;
-
-    @Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second)
-    private LocalDateTime lastViewedAt;
-
-    // Search boost fields
-    @Field(type = FieldType.Double)
-    private Double searchBoost; // For ranking purposes
-
-    @Field(type = FieldType.Keyword)
-    private String categoryPath; // For faceted search
-
-    // Additional search fields
-    @Field(type = FieldType.Text, analyzer = "keyword")
-    private String searchableText; // Combined searchable content
-
-    @CompletionField
-    private CompletionSuggestion suggest;
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CompletionSuggestion {
-        private String[] input;
-        private Integer weight;
-        private String[] contexts;
-    }
-
-    /**
-     * Create search suggestions for auto-complete
+    /*
+     * ============================================================
+     * Media (Minimal – NOT full assets)
+     * ============================================================
      */
-    public static CompletionSuggestion createSuggestion(String make, String model, Integer year) {
-        return CompletionSuggestion.builder()
-                .input(new String[]{
-                    make,
-                    model,
-                    make + " " + model,
-                    year + " " + make,
-                    year + " " + model,
-                    year + " " + make + " " + model
-                })
-                .weight(1)
-                .build();
-    }
 
-    /**
-     * Build searchable text from all relevant fields
-     */
-    public void buildSearchableText() {
-        StringBuilder sb = new StringBuilder();
-        
-        if (make != null) sb.append(make).append(" ");
-        if (model != null) sb.append(model).append(" ");
-        if (year != null) sb.append(year).append(" ");
-        if (bodyType != null) sb.append(bodyType).append(" ");
-        if (fuelType != null) sb.append(fuelType).append(" ");
-        if (transmission != null) sb.append(transmission).append(" ");
-        if (color != null) sb.append(color).append(" ");
-        if (location != null) sb.append(location).append(" ");
-        if (description != null) sb.append(description).append(" ");
-        if (features != null) {
-            features.forEach(feature -> sb.append(feature).append(" "));
-        }
-        if (tags != null) {
-            tags.forEach(tag -> sb.append(tag).append(" "));
-        }
-        
-        this.searchableText = sb.toString().trim().toLowerCase();
-    }
+    @Field(type = FieldType.Keyword)
+    private String thumbnailImageUrl;
 
-    /**
-     * Calculate search boost based on vehicle attributes
+    /*
+     * ============================================================
+     * Tags / Flags
+     * ============================================================
      */
-    public void calculateSearchBoost() {
-        double boost = 1.0;
-        
-        // Boost verified vehicles
-        if (Boolean.TRUE.equals(isVerified)) {
-            boost += 0.5;
-        }
-        
-        // Boost featured vehicles
-        if (Boolean.TRUE.equals(isFeatured)) {
-            boost += 0.3;
-        }
-        
-        // Boost based on popularity
-        if (popularity != null && popularity > 0) {
-            boost += Math.min(popularity * 0.01, 1.0);
-        }
-        
-        // Boost based on inquiry count
-        if (inquiryCount != null && inquiryCount > 0) {
-            boost += Math.min(inquiryCount * 0.05, 0.5);
-        }
-        
-        // Boost newer listings
-        if (createdAt != null) {
-            LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
-            if (createdAt.isAfter(thirtyDaysAgo)) {
-                boost += 0.2;
-            }
-        }
-        
-        this.searchBoost = boost;
-    }
+
+    @Field(type = FieldType.Keyword)
+    private List<String> highlights; // e.g. ["single-owner", "verified"]
 }

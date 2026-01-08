@@ -27,7 +27,7 @@ public class MessageRead {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "message_id", nullable = false)
-    private ChatMessageV2 message;
+    private ChatMessage message;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -35,7 +35,7 @@ public class MessageRead {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "chat_room_id", nullable = false)
-    private ChatRoomV2 chatRoom;
+    private ChatRoom chatRoom;
 
     @CreationTimestamp
     @Column(name = "read_at", nullable = false)
