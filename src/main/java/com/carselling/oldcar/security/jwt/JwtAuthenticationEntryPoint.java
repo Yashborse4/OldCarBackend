@@ -16,31 +16,37 @@ import java.util.Map;
 
 /**
  * JWT Authentication Entry Point for handling unauthorized access
- * This class handles authentication failures and returns structured error responses
+ * This class handles authentication failures and returns structured error
+ * responses
  */
 @Component
 @Slf4j
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
+    private final ObjectMapper mapper;
+
+    public JwtAuthenticationEntryPoint(ObjectMapper mapper) {
+        this.mapper = mapper;
+    }
+
     @Override
-    public void commence(HttpServletRequest request, 
-                        HttpServletResponse response,
-                        AuthenticationException authException) throws IOException {
-        
-        log.error("Unauthorized access attempt: {} - {}", 
+    public void commence(HttpServletRequest request,
+            HttpServletResponse response,
+            AuthenticationException authException) throws IOException {
+
+        log.error("Unauthorized access attempt: {} - {}",
                 request.getRequestURI(), authException.getMessage());
 
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
         Map<String, Object> errorResponse = createErrorResponse(request, authException);
-        
-        ObjectMapper mapper = new ObjectMapper();
+
         mapper.writeValue(response.getOutputStream(), errorResponse);
     }
 
-    private Map<String, Object> createErrorResponse(HttpServletRequest request, 
-                                                   AuthenticationException authException) {
+    private Map<String, Object> createErrorResponse(HttpServletRequest request,
+            AuthenticationException authException) {
         Map<String, Object> errorResponse = new HashMap<>();
         errorResponse.put("timestamp", LocalDateTime.now());
         errorResponse.put("status", HttpServletResponse.SC_UNAUTHORIZED);
@@ -48,7 +54,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         errorResponse.put("message", determineErrorMessage(authException));
         errorResponse.put("path", request.getRequestURI());
         errorResponse.put("method", request.getMethod());
-        
+
         // Additional context for debugging (remove in production)
         if (log.isDebugEnabled()) {
             errorResponse.put("details", authException.getMessage());
@@ -59,7 +65,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
     private String determineErrorMessage(AuthenticationException authException) {
         String message = authException.getMessage();
-        
+
         // Provide user-friendly error messages
         if (message != null) {
             if (message.contains("JWT expired")) {
@@ -70,7 +76,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
                 return "Invalid authentication token format. Please login again.";
             }
         }
-        
+
         return "Authentication required. Please provide a valid authentication token.";
     }
 }

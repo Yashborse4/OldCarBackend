@@ -62,7 +62,7 @@ public class RateLimitingConfig {
         } else {
             log.info("Redis disabled or not configured, using in-memory rate limiting cache");
         }
-        
+
         return new ConcurrentHashMap<>();
     }
 
@@ -71,12 +71,14 @@ public class RateLimitingConfig {
      */
     @Bean
     public RateLimitService rateLimitService() {
-        return new InMemoryRateLimitService(capacity, refillTokens, refillPeriodMinutes, inMemoryCacheService, rateLimitingEnabled);
+        return new InMemoryRateLimitService(capacity, refillTokens, refillPeriodMinutes, inMemoryCacheService,
+                rateLimitingEnabled);
     }
 
     public BucketConfiguration createBucketConfiguration() {
         return BucketConfiguration.builder()
-                .addLimit(Bandwidth.classic(capacity, Refill.greedy(refillTokens, Duration.ofMinutes(refillPeriodMinutes))))
+                .addLimit(Bandwidth.classic(capacity,
+                        Refill.greedy(refillTokens, Duration.ofMinutes(refillPeriodMinutes))))
                 .build();
     }
 
@@ -89,9 +91,17 @@ public class RateLimitingConfig {
      */
     public interface RateLimitService {
         boolean isAllowed(String key);
+
+        boolean isAllowed(String key, String role);
+
         boolean isAllowed(String key, int tokens);
+
+        boolean isAllowed(String key, int capacity, int refillTokens, int refillPeriod);
+
         long getRemainingTokens(String key);
+
         void reset(String key);
+
         void resetAll();
     }
 
@@ -106,13 +116,15 @@ public class RateLimitingConfig {
         private final ConcurrentHashMap<String, TokenBucket> buckets = new ConcurrentHashMap<>();
         private final boolean rateLimitingEnabled;
 
-        public InMemoryRateLimitService(int capacity, int refillTokens, int refillPeriodMinutes, InMemoryCacheService cacheService, boolean rateLimitingEnabled) {
+        public InMemoryRateLimitService(int capacity, int refillTokens, int refillPeriodMinutes,
+                InMemoryCacheService cacheService, boolean rateLimitingEnabled) {
             this.capacity = capacity;
             this.refillTokens = refillTokens;
             this.refillPeriodMinutes = refillPeriodMinutes;
             this.cacheService = cacheService;
             this.rateLimitingEnabled = rateLimitingEnabled;
-            log.info("InMemoryRateLimitService initialized with capacity: {}, refill: {} tokens per {} minutes, enabled: {}", 
+            log.info(
+                    "InMemoryRateLimitService initialized with capacity: {}, refill: {} tokens per {} minutes, enabled: {}",
                     capacity, refillTokens, refillPeriodMinutes, rateLimitingEnabled);
         }
 
@@ -126,11 +138,11 @@ public class RateLimitingConfig {
             if (!rateLimitingEnabled) {
                 return true; // Rate limiting disabled
             }
-            
+
             try {
                 TokenBucket bucket = getBucket(key);
                 boolean allowed = bucket.tryConsume(tokens);
-                log.debug("Rate limit check for key '{}': {} tokens requested, allowed: {}, remaining: {}", 
+                log.debug("Rate limit check for key '{}': {} tokens requested, allowed: {}, remaining: {}",
                         key, tokens, allowed, bucket.getAvailableTokens());
                 return allowed;
             } catch (Exception e) {
@@ -172,11 +184,65 @@ public class RateLimitingConfig {
             }
         }
 
-        private TokenBucket getBucket(String key) {
+        @Override
+        public boolean isAllowed(String key, String role) {
+            return isAllowed(key, role, 1);
+        }
+
+        public boolean isAllowed(String key, String role, int tokens) {
+            if (!rateLimitingEnabled)
+                return true;
+            try {
+                TokenBucket bucket = getBucket(key, role);
+                boolean allowed = bucket.tryConsume(tokens);
+                log.debug("Rate limit check for key '{}' (Role: {}): allowed: {}", key, role, allowed);
+                return allowed;
+            } catch (Exception e) {
+                log.error("Error rate limit check: {}", e.getMessage());
+                return true;
+            }
+        }
+
+        @Override
+        public boolean isAllowed(String key, int capacity, int refillTokens, int refillPeriod) {
+            if (!rateLimitingEnabled)
+                return true;
+            try {
+                TokenBucket bucket = buckets.computeIfAbsent(key,
+                        k -> new TokenBucket(capacity, refillTokens, refillPeriod));
+
+                boolean allowed = bucket.tryConsume(1);
+                log.debug("Custom Rate limit check for key '{}': allowed: {}", key, allowed);
+                return allowed;
+            } catch (Exception e) {
+                log.error("Error custom rate limit check: {}", e.getMessage());
+                return true;
+            }
+        }
+
+        private TokenBucket getBucket(String key, String role) {
             return buckets.computeIfAbsent(key, k -> {
-                log.debug("Creating new token bucket for key: {}", k);
-                return new TokenBucket(capacity, refillTokens, refillPeriodMinutes);
+                int cap = capacity;
+                int refill = refillTokens;
+                if ("ADMIN".equalsIgnoreCase(role)) {
+                    cap = 2000;
+                    refill = 500;
+                } else if ("DEALER".equalsIgnoreCase(role)) {
+                    cap = 500;
+                    refill = 100;
+                } else if ("USER".equalsIgnoreCase(role)) {
+                    cap = 100;
+                    refill = 20;
+                } else {
+                    cap = 20;
+                    refill = 5;
+                } // Anonymous
+                return new TokenBucket(cap, refill, refillPeriodMinutes);
             });
+        }
+
+        private TokenBucket getBucket(String key) {
+            return getBucket(key, "ANONYMOUS");
         }
 
         /**
@@ -205,16 +271,16 @@ public class RateLimitingConfig {
                 if (tokensToConsume > capacity) {
                     return false; // Request exceeds bucket capacity
                 }
-                
+
                 refillIfNeeded();
-                
+
                 // Atomic compare-and-swap loop
                 while (true) {
                     long currentTokens = tokens.get();
                     if (currentTokens < tokensToConsume) {
                         return false; // Not enough tokens
                     }
-                    
+
                     if (tokens.compareAndSet(currentTokens, currentTokens - tokensToConsume)) {
                         return true; // Successfully consumed tokens
                     }
@@ -230,22 +296,22 @@ public class RateLimitingConfig {
             private void refillIfNeeded() {
                 long now = System.currentTimeMillis();
                 long timeSinceLastRefill = now - lastRefillTime;
-                
+
                 if (timeSinceLastRefill >= refillPeriodMillis) {
                     synchronized (refillLock) {
                         // Double-check inside synchronized block
                         now = System.currentTimeMillis();
                         timeSinceLastRefill = now - lastRefillTime;
-                        
+
                         if (timeSinceLastRefill >= refillPeriodMillis) {
                             long periodsElapsed = timeSinceLastRefill / refillPeriodMillis;
                             long tokensToAdd = Math.min(periodsElapsed * refillTokens, capacity);
-                            
+
                             // Add tokens up to capacity
                             while (true) {
                                 long currentTokens = tokens.get();
                                 long newTokens = Math.min(currentTokens + tokensToAdd, capacity);
-                                
+
                                 if (tokens.compareAndSet(currentTokens, newTokens)) {
                                     lastRefillTime = now - (timeSinceLastRefill % refillPeriodMillis);
                                     break;

@@ -23,49 +23,71 @@ public class SecurityUtils {
 
     /**
      * Get current authenticated user's ID
+     * 
      * @return User ID or null if not authenticated
      */
     public static Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        
-        if (authentication == null || !authentication.isAuthenticated() || 
-            "anonymousUser".equals(authentication.getPrincipal())) {
+
+        if (authentication == null || !authentication.isAuthenticated() ||
+                authentication.getPrincipal() == null ||
+                "anonymousUser".equals(authentication.getPrincipal())) {
             return null;
         }
 
         try {
-            // If principal is a UserDetails object
-            if (authentication.getPrincipal() instanceof UserDetails) {
-                UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-                return Long.parseLong(userDetails.getUsername());
+            Object principal = authentication.getPrincipal();
+
+            // If principal is a UserPrincipal (our custom class), use getId() directly
+            if (principal instanceof com.carselling.oldcar.security.UserPrincipal) {
+                com.carselling.oldcar.security.UserPrincipal userPrincipal = (com.carselling.oldcar.security.UserPrincipal) principal;
+                return userPrincipal.getId();
             }
-            
+
             // If principal is directly the user ID (as string)
-            if (authentication.getPrincipal() instanceof String) {
-                return Long.parseLong((String) authentication.getPrincipal());
+            if (principal instanceof String) {
+                String principalStr = (String) principal;
+                if (principalStr == null || principalStr.trim().isEmpty()) {
+                    return null;
+                }
+                return Long.parseLong(principalStr);
             }
-            
+
             // If principal is already a Long
-            if (authentication.getPrincipal() instanceof Long) {
-                return (Long) authentication.getPrincipal();
+            if (principal instanceof Long) {
+                return (Long) principal;
             }
-            
+
+            // Fallback: try to get username and parse as Long (for other UserDetails
+            // implementations)
+            if (principal instanceof UserDetails) {
+                UserDetails userDetails = (UserDetails) principal;
+                String username = userDetails.getUsername();
+                if (username == null || username.trim().isEmpty()) {
+                    return null;
+                }
+                return Long.parseLong(username);
+            }
+
         } catch (NumberFormatException e) {
             log.error("Failed to parse user ID from authentication: {}", authentication.getPrincipal());
+        } catch (Exception e) {
+            log.error("Unexpected error parsing user ID from authentication: {}", e.getMessage());
         }
-        
+
         return null;
     }
 
     /**
      * Get current authenticated user's username
+     * 
      * @return Username or null if not authenticated
      */
     public static String getCurrentUsername() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        
-        if (authentication == null || !authentication.isAuthenticated() || 
-            "anonymousUser".equals(authentication.getPrincipal())) {
+
+        if (authentication == null || !authentication.isAuthenticated() ||
+                "anonymousUser".equals(authentication.getPrincipal())) {
             return null;
         }
 
@@ -73,26 +95,28 @@ public class SecurityUtils {
             UserDetails userDetails = (UserDetails) authentication.getPrincipal();
             return userDetails.getUsername();
         }
-        
+
         return authentication.getName();
     }
 
     /**
      * Get current authenticated user's authorities/roles
+     * 
      * @return Collection of authorities or empty collection if not authenticated
      */
     public static Collection<? extends GrantedAuthority> getCurrentUserAuthorities() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        
+
         if (authentication == null || !authentication.isAuthenticated()) {
             return java.util.Collections.emptyList();
         }
-        
+
         return authentication.getAuthorities();
     }
 
     /**
      * Check if current user has a specific role
+     * 
      * @param role Role to check
      * @return true if user has the role, false otherwise
      */
@@ -102,18 +126,20 @@ public class SecurityUtils {
 
     /**
      * Check if current user has a specific authority
+     * 
      * @param authority Authority to check (e.g., "ROLE_ADMIN")
      * @return true if user has the authority, false otherwise
      */
     public static boolean hasRole(String authority) {
         Collection<? extends GrantedAuthority> authorities = getCurrentUserAuthorities();
-        
+
         return authorities.stream()
                 .anyMatch(auth -> auth.getAuthority().equals(authority));
     }
 
     /**
      * Check if current user has any of the specified roles
+     * 
      * @param roles Roles to check
      * @return true if user has any of the roles, false otherwise
      */
@@ -128,6 +154,7 @@ public class SecurityUtils {
 
     /**
      * Check if current user has any of the specified authorities
+     * 
      * @param authorities Authorities to check
      * @return true if user has any of the authorities, false otherwise
      */
@@ -142,11 +169,12 @@ public class SecurityUtils {
 
     /**
      * Get current user's highest role
+     * 
      * @return Highest role or null if not authenticated
      */
     public static Optional<Role> getCurrentUserHighestRole() {
         Collection<? extends GrantedAuthority> authorities = getCurrentUserAuthorities();
-        
+
         // Check roles in order of hierarchy (highest to lowest)
         if (authorities.stream().anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"))) {
             return Optional.of(Role.ADMIN);
@@ -154,18 +182,16 @@ public class SecurityUtils {
         if (authorities.stream().anyMatch(auth -> auth.getAuthority().equals("ROLE_DEALER"))) {
             return Optional.of(Role.DEALER);
         }
-        if (authorities.stream().anyMatch(auth -> auth.getAuthority().equals("ROLE_SELLER"))) {
-            return Optional.of(Role.SELLER);
+        if (authorities.stream().anyMatch(auth -> auth.getAuthority().equals("ROLE_USER"))) {
+            return Optional.of(Role.USER);
         }
-        if (authorities.stream().anyMatch(auth -> auth.getAuthority().equals("ROLE_VIEWER"))) {
-            return Optional.of(Role.VIEWER);
-        }
-        
+
         return Optional.empty();
     }
 
     /**
      * Check if the current user is the same as the specified user ID
+     * 
      * @param userId User ID to check against
      * @return true if current user matches the specified ID
      */
@@ -176,18 +202,20 @@ public class SecurityUtils {
 
     /**
      * Check if current user is authenticated
+     * 
      * @return true if authenticated, false otherwise
      */
     public static boolean isAuthenticated() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        
-        return authentication != null && 
-               authentication.isAuthenticated() && 
-               !"anonymousUser".equals(authentication.getPrincipal());
+
+        return authentication != null &&
+                authentication.isAuthenticated() &&
+                !"anonymousUser".equals(authentication.getPrincipal());
     }
 
     /**
      * Check if current user is an admin
+     * 
      * @return true if user is admin, false otherwise
      */
     public static boolean isAdmin() {
@@ -197,6 +225,7 @@ public class SecurityUtils {
     /**
      * Check if current user can manage the specified user
      * (Admin can manage everyone, users can manage themselves)
+     * 
      * @param userId User ID to check
      * @return true if current user can manage the specified user
      */
@@ -206,6 +235,7 @@ public class SecurityUtils {
 
     /**
      * Check if current user can view the specified user's information
+     * 
      * @param userId User ID to check
      * @return true if current user can view the user's information
      */
@@ -216,9 +246,70 @@ public class SecurityUtils {
 
     /**
      * Get current authentication object
+     * 
      * @return Authentication object or null if not authenticated
      */
     public static Authentication getCurrentAuthentication() {
         return SecurityContextHolder.getContext().getAuthentication();
+    }
+
+    /**
+     * Extract username from email address (part before @ symbol)
+     * Removes digits and extracts core username
+     * Example: yashborse432005@gmail.com -> yash
+     * 
+     * @param email Email address to extract username from
+     * @return Extracted username or null if email is invalid
+     */
+    public static String extractUsernameFromEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            return null;
+        }
+
+        // Get the local part (before @)
+        String localPart = email.substring(0, email.indexOf("@"));
+
+        // Remove all digits to get the alphabetic portion
+        String alphabeticPart = localPart.replaceAll("[0-9]", "");
+
+        // If the alphabetic part is too long, take a reasonable portion (first 4-8
+        // chars)
+        // This handles cases like "yashborse" -> "yash"
+        String username = alphabeticPart;
+        if (alphabeticPart.length() > 8) {
+            // Try to find a natural break point (uppercase letter, underscore, dot)
+            int breakPoint = -1;
+            for (int i = 1; i < Math.min(alphabeticPart.length(), 12); i++) {
+                char c = alphabeticPart.charAt(i);
+                if (Character.isUpperCase(c) || c == '_' || c == '.') {
+                    breakPoint = i;
+                    break;
+                }
+            }
+
+            if (breakPoint > 3) {
+                username = alphabeticPart.substring(0, breakPoint);
+            } else {
+                // No natural break, take first 8 characters
+                username = alphabeticPart.substring(0, 8);
+            }
+        } else if (alphabeticPart.length() > 5) {
+            // For medium length (6-8 chars), take first 4-5 characters
+            username = alphabeticPart.substring(0, Math.min(5, alphabeticPart.length()));
+        }
+
+        // Ensure minimum length
+        if (username.length() < 3) {
+            // If too short after processing, use original local part
+            username = localPart;
+            if (username.length() < 3) {
+                username = username + "_user";
+            }
+        }
+
+        // Sanitize username to ensure it only contains valid characters
+        username = username.replaceAll("[^a-zA-Z0-9_.-]", "_");
+
+        return username;
     }
 }

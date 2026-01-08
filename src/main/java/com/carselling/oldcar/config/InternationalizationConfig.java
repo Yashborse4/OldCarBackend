@@ -23,19 +23,19 @@ public class InternationalizationConfig implements WebMvcConfigurer {
     public LocaleResolver localeResolver() {
         AcceptHeaderLocaleResolver localeResolver = new AcceptHeaderLocaleResolver();
         localeResolver.setSupportedLocales(Arrays.asList(
-            Locale.US,          // English (US)
-            Locale.UK,          // English (UK)
-            new Locale("es"),   // Spanish
-            new Locale("fr"),   // French
-            new Locale("de"),   // German
-            new Locale("it"),   // Italian
-            new Locale("pt"),   // Portuguese   
-            new Locale("ja"),   // Japanese
-            new Locale("ko"),   // Korean
-            new Locale("zh"),   // Chinese
-            new Locale("ar"),   // Arabic
-            new Locale("hi"),   // Hindi
-            new Locale("ru")    // Russian
+                Locale.US, // English (US)
+                Locale.UK, // English (UK)
+                Locale.of("es"), // Spanish
+                Locale.of("fr"), // French
+                Locale.of("de"), // German
+                Locale.of("it"), // Italian
+                Locale.of("pt"), // Portuguese
+                Locale.of("ja"), // Japanese
+                Locale.of("ko"), // Korean
+                Locale.of("zh"), // Chinese
+                Locale.of("ar"), // Arabic
+                Locale.of("hi"), // Hindi
+                Locale.of("ru") // Russian
         ));
         localeResolver.setDefaultLocale(Locale.US);
         return localeResolver;
@@ -52,11 +52,11 @@ public class InternationalizationConfig implements WebMvcConfigurer {
     public MessageSource messageSource() {
         ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
         messageSource.setBasenames(
-            "messages/messages",           // General messages
-            "messages/validation",         // Validation messages
-            "messages/email",             // Email templates
-            "messages/notifications",      // Notification messages
-            "messages/errors"             // Error messages
+                "messages/messages", // General messages
+                "messages/validation", // Validation messages
+                "messages/email", // Email templates
+                "messages/notifications", // Notification messages
+                "messages/errors" // Error messages
         );
         messageSource.setDefaultEncoding("UTF-8");
         messageSource.setUseCodeAsDefaultMessage(true);

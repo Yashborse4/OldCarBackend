@@ -2,100 +2,75 @@ package com.carselling.oldcar.security;
 
 import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.model.User;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 
-/**
- * User Principal for enhanced Spring Security user details
- * Provides comprehensive user information for authentication and authorization
- */
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
 public class UserPrincipal implements UserDetails {
-    
-    private Long id;
-    private String username;
-    private String email;
-    private String password;
-    private Role role;
-    private String location;
-    private Boolean isActive;
-    private Boolean isEmailVerified;
-    private Integer failedLoginAttempts;
-    private LocalDateTime lockedUntil;
-    private Collection<? extends GrantedAuthority> authorities;
 
-    public static UserPrincipal create(User user) {
-        List<GrantedAuthority> authorities = createAuthorities(user.getRole());
-        
+    private final Long id;
+    private final String email;
+    private final String password;
+    private final Role role;
+    private final boolean active;
+    private final boolean emailVerified;
+    private final boolean verifiedDealer;
+    private final LocalDateTime lockedUntil;
+
+    private UserPrincipal(
+            Long id,
+            String email,
+            String password,
+            Role role,
+            boolean active,
+            boolean emailVerified,
+            boolean verifiedDealer,
+            LocalDateTime lockedUntil) {
+        this.id = id;
+        this.email = email;
+        this.password = password;
+        this.role = role;
+        this.active = active;
+        this.emailVerified = emailVerified;
+        this.verifiedDealer = verifiedDealer;
+        this.lockedUntil = lockedUntil;
+    }
+
+    /**
+     * Factory method to convert User entity → UserPrincipal
+     */
+    public static UserPrincipal from(User user) {
         return new UserPrincipal(
                 user.getId(),
-                user.getUsername(),
                 user.getEmail(),
                 user.getPassword(),
                 user.getRole(),
-                user.getLocation(),
-                user.getIsActive(),
-                user.getIsEmailVerified(),
-                user.getFailedLoginAttempts(),
-                user.getLockedUntil(),
-                authorities
-        );
+                user.isActive(),
+                Boolean.TRUE.equals(user.getIsEmailVerified()),
+                Boolean.TRUE.equals(user.isDealerVerified()),
+                user.getLockedUntil());
     }
 
-    private static List<GrantedAuthority> createAuthorities(Role role) {
-        List<GrantedAuthority> authorities = new ArrayList<>();
-        
-        // Add role-based authority
-        authorities.add(new SimpleGrantedAuthority("ROLE_" + role.name()));
-        
-        // Add permission-based authorities
-        switch (role) {
-            case ADMIN -> {
-                authorities.add(new SimpleGrantedAuthority("car:read"));
-                authorities.add(new SimpleGrantedAuthority("car:create"));
-                authorities.add(new SimpleGrantedAuthority("car:update:any"));
-                authorities.add(new SimpleGrantedAuthority("car:delete:any"));
-                authorities.add(new SimpleGrantedAuthority("car:feature"));
-                authorities.add(new SimpleGrantedAuthority("user:manage"));
-                authorities.add(new SimpleGrantedAuthority("analytics:view"));
-            }
-            case DEALER -> {
-                authorities.add(new SimpleGrantedAuthority("car:read"));
-                authorities.add(new SimpleGrantedAuthority("car:create"));
-                authorities.add(new SimpleGrantedAuthority("car:update:own"));
-                authorities.add(new SimpleGrantedAuthority("car:delete:own"));
-                authorities.add(new SimpleGrantedAuthority("car:feature"));
-                authorities.add(new SimpleGrantedAuthority("analytics:view"));
-            }
-            case SELLER -> {
-                authorities.add(new SimpleGrantedAuthority("car:read"));
-                authorities.add(new SimpleGrantedAuthority("car:create"));
-                authorities.add(new SimpleGrantedAuthority("car:update:own"));
-                authorities.add(new SimpleGrantedAuthority("car:delete:own"));
-            }
-            case VIEWER -> {
-                authorities.add(new SimpleGrantedAuthority("car:read"));
-            }
-        }
-        
-        return authorities;
-    }
-
-    // UserDetails interface methods
+    /**
+     * Authorities used by Spring Security
+     */
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return authorities;
+        return List.of(
+                new SimpleGrantedAuthority("ROLE_" + role.name()));
+    }
+
+    /**
+     * Username for authentication (email-based login)
+     */
+    @Override
+    public String getUsername() {
+        return email;
     }
 
     @Override
@@ -103,102 +78,60 @@ public class UserPrincipal implements UserDetails {
         return password;
     }
 
-    @Override
-    public String getUsername() {
-        return username;
-    }
-
+    /**
+     * Account state checks
+     */
     @Override
     public boolean isAccountNonExpired() {
-        return true; // We don't implement account expiration
+        return true;
     }
 
     @Override
     public boolean isAccountNonLocked() {
+        // Account is locked if lockedUntil is set and is in the future
         return lockedUntil == null || lockedUntil.isBefore(LocalDateTime.now());
     }
 
     @Override
     public boolean isCredentialsNonExpired() {
-        return true; // We don't implement password expiration
+        return true;
     }
 
     @Override
     public boolean isEnabled() {
-        return Boolean.TRUE.equals(isActive);
+        // User is enabled only if active AND email is verified
+        return active && emailVerified;
     }
 
-    // Helper methods
-    public boolean hasRole(Role role) {
-        return this.role == role;
+    /**
+     * Custom getters (useful in controllers & security checks)
+     */
+    public Long getId() {
+        return id;
     }
 
-    public boolean hasAuthority(String authority) {
-        return authorities.stream()
-                .anyMatch(grantedAuth -> grantedAuth.getAuthority().equals(authority));
+    public Role getRole() {
+        return role;
     }
 
-    public boolean hasAnyRole(Role... roles) {
-        for (Role role : roles) {
-            if (hasRole(role)) {
-                return true;
-            }
-        }
-        return false;
+    public boolean isVerifiedDealer() {
+        return verifiedDealer;
     }
 
-    public boolean hasAnyAuthority(String... authorities) {
-        for (String authority : authorities) {
-            if (hasAuthority(authority)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public String getDisplayName() {
-        return username;
-    }
-
-    public boolean isAdmin() {
-        return hasRole(Role.ADMIN);
-    }
-
-    public boolean isDealer() {
-        return hasRole(Role.DEALER);
-    }
-
-    public boolean isSeller() {
-        return hasRole(Role.SELLER);
-    }
-
-    public boolean isViewer() {
-        return hasRole(Role.VIEWER);
-    }
-
-    public boolean canManageUsers() {
-        return hasAuthority("user:manage");
-    }
-
-    public boolean canFeatureCars() {
-        return hasAuthority("car:feature");
-    }
-
-    public boolean canViewAnalytics() {
-        return hasAuthority("analytics:view");
-    }
-
-    // Security override - exclude password from toString
+    /**
+     * Equality based on user ID (important for security context)
+     */
     @Override
-    public String toString() {
-        return "UserPrincipal{" +
-                "id=" + id +
-                ", username='" + username + '\'' +
-                ", email='" + email + '\'' +
-                ", role=" + role +
-                ", location='" + location + '\'' +
-                ", isActive=" + isActive +
-                ", authorities=" + authorities +
-                '}';
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (!(o instanceof UserPrincipal that))
+            return false;
+        return Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 }

@@ -30,10 +30,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final CustomUserDetailsService userDetailsService;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, 
-                                  HttpServletResponse response, 
-                                  FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
         try {
+            if (request == null || response == null || filterChain == null) {
+                log.error("Invalid filter parameters - one or more parameters are null");
+                if (filterChain != null && request != null && response != null) {
+                    filterChain.doFilter(request, response);
+                }
+                return;
+            }
+
             String jwt = getJwtFromRequest(request);
 
             if (StringUtils.hasText(jwt) && tokenProvider.validateAccessToken(jwt)) {
@@ -41,18 +49,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                     UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                    
+
                     // Additional validation - ensure token is still valid for this user
                     if (userDetails != null && !isTokenBlacklisted(jwt)) {
-                        UsernamePasswordAuthenticationToken authentication = 
-                                new UsernamePasswordAuthenticationToken(
-                                        userDetails, 
-                                        null, 
-                                        userDetails.getAuthorities()
-                                );
+                        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities());
                         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                         SecurityContextHolder.getContext().setAuthentication(authentication);
-                        
+
                         log.debug("Successfully authenticated user: {}", username);
                     }
                 }
@@ -63,7 +69,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             SecurityContextHolder.clearContext();
         }
 
-        filterChain.doFilter(request, response);
+        if (filterChain != null) {
+            filterChain.doFilter(request, response);
+        }
     }
 
     /**
@@ -82,25 +90,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * This can be extended to check against a blacklist cache/database
      */
     private boolean isTokenBlacklisted(String token) {
-        // TODO: Implement token blacklisting for logout functionality
-        // For now, return false (no blacklisting)
-        return false;
+        return tokenProvider.isTokenBlacklisted(token);
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        
+
         // Skip JWT filter for public endpoints
         return path.startsWith("/api/auth/") ||
-               path.startsWith("/actuator/") ||
-               path.startsWith("/h2-console/") ||
-               path.startsWith("/swagger-") ||
-               path.startsWith("/v3/api-docs") ||
-               path.startsWith("/ws") ||
-               path.equals("/") ||
-               path.equals("/favicon.ico") ||
-               path.startsWith("/static/") ||
-               path.startsWith("/public/");
+                path.startsWith("/actuator/") ||
+                path.startsWith("/h2-console/") ||
+                path.startsWith("/swagger-") ||
+                path.startsWith("/v3/api-docs") ||
+                path.startsWith("/ws") ||
+                path.equals("/") ||
+                path.equals("/favicon.ico") ||
+                path.startsWith("/static/") ||
+                path.startsWith("/public/");
     }
 }

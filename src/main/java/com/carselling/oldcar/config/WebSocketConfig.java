@@ -46,15 +46,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
      */
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // Enable a simple in-memory broker for destinations prefixed with "/topic" and "/queue"
+        // Enable a simple in-memory broker for destinations prefixed with "/topic" and
+        // "/queue"
         config.enableSimpleBroker("/topic", "/queue", "/user");
-        
+
         // Destination prefixes for client messages
         config.setApplicationDestinationPrefixes("/app");
-        
+
         // User-specific destination prefix
         config.setUserDestinationPrefix("/user");
-        
+
         log.info("WebSocket message broker configured with prefixes: /topic, /queue, /user, /app");
     }
 
@@ -65,16 +66,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // Register the WebSocket endpoint with SockJS fallback
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*") // Configure based on your frontend URL in production
+                .setAllowedOriginPatterns("http://localhost:*", "https://*.carselling.com") // Strict origins
                 .withSockJS()
                 .setSessionCookieNeeded(false)
                 .setHeartbeatTime(25000)
                 .setDisconnectDelay(5000);
-        
+
         // Also register without SockJS for native WebSocket clients
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*");
-        
+                .setAllowedOriginPatterns("http://localhost:*", "https://*.carselling.com");
+
         log.info("WebSocket STOMP endpoints registered at /ws");
     }
 
@@ -87,34 +88,35 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             @Override
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
                 StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-                
+
                 if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
                     // Extract JWT token from WebSocket headers
                     String token = accessor.getFirstNativeHeader("Authorization");
-                    
+
                     if (token != null && token.startsWith("Bearer ")) {
                         token = token.substring(7);
-                        
+
                         try {
                             // Validate JWT token
                             if (jwtTokenProvider.validateToken(token)) {
                                 // Extract user information
                                 Long userIdLong = jwtTokenProvider.getUserIdFromToken(token);
                                 String userId = userIdLong != null ? userIdLong.toString() : null;
-                                
+
                                 if (userId != null) {
                                     // Create authentication object with converted authorities
-                                    Collection<? extends GrantedAuthority> authorities = jwtTokenProvider.getAuthoritiesFromToken(token)
+                                    Collection<? extends GrantedAuthority> authorities = jwtTokenProvider
+                                            .getAuthoritiesFromToken(token)
                                             .stream()
                                             .map(SimpleGrantedAuthority::new)
                                             .collect(Collectors.toList());
-                                    
+
                                     Authentication auth = new UsernamePasswordAuthenticationToken(
                                             userId, null, authorities);
-                                    
+
                                     // Set authentication in security context
                                     SecurityContextHolder.getContext().setAuthentication(auth);
-                                    
+
                                     // Set user principal for WebSocket session
                                     accessor.setUser(new Principal() {
                                         @Override
@@ -122,7 +124,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                                             return userId;
                                         }
                                     });
-                                    
+
                                     log.debug("WebSocket authenticated user: {}", userId);
                                 } else {
                                     log.warn("Could not extract user ID from JWT token");
@@ -147,7 +149,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         log.debug("WebSocket user disconnected: {}", user.getName());
                     }
                 }
-                
+
                 return message;
             }
         });

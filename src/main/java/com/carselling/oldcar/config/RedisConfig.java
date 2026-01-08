@@ -1,16 +1,14 @@
 package com.carselling.oldcar.config;
 
-import com.carselling.oldcar.service.InMemoryCacheService;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.data.redis.RedisConnectionDetails;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
@@ -31,7 +29,8 @@ import java.util.Map;
 
 /**
  * Redis Configuration with Fallback Support
- * Provides Redis caching when available, falls back to in-memory caching when Redis is down
+ * Provides Redis caching when available, falls back to in-memory caching when
+ * Redis is down
  */
 @Configuration
 @EnableCaching
@@ -44,9 +43,6 @@ public class RedisConfig {
     @Value("${app.redis.fallback-to-memory:true}")
     private boolean fallbackToMemory;
 
-    @Autowired
-    private InMemoryCacheService inMemoryCacheService;
-
     /**
      * Primary RedisTemplate bean - only created if Redis is available and enabled
      */
@@ -56,7 +52,7 @@ public class RedisConfig {
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
         try {
             log.info("Initializing RedisTemplate with connection factory");
-            
+
             RedisTemplate<String, Object> template = new RedisTemplate<>();
             template.setConnectionFactory(connectionFactory);
 
@@ -66,20 +62,20 @@ public class RedisConfig {
 
             // Use Jackson JSON serializer for values
             ObjectMapper objectMapper = createObjectMapper();
-            Jackson2JsonRedisSerializer<Object> jackson2JsonRedisSerializer = 
-                    new Jackson2JsonRedisSerializer<>(objectMapper, Object.class);
+            Jackson2JsonRedisSerializer<Object> jackson2JsonRedisSerializer = new Jackson2JsonRedisSerializer<>(
+                    objectMapper, Object.class);
 
             template.setValueSerializer(jackson2JsonRedisSerializer);
             template.setHashValueSerializer(jackson2JsonRedisSerializer);
 
             template.afterPropertiesSet();
-            
+
             // Test Redis connection
             testRedisConnection(template);
-            
+
             log.info("RedisTemplate initialized successfully");
             return template;
-            
+
         } catch (Exception e) {
             log.error("Failed to initialize RedisTemplate: {}", e.getMessage(), e);
             if (fallbackToMemory) {
@@ -91,7 +87,6 @@ public class RedisConfig {
         }
     }
 
-
     /**
      * Redis-based CacheManager - used when Redis is available
      */
@@ -100,17 +95,20 @@ public class RedisConfig {
     public CacheManager redisCacheManager(RedisConnectionFactory connectionFactory) {
         try {
             log.info("Initializing Redis-based CacheManager");
-            
+
             // Test connection first
             testRedisConnectionFactory(connectionFactory);
-            
+
             RedisCacheConfiguration defaultCacheConfig = RedisCacheConfiguration.defaultCacheConfig()
                     .entryTtl(Duration.ofHours(1)) // Default 1 hour TTL
                     .disableCachingNullValues()
-                    .serializeKeysWith(org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair
-                            .fromSerializer(new StringRedisSerializer()))
-                    .serializeValuesWith(org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair
-                            .fromSerializer(new Jackson2JsonRedisSerializer<>(createObjectMapper(), Object.class)));
+                    .serializeKeysWith(
+                            org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair
+                                    .fromSerializer(new StringRedisSerializer()))
+                    .serializeValuesWith(
+                            org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair
+                                    .fromSerializer(
+                                            new Jackson2JsonRedisSerializer<>(createObjectMapper(), Object.class)));
 
             Map<String, RedisCacheConfiguration> cacheConfigurations = createCacheConfigurations(defaultCacheConfig);
 
@@ -118,32 +116,21 @@ public class RedisConfig {
                     .cacheDefaults(defaultCacheConfig)
                     .withInitialCacheConfigurations(cacheConfigurations)
                     .build();
-            
+
             log.info("Redis-based CacheManager initialized successfully");
             return cacheManager;
-            
+
         } catch (Exception e) {
             log.error("Failed to initialize Redis CacheManager: {}", e.getMessage(), e);
             if (fallbackToMemory) {
                 log.warn("Falling back to in-memory CacheManager");
-                return createInMemoryCacheManager();
+                return inMemoryFallbackCacheManager();
             } else {
                 throw new RuntimeException("Redis CacheManager initialization failed and fallback is disabled", e);
             }
         }
     }
 
-    /**
-     * In-memory CacheManager - used as fallback or when Redis is disabled
-     */
-    @Bean("inMemoryCacheManager")
-    public CacheManager inMemoryCacheManager() {
-        return createInMemoryCacheManager();
-    }
-
-    /**
-     * Primary CacheManager - uses Redis if available, otherwise in-memory
-     */
     @Bean
     @Primary
     public CacheManager primaryCacheManager(RedisConnectionFactory connectionFactory) {
@@ -152,11 +139,11 @@ public class RedisConfig {
                 return redisCacheManager(connectionFactory);
             } catch (Exception e) {
                 log.warn("Redis CacheManager failed, using in-memory fallback: {}", e.getMessage());
-                return createInMemoryCacheManager();
+                return inMemoryFallbackCacheManager();
             }
         } else {
             log.info("Redis disabled, using in-memory CacheManager");
-            return createInMemoryCacheManager();
+            return inMemoryFallbackCacheManager();
         }
     }
 
@@ -169,7 +156,7 @@ public class RedisConfig {
     }
 
     // Helper methods
-    
+
     private ObjectMapper createObjectMapper() {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
@@ -180,12 +167,12 @@ public class RedisConfig {
 
     private Map<String, RedisCacheConfiguration> createCacheConfigurations(RedisCacheConfiguration defaultCacheConfig) {
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
-        
+
         // User cache - 30 minutes TTL
         cacheConfigurations.put("users", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
         cacheConfigurations.put("userPreferences", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
         cacheConfigurations.put("similarUsers", defaultCacheConfig.entryTtl(Duration.ofHours(2)));
-        
+
         // Vehicle cache - 2 hours TTL
         cacheConfigurations.put("vehicles", defaultCacheConfig.entryTtl(Duration.ofHours(2)));
         cacheConfigurations.put("vehicleSearch", defaultCacheConfig.entryTtl(Duration.ofMinutes(15)));
@@ -193,37 +180,36 @@ public class RedisConfig {
         cacheConfigurations.put("vehicleStats", defaultCacheConfig.entryTtl(Duration.ofHours(4)));
         cacheConfigurations.put("trendingVehicles", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
         cacheConfigurations.put("trendingSearches", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
-        
+
         // Chat and messaging
         cacheConfigurations.put("chatMessages", defaultCacheConfig.entryTtl(Duration.ofHours(1)));
-        
+
         // System and metadata
         cacheConfigurations.put("userActivity", defaultCacheConfig.entryTtl(Duration.ofHours(6)));
         cacheConfigurations.put("systemConfig", defaultCacheConfig.entryTtl(Duration.ofHours(24)));
         cacheConfigurations.put("fileMetadata", defaultCacheConfig.entryTtl(Duration.ofHours(12)));
-        
+
         // Fraud detection
         cacheConfigurations.put("fraudDetection", defaultCacheConfig.entryTtl(Duration.ofHours(24)));
-        
+
         return cacheConfigurations;
     }
-    
-    private CacheManager createInMemoryCacheManager() {
+
+    private CacheManager inMemoryFallbackCacheManager() {
         log.info("Creating in-memory CacheManager");
         ConcurrentMapCacheManager cacheManager = new ConcurrentMapCacheManager();
-        
+
         // Pre-configure cache names for consistency
         cacheManager.setCacheNames(java.util.Arrays.asList(
-            "users", "userPreferences", "similarUsers",
-            "vehicles", "vehicleSearch", "vehicleRecommendations", "vehicleStats", 
-            "trendingVehicles", "trendingSearches",
-            "chatMessages", "userActivity", "systemConfig", "fileMetadata",
-            "fraudDetection"
-        ));
-        
+                "users", "userPreferences", "similarUsers",
+                "vehicles", "vehicleSearch", "vehicleRecommendations", "vehicleStats",
+                "trendingVehicles", "trendingSearches",
+                "chatMessages", "userActivity", "systemConfig", "fileMetadata",
+                "fraudDetection"));
+
         return cacheManager;
     }
-    
+
     private void testRedisConnection(RedisTemplate<String, Object> template) {
         try {
             template.opsForValue().set("redis:health:test", "OK", Duration.ofSeconds(5));
@@ -238,7 +224,7 @@ public class RedisConfig {
             throw e;
         }
     }
-    
+
     private void testRedisConnectionFactory(RedisConnectionFactory connectionFactory) {
         try {
             if (connectionFactory instanceof LettuceConnectionFactory) {

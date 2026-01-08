@@ -1,6 +1,7 @@
 package com.carselling.oldcar.config;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.elasticsearch.client.ClientConfiguration;
 import org.springframework.data.elasticsearch.client.elc.ElasticsearchConfiguration;
@@ -14,6 +15,7 @@ import org.springframework.data.elasticsearch.repository.config.EnableElasticsea
  * elasticsearch.* properties (see application.yml).
  */
 @Configuration
+@ConditionalOnProperty(name = "elasticsearch.enabled", havingValue = "true", matchIfMissing = false)
 @EnableElasticsearchRepositories(basePackages = "com.carselling.oldcar.search")
 public class ElasticsearchConfig extends ElasticsearchConfiguration {
 

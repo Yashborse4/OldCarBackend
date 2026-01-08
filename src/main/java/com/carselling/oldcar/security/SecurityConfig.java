@@ -95,23 +95,27 @@ public class SecurityConfig {
                         // Authentication (Login, Register, OTP)
                         .requestMatchers("/api/auth/**").permitAll()
 
-                        // Public Car Viewing & Search
-                        .requestMatchers(HttpMethod.GET, "/api/cars", "/api/cars/*", "/api/cars/**")
-                        .permitAll()
-                        .requestMatchers("/api/search/**").permitAll()
-                        .requestMatchers("/graphql").permitAll()
-
                         // WebSocket & System
                         .requestMatchers("/ws/**", "/ws-native/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
 
+                        // Search API is public
+                        .requestMatchers("/api/search/**").permitAll()
+                        .requestMatchers("/graphql").permitAll()
+
                         // =====================================================
-                        // PROTECTED ENDPOINTS (Requiure Auth)
+                        // PROTECTED ENDPOINTS (Require Auth)
+                        // Note: Order matters! More specific rules must come BEFORE general rules
                         // =====================================================
 
                         // User Profile
                         .requestMatchers("/api/user/**").authenticated()
+
+                        // Dealer Specific Actions - MUST BE BEFORE /api/cars/** permitAll
+                        .requestMatchers("/api/cars/dealer/**").hasAnyRole("USER", "DEALER", "ADMIN")
+                        .requestMatchers("/api/cars/*/feature").hasAnyRole("DEALER", "ADMIN")
+                        .requestMatchers("/api/cars/mycars").hasAnyRole("USER", "DEALER", "ADMIN")
 
                         // Car Management (Create/Update/Delete) - Requires Role
                         .requestMatchers(HttpMethod.POST, "/api/cars")
@@ -122,12 +126,10 @@ public class SecurityConfig {
                         .hasAnyRole("USER", "DEALER", "ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/cars/*")
                         .hasAnyRole("USER", "DEALER", "ADMIN")
-                        .requestMatchers("/api/cars/mycars").hasAnyRole("USER", "DEALER", "ADMIN")
 
-                        // Dealer Specific Actions (Feature Car, etc.)
-                        // Note: Additional verificaton (isVerifiedDealer) should be enforced at
-                        // Controller level
-                        .requestMatchers("/api/cars/*/feature").hasAnyRole("DEALER", "ADMIN")
+                        // Public Car Viewing & Search - AFTER protected endpoints
+                        .requestMatchers(HttpMethod.GET, "/api/cars", "/api/cars/*", "/api/cars/**")
+                        .permitAll()
 
                         // Admin Only
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
