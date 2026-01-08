@@ -21,7 +21,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
@@ -38,358 +37,478 @@ import java.util.stream.Collectors;
 @Slf4j
 public class GlobalExceptionHandler {
 
-    // Custom Application Exceptions
-    
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ApiResponse<Object>> handleResourceNotFoundException(
-            ResourceNotFoundException ex, HttpServletRequest request) {
-        
-        log.error("Resource not found: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message(ex.getMessage())
-                .details("The requested resource could not be found")
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
-    }
+        // Custom Application Exceptions
 
-    @ExceptionHandler(ResourceAlreadyExistsException.class)
-    public ResponseEntity<ApiResponse<Object>> handleResourceAlreadyExistsException(
-            ResourceAlreadyExistsException ex, HttpServletRequest request) {
-        
-        log.error("Resource already exists: {}", ex.getMessage(), ex);
-        
-        String message = determineConflictMessage(ex.getMessage());
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message(message)
-                .details("The resource already exists in the system")
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.CONFLICT);
-    }
+        @ExceptionHandler(ResourceNotFoundException.class)
+        public ResponseEntity<ApiResponse<Object>> handleResourceNotFoundException(
+                        ResourceNotFoundException ex, HttpServletRequest request) {
 
-    @ExceptionHandler(AuthenticationFailedException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAuthenticationFailedException(
-            AuthenticationFailedException ex, HttpServletRequest request) {
-        
-        log.error("Authentication failed: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Authentication failed")
-                .details("Invalid username/email or password. Please check your credentials and try again.")
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
-    }
+                log.error("Resource not found: {}", ex.getMessage(), ex);
 
-    @ExceptionHandler(InsufficientPermissionException.class)
-    public ResponseEntity<ApiResponse<Object>> handleInsufficientPermissionException(
-            InsufficientPermissionException ex, HttpServletRequest request) {
-        
-        log.error("Insufficient permission: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Access denied")
-                .details("You don't have sufficient permissions to perform this action")
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
-    }
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message(ex.getMessage())
+                                .details("The requested resource could not be found")
+                                .success(false)
+                                .build();
 
-    @ExceptionHandler(InvalidInputException.class)
-    public ResponseEntity<ApiResponse<Object>> handleInvalidInputException(
-            InvalidInputException ex, HttpServletRequest request) {
-        
-        log.error("Invalid input: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message(ex.getMessage())
-                .details("Invalid input provided")
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-    }
-
-    // Spring Security Exceptions
-    
-    @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<ApiResponse<Object>> handleBadCredentialsException(
-            BadCredentialsException ex, HttpServletRequest request) {
-        
-        log.error("Bad credentials: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Authentication failed")
-                .details("Invalid username/email or password. Please check your credentials and try again.")
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
-    }
-
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(
-            AccessDeniedException ex, HttpServletRequest request) {
-        
-        log.error("Access denied: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Access denied")
-                .details("You don't have permission to access this resource")
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
-    }
-
-    @ExceptionHandler(InsufficientAuthenticationException.class)
-    public ResponseEntity<ApiResponse<Object>> handleInsufficientAuthenticationException(
-            InsufficientAuthenticationException ex, HttpServletRequest request) {
-        
-        log.error("Insufficient authentication: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Authentication required")
-                .details("Please provide valid authentication credentials")
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
-    }
-
-    @ExceptionHandler(AuthenticationException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAuthenticationException(
-            AuthenticationException ex, HttpServletRequest request) {
-        
-        log.error("Authentication exception: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Authentication failed")
-                .details("Unable to authenticate. Please check your credentials and try again.")
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
-    }
-
-    // Validation Exceptions
-    
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Object>> handleMethodArgumentNotValidException(
-            MethodArgumentNotValidException ex, HttpServletRequest request) {
-        
-        log.error("Validation failed: {}", ex.getMessage(), ex);
-        
-        BindingResult result = ex.getBindingResult();
-        Map<String, String> fieldErrors = new HashMap<>();
-        
-        for (FieldError error : result.getFieldErrors()) {
-            fieldErrors.put(error.getField(), error.getDefaultMessage());
+                return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
         }
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Validation failed")
-                .details("Please check the input data and try again")
-                .data(Map.of("fieldErrors", fieldErrors))
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-    }
 
-    @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ApiResponse<Object>> handleConstraintViolationException(
-            ConstraintViolationException ex, HttpServletRequest request) {
-        
-        log.error("Constraint violation: {}", ex.getMessage(), ex);
-        
-        Map<String, String> fieldErrors = ex.getConstraintViolations()
-                .stream()
-                .collect(Collectors.toMap(
-                    violation -> violation.getPropertyPath().toString(),
-                    ConstraintViolation::getMessage,
-                    (existing, replacement) -> existing
-                ));
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Validation failed")
-                .details("Please check the input data and try again")
-                .data(Map.of("fieldErrors", fieldErrors))
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-    }
+        @ExceptionHandler(ResourceAlreadyExistsException.class)
+        public ResponseEntity<ApiResponse<Object>> handleResourceAlreadyExistsException(
+                        ResourceAlreadyExistsException ex, HttpServletRequest request) {
 
-    // Database Exceptions
-    
-    @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolationException(
-            DataIntegrityViolationException ex, HttpServletRequest request) {
-        
-        log.error("Data integrity violation: {}", ex.getMessage(), ex);
-        
-        String message = "Data integrity violation";
-        String details = "The operation violates database constraints";
-        
-        // Try to provide more specific error messages
-        if (ex.getMessage().contains("duplicate") || ex.getMessage().contains("unique")) {
-            message = "Duplicate data detected";
-            details = "The provided data conflicts with existing records";
+                log.error("Resource already exists: {}", ex.getMessage(), ex);
+
+                String message = determineConflictMessage(ex.getMessage());
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message(message)
+                                .details("The resource already exists in the system")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.CONFLICT);
         }
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message(message)
-                .details(details)
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.CONFLICT);
-    }
 
-    // HTTP Exceptions
-    
-    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ApiResponse<Object>> handleHttpRequestMethodNotSupportedException(
-            HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
-        
-        log.error("Method not supported: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Method not allowed")
-                .details(String.format("HTTP method %s is not supported for this endpoint", ex.getMethod()))
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.METHOD_NOT_ALLOWED);
-    }
+        @ExceptionHandler(AuthenticationFailedException.class)
+        public ResponseEntity<ApiResponse<Object>> handleAuthenticationFailedException(
+                        AuthenticationFailedException ex, HttpServletRequest request) {
 
-    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-    public ResponseEntity<ApiResponse<Object>> handleHttpMediaTypeNotSupportedException(
-            HttpMediaTypeNotSupportedException ex, HttpServletRequest request) {
-        
-        log.error("Media type not supported: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Unsupported media type")
-                .details("The request media type is not supported")
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.UNSUPPORTED_MEDIA_TYPE);
-    }
+                log.error("Authentication failed: {}", ex.getMessage(), ex);
 
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiResponse<Object>> handleHttpMessageNotReadableException(
-            HttpMessageNotReadableException ex, HttpServletRequest request) {
-        
-        log.error("Message not readable: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Invalid request format")
-                .details("The request body is malformed or unreadable")
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-    }
+                String rawMessage = ex.getMessage();
+                String lowerMessage = rawMessage != null ? rawMessage.toLowerCase() : "";
+                Map<String, Object> data = new HashMap<>();
 
-    @ExceptionHandler(MissingServletRequestParameterException.class)
-    public ResponseEntity<ApiResponse<Object>> handleMissingServletRequestParameterException(
-            MissingServletRequestParameterException ex, HttpServletRequest request) {
-        
-        log.error("Missing request parameter: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Missing required parameter")
-                .details(String.format("Required parameter '%s' is missing", ex.getParameterName()))
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-    }
+                String errorType = "AUTH_FAILED";
+                if (lowerMessage.contains("user not found")) {
+                        errorType = "USER_NOT_FOUND";
+                } else if (lowerMessage.contains("incorrect password")) {
+                        errorType = "INVALID_PASSWORD";
+                } else if (lowerMessage.contains("email") && lowerMessage.contains("not verified")) {
+                        errorType = "EMAIL_NOT_VERIFIED";
+                        data.put("redirectTo", "EMAIL_VERIFICATION");
+                }
 
-    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ApiResponse<Object>> handleMethodArgumentTypeMismatchException(
-            MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
-        
-        log.error("Argument type mismatch: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Invalid parameter type")
-                .details(String.format("Parameter '%s' has invalid type", ex.getName()))
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-    }
+                data.put("errorType", errorType);
 
-    @ExceptionHandler(NoHandlerFoundException.class)
-    public ResponseEntity<ApiResponse<Object>> handleNoHandlerFoundException(
-            NoHandlerFoundException ex, HttpServletRequest request) {
-        
-        log.error("No handler found: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Endpoint not found")
-                .details(String.format("No handler found for %s %s", ex.getHttpMethod(), ex.getRequestURL()))
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
-    }
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Authentication failed")
+                                .details(rawMessage != null ? rawMessage
+                                                : "Invalid username/email or password")
+                                .data(data)
+                                .success(false)
+                                .build();
 
-    // Generic Exception Handler (fallback)
-    
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Object>> handleGenericException(
-            Exception ex, HttpServletRequest request) {
-        
-        log.error("Unexpected error: {}", ex.getMessage(), ex);
-        
-        ApiResponse<Object> response = ApiResponse.builder()
-                .timestamp(LocalDateTime.now())
-                .message("Internal server error")
-                .details("An unexpected error occurred. Please try again later.")
-                .success(false)
-                .build();
-        
-        return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-
-    // Helper Methods
-    
-    private String determineConflictMessage(String exceptionMessage) {
-        if (exceptionMessage.contains("username")) {
-            return "Username is already taken. Please choose a different username.";
-        } else if (exceptionMessage.contains("email")) {
-            return "Email is already registered. Please use a different email or try logging in.";
+                return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
         }
-        return "Resource already exists";
-    }
+
+        @ExceptionHandler(InsufficientPermissionException.class)
+        public ResponseEntity<ApiResponse<Object>> handleInsufficientPermissionException(
+                        InsufficientPermissionException ex, HttpServletRequest request) {
+
+                log.error("Insufficient permission: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Access denied")
+                                .details("You don't have sufficient permissions to perform this action")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+        }
+
+        @ExceptionHandler(IllegalArgumentException.class)
+        public ResponseEntity<ApiResponse<Object>> handleIllegalArgumentException(
+                        IllegalArgumentException ex, HttpServletRequest request) {
+
+                log.warn("Illegal argument at {} {}: {}", request.getMethod(), request.getRequestURI(),
+                                ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Invalid request data")
+                                .details(ex.getMessage())
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        @ExceptionHandler(InvalidInputException.class)
+        public ResponseEntity<ApiResponse<Object>> handleInvalidInputException(
+                        InvalidInputException ex, HttpServletRequest request) {
+
+                log.error("Invalid input: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message(ex.getMessage())
+                                .details("Invalid input provided")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        @ExceptionHandler(BusinessException.class)
+        public ResponseEntity<ApiResponse<Object>> handleBusinessException(
+                        BusinessException ex, HttpServletRequest request) {
+
+                log.error("Business error: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message(ex.getMessage())
+                                .details("A business rule was violated")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.UNPROCESSABLE_ENTITY);
+        }
+
+        @ExceptionHandler(RateLimitExceededException.class)
+        public ResponseEntity<ApiResponse<Object>> handleRateLimitExceededException(
+                        RateLimitExceededException ex, HttpServletRequest request) {
+
+                log.warn("Rate limit exceeded: {}", ex.getMessage());
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Rate limit exceeded")
+                                .details("Too many requests. Please try again later.")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.TOO_MANY_REQUESTS);
+        }
+
+        @ExceptionHandler(UnauthorizedActionException.class)
+        public ResponseEntity<ApiResponse<Object>> handleUnauthorizedActionException(
+                        UnauthorizedActionException ex, HttpServletRequest request) {
+
+                log.error("Unauthorized action: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Unauthorized action")
+                                .details(ex.getMessage())
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+        }
+
+        // Spring Security Exceptions
+
+        @ExceptionHandler(BadCredentialsException.class)
+        public ResponseEntity<ApiResponse<Object>> handleBadCredentialsException(
+                        BadCredentialsException ex, HttpServletRequest request) {
+
+                log.error("Bad credentials: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Authentication failed")
+                                .details("Invalid username/email or password. Please check your credentials and try again.")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
+        }
+
+        @ExceptionHandler(AccessDeniedException.class)
+        public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(
+                        AccessDeniedException ex, HttpServletRequest request) {
+
+                log.error("Access denied: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Access denied")
+                                .details("You don't have permission to access this resource")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+        }
+
+        @ExceptionHandler(InsufficientAuthenticationException.class)
+        public ResponseEntity<ApiResponse<Object>> handleInsufficientAuthenticationException(
+                        InsufficientAuthenticationException ex, HttpServletRequest request) {
+
+                log.error("Insufficient authentication: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Authentication required")
+                                .details("Please provide valid authentication credentials")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
+        }
+
+        @ExceptionHandler(AuthenticationException.class)
+        public ResponseEntity<ApiResponse<Object>> handleAuthenticationException(
+                        AuthenticationException ex, HttpServletRequest request) {
+
+                log.error("Authentication exception: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Authentication failed")
+                                .details("Unable to authenticate. Please check your credentials and try again.")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
+        }
+
+        // Validation Exceptions
+
+        @ExceptionHandler(MethodArgumentNotValidException.class)
+        public ResponseEntity<ApiResponse<Object>> handleMethodArgumentNotValidException(
+                        MethodArgumentNotValidException ex, HttpServletRequest request) {
+
+                log.error("Validation failed: {}", ex.getMessage(), ex);
+
+                BindingResult result = ex.getBindingResult();
+                Map<String, String> fieldErrors = new HashMap<>();
+                StringBuilder errorMsg = new StringBuilder();
+
+                for (FieldError error : result.getFieldErrors()) {
+                        fieldErrors.put(error.getField(), error.getDefaultMessage());
+                        if (errorMsg.length() > 0)
+                                errorMsg.append("; ");
+                        errorMsg.append(error.getDefaultMessage());
+                }
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message(errorMsg.toString())
+                                .details("Validation failed for one or more fields")
+                                .fieldErrors(fieldErrors)
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        @ExceptionHandler(ConstraintViolationException.class)
+        public ResponseEntity<ApiResponse<Object>> handleConstraintViolationException(
+                        ConstraintViolationException ex, HttpServletRequest request) {
+
+                log.error("Constraint violation: {}", ex.getMessage(), ex);
+
+                Map<String, String> fieldErrors = ex.getConstraintViolations()
+                                .stream()
+                                .collect(Collectors.toMap(
+                                                violation -> violation.getPropertyPath().toString(),
+                                                ConstraintViolation::getMessage,
+                                                (existing, replacement) -> existing));
+
+                StringBuilder errorMsg = new StringBuilder();
+                fieldErrors.forEach((field, message) -> {
+                        if (errorMsg.length() > 0)
+                                errorMsg.append("; ");
+                        errorMsg.append(message);
+                });
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message(errorMsg.toString())
+                                .details("Validation failed for one or more fields")
+                                .data(Map.of("fieldErrors", fieldErrors))
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        // Database Exceptions
+
+        @ExceptionHandler(DataIntegrityViolationException.class)
+        public ResponseEntity<ApiResponse<Object>> handleDataIntegrityViolationException(
+                        DataIntegrityViolationException ex, HttpServletRequest request) {
+
+                log.error("Data integrity violation: {}", ex.getMessage(), ex);
+
+                String message = "Data integrity violation";
+                String details = "The operation violates database constraints";
+
+                // Try to provide more specific error messages
+                if (ex.getMessage() != null && (ex.getMessage().toLowerCase().contains("duplicate")
+                                || ex.getMessage().toLowerCase().contains("unique"))) {
+                        message = determineConflictMessage(ex.getMessage().toLowerCase());
+                        details = "The provided data conflicts with existing records";
+                }
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message(message)
+                                .details(details)
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.CONFLICT);
+        }
+
+        // HTTP Exceptions
+
+        @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+        public ResponseEntity<ApiResponse<Object>> handleHttpRequestMethodNotSupportedException(
+                        HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+
+                log.error("Method not supported: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Method not allowed")
+                                .details(String.format("HTTP method %s is not supported for this endpoint",
+                                                ex.getMethod()))
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.METHOD_NOT_ALLOWED);
+        }
+
+        @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+        public ResponseEntity<ApiResponse<Object>> handleHttpMediaTypeNotSupportedException(
+                        HttpMediaTypeNotSupportedException ex, HttpServletRequest request) {
+
+                log.error("Media type not supported: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Unsupported media type")
+                                .details("The request media type is not supported")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        }
+
+        @ExceptionHandler(HttpMessageNotReadableException.class)
+        public ResponseEntity<ApiResponse<Object>> handleHttpMessageNotReadableException(
+                        HttpMessageNotReadableException ex, HttpServletRequest request) {
+
+                log.error("Message not readable: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Invalid request format")
+                                .details("The request body is malformed or unreadable")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        @ExceptionHandler(MissingServletRequestParameterException.class)
+        public ResponseEntity<ApiResponse<Object>> handleMissingServletRequestParameterException(
+                        MissingServletRequestParameterException ex, HttpServletRequest request) {
+
+                log.error("Missing request parameter: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Missing required parameter")
+                                .details(String.format("Required parameter '%s' is missing", ex.getParameterName()))
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+        public ResponseEntity<ApiResponse<Object>> handleMethodArgumentTypeMismatchException(
+                        MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+
+                log.error("Argument type mismatch: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Invalid parameter type")
+                                .details(String.format("Parameter '%s' has invalid type", ex.getName()))
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        @ExceptionHandler(NoHandlerFoundException.class)
+        public ResponseEntity<ApiResponse<Object>> handleNoHandlerFoundException(
+                        NoHandlerFoundException ex, HttpServletRequest request) {
+
+                log.error("No handler found: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Endpoint not found")
+                                .details(String.format("No handler found for %s %s", ex.getHttpMethod(),
+                                                ex.getRequestURL()))
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+        }
+
+        // Null Pointer Exception Handler
+
+        @ExceptionHandler(NullPointerException.class)
+        public ResponseEntity<ApiResponse<Object>> handleNullPointerException(
+                        NullPointerException ex, HttpServletRequest request) {
+
+                log.error("Null pointer exception occurred: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Invalid data encountered")
+                                .details("A required value was not provided. Please check your input and try again.")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        }
+
+        // Generic Exception Handler (fallback)
+
+        @ExceptionHandler(Exception.class)
+        public ResponseEntity<ApiResponse<Object>> handleGenericException(
+                        Exception ex, HttpServletRequest request) {
+
+                log.error("Unexpected error: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Internal server error")
+                                .details("An unexpected error occurred. Please try again later.")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        // Helper Methods
+
+        private String determineConflictMessage(String exceptionMessage) {
+                if (exceptionMessage == null || exceptionMessage.isEmpty()) {
+                        return "Resource already exists";
+                }
+
+                String lowerCaseMessage = exceptionMessage.toLowerCase();
+
+                if (lowerCaseMessage.contains("username")) {
+                        return "Username is already taken. Please choose a different username.";
+                } else if (lowerCaseMessage.contains("email")) {
+                        return "Email is already registered. Please use a different email or try logging in.";
+                }
+                return "Resource already exists";
+        }
 }

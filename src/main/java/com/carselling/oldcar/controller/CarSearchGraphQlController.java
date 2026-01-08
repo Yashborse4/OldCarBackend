@@ -9,6 +9,7 @@ import com.carselling.oldcar.service.AdvancedSearchService;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Controller
+@ConditionalOnProperty(name = "elasticsearch.enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 public class CarSearchGraphQlController {
 
@@ -48,7 +50,7 @@ public class CarSearchGraphQlController {
         private String variant;
         private List<String> fuelTypes;
         private List<String> transmissions;
-        private String city;
+        private List<String> cities;
         private Integer minYear;
         private Integer maxYear;
         private BigDecimal minPrice;
@@ -71,7 +73,7 @@ public class CarSearchGraphQlController {
                 .variant(trim(input.getVariant()))
                 .fuelTypes(trimList(input.getFuelTypes()))
                 .transmissions(trimList(input.getTransmissions()))
-                .city(trim(input.getCity()))
+                .cities(trimList(input.getCities()))
                 .minYear(input.getMinYear())
                 .maxYear(input.getMaxYear())
                 .minPrice(input.getMinPrice())

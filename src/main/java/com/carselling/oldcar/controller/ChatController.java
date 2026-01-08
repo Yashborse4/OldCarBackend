@@ -21,7 +21,7 @@ import java.util.Map;
  * Enhanced Chat Controller V2 with comprehensive chat functionality
  */
 @RestController
-@RequestMapping("/api/v2/chat")
+@RequestMapping("/api/chat")
 public class ChatController {
 
     @Autowired
@@ -38,8 +38,8 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            ChatRoomDtoV2 chatRoom = ChatService.createPrivateChat(request, currentUser.getId());
-            return ResponseEntity.ok(chatRoom);
+            ChatRoomDto chatRoom = ChatService.createPrivateChat(request, currentUser.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(chatRoom);
         } catch (Exception e) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "Failed to create private chat", "message", e.getMessage()));
@@ -55,8 +55,8 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            ChatRoomDtoV2 chatRoom = ChatService.createGroupChat(request, currentUser.getId());
-            return ResponseEntity.ok(chatRoom);
+            ChatRoomDto chatRoom = ChatService.createGroupChat(request, currentUser.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(chatRoom);
         } catch (Exception e) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "Failed to create group chat", "message", e.getMessage()));
@@ -65,15 +65,20 @@ public class ChatController {
 
     /**
      * Create a car inquiry chat
+     *
+     * Permission matrix:
+     * - Only verified dealers and admins may initiate direct car inquiries (contact
+     * seller).
      */
     @PostMapping("/car-inquiry")
+
     public ResponseEntity<?> createCarInquiryChat(
             @Valid @RequestBody CreateCarInquiryChatRequest request,
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            ChatRoomDtoV2 chatRoom = ChatService.createCarInquiryChat(request, currentUser.getId());
-            return ResponseEntity.ok(chatRoom);
+            ChatRoomDto chatRoom = ChatService.createCarInquiryChat(request, currentUser.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(chatRoom);
         } catch (Exception e) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "Failed to create car inquiry chat", "message", e.getMessage()));
@@ -89,7 +94,7 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            Page<ChatRoomDtoV2> chatRooms = ChatService.getUserChatRooms(currentUser.getId(), pageable);
+            Page<ChatRoomDto> chatRooms = ChatService.getUserChatRooms(currentUser.getId(), pageable);
             return ResponseEntity.ok(chatRooms);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -106,7 +111,7 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            ChatRoomDtoV2 chatRoom = ChatService.getChatRoom(chatRoomId, currentUser.getId());
+            ChatRoomDto chatRoom = ChatService.getChatRoom(chatRoomId, currentUser.getId());
             return ResponseEntity.ok(chatRoom);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -124,7 +129,7 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            ChatRoomDtoV2 updatedRoom = ChatService.updateChatRoom(chatRoomId, request, currentUser.getId());
+            ChatRoomDto updatedRoom = ChatService.updateChatRoom(chatRoomId, request, currentUser.getId());
             return ResponseEntity.ok(updatedRoom);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -179,7 +184,8 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            List<ChatParticipantDto> participants = ChatService.getChatRoomParticipants(chatRoomId, currentUser.getId());
+            List<ChatParticipantDto> participants = ChatService.getChatRoomParticipants(chatRoomId,
+                    currentUser.getId());
             return ResponseEntity.ok(participants);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -212,13 +218,13 @@ public class ChatController {
     @PostMapping("/rooms/{chatRoomId}/messages")
     public ResponseEntity<?> sendMessage(
             @PathVariable Long chatRoomId,
-            @Valid @RequestBody SendMessageRequestV2 request,
+            @Valid @RequestBody SendMessageRequest request,
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
             request.setChatId(chatRoomId); // Set the chat room ID from path
-            ChatMessageDtoV2 message = ChatService.sendMessage(request, currentUser.getId());
-            return ResponseEntity.ok(message);
+            ChatMessageDto message = ChatService.sendMessage(request, currentUser.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(message);
         } catch (Exception e) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "Failed to send message", "message", e.getMessage()));
@@ -237,8 +243,9 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            ChatMessageDtoV2 message = ChatService.sendFileMessage(chatRoomId, file, content, replyToId, currentUser.getId());
-            return ResponseEntity.ok(message);
+            ChatMessageDto message = ChatService.sendFileMessage(chatRoomId, file, content, replyToId,
+                    currentUser.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(message);
         } catch (Exception e) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "Failed to send file message", "message", e.getMessage()));
@@ -255,7 +262,7 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            Page<ChatMessageDtoV2> messages = ChatService.getChatMessages(chatRoomId, currentUser.getId(), pageable);
+            Page<ChatMessageDto> messages = ChatService.getChatMessages(chatRoomId, currentUser.getId(), pageable);
             return ResponseEntity.ok(messages);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -273,7 +280,8 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            ChatMessageDtoV2 updatedMessage = ChatService.editMessage(messageId, request.getNewContent(), currentUser.getId());
+            ChatMessageDto updatedMessage = ChatService.editMessage(messageId, request.getNewContent(),
+                    currentUser.getId());
             return ResponseEntity.ok(updatedMessage);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -328,7 +336,7 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            Page<ChatMessageDtoV2> messages = ChatService.searchMessages(query, currentUser.getId(), pageable);
+            Page<ChatMessageDto> messages = ChatService.searchMessages(query, currentUser.getId(), pageable);
             return ResponseEntity.ok(messages);
         } catch (Exception e) {
             return ResponseEntity.badRequest()
@@ -347,7 +355,8 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            Page<ChatMessageDtoV2> messages = ChatService.searchMessagesInChatRoom(chatRoomId, query, currentUser.getId(), pageable);
+            Page<ChatMessageDto> messages = ChatService.searchMessagesInChatRoom(chatRoomId, query,
+                    currentUser.getId(), pageable);
             return ResponseEntity.ok(messages);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -396,7 +405,7 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            Page<ChatRoomDtoV2> dealerGroups = ChatService.getDealerGroups(currentUser.getId(), pageable);
+            Page<ChatRoomDto> dealerGroups = ChatService.getDealerGroups(currentUser.getId(), pageable);
             return ResponseEntity.ok(dealerGroups);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -413,8 +422,8 @@ public class ChatController {
             Authentication authentication) {
         try {
             User currentUser = (User) authentication.getPrincipal();
-            ChatRoomDtoV2 dealerGroup = ChatService.createDealerGroup(currentUser.getId(), request);
-            return ResponseEntity.ok(dealerGroup);
+            ChatRoomDto dealerGroup = ChatService.createDealerGroup(currentUser.getId(), request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(dealerGroup);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Failed to create dealer group", "message", e.getMessage()));

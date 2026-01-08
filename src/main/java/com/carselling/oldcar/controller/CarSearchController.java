@@ -7,6 +7,7 @@ import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.service.AdvancedSearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -26,22 +27,23 @@ import java.util.stream.Collectors;
  * REST API for Elasticsearch-backed car search.
  */
 @RestController
-@RequestMapping("/api/search/cars")
+@RequestMapping({ "/api/search/cars", "/api/cars/search" })
+@ConditionalOnProperty(name = "elasticsearch.enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 @Slf4j
 public class CarSearchController {
 
-    private final AdvancedSearchService advancedSearchService;
+        private final AdvancedSearchService advancedSearchService;
 
         @GetMapping
         public ResponseEntity<ApiResponse<Page<CarSearchHitDto>>> searchCars(
                         @RequestParam(value = "q", required = false) String keyword,
-                        @RequestParam(value = "brand", required = false) String brand,
-                        @RequestParam(value = "model", required = false) String model,
+                        @RequestParam(value = "brands", required = false) List<String> brands,
+                        @RequestParam(value = "models", required = false) List<String> models,
                         @RequestParam(value = "variant", required = false) String variant,
-                        @RequestParam(value = "fuelType", required = false) String fuelType,
-                        @RequestParam(value = "transmission", required = false) String transmission,
-                        @RequestParam(value = "city", required = false) String city,
+                        @RequestParam(value = "fuelTypes", required = false) List<String> fuelTypes,
+                        @RequestParam(value = "transmissions", required = false) List<String> transmissions,
+                        @RequestParam(value = "cities", required = false) List<String> cities,
                         @RequestParam(value = "minYear", required = false) Integer minYear,
                         @RequestParam(value = "maxYear", required = false) Integer maxYear,
                         @RequestParam(value = "minPrice", required = false) BigDecimal minPrice,
@@ -57,12 +59,12 @@ public class CarSearchController {
 
                 CarSearchRequest criteria = CarSearchRequest.builder()
                                 .keyword(trim(keyword))
-                                .brand(trim(brand))
-                                .model(trim(model))
+                                .brands(trimList(brands))
+                                .models(trimList(models))
                                 .variant(trim(variant))
-                                .fuelType(trim(fuelType))
-                                .transmission(trim(transmission))
-                                .city(trim(city))
+                                .fuelTypes(trimList(fuelTypes))
+                                .transmissions(trimList(transmissions))
+                                .cities(trimList(cities))
                                 .minYear(minYear)
                                 .maxYear(maxYear)
                                 .minPrice(minPrice)
@@ -73,12 +75,12 @@ public class CarSearchController {
                 Page<VehicleSearchDocument> result = advancedSearchService.searchCars(
                                 AdvancedSearchService.CarSearchCriteria.builder()
                                                 .keyword(criteria.getKeyword())
-                                                .brand(criteria.getBrand())
-                                                .model(criteria.getModel())
+                                                .brands(criteria.getBrands())
+                                                .models(criteria.getModels())
                                                 .variant(criteria.getVariant())
-                                                .fuelType(criteria.getFuelType())
-                                                .transmission(criteria.getTransmission())
-                                                .city(criteria.getCity())
+                                                .fuelTypes(criteria.getFuelTypes())
+                                                .transmissions(criteria.getTransmissions())
+                                                .cities(criteria.getCities())
                                                 .minYear(criteria.getMinYear())
                                                 .maxYear(criteria.getMaxYear())
                                                 .minPrice(criteria.getMinPrice())
@@ -138,5 +140,15 @@ public class CarSearchController {
 
         private String nonNull(String value) {
                 return value == null ? "" : value.trim();
+        }
+
+        private List<String> trimList(List<String> values) {
+                if (values == null) {
+                        return null;
+                }
+                return values.stream()
+                                .map(this::trim)
+                                .filter(s -> s != null && !s.isEmpty())
+                                .collect(Collectors.toList());
         }
 }

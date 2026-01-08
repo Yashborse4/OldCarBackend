@@ -2,6 +2,7 @@ package com.carselling.oldcar.controller;
 
 import com.carselling.oldcar.dto.file.FileUploadResponse;
 import com.carselling.oldcar.model.User;
+import com.carselling.oldcar.model.ResourceType;
 import com.carselling.oldcar.service.FileUploadService;
 import com.carselling.oldcar.service.FileValidationService;
 import lombok.RequiredArgsConstructor;
@@ -12,7 +13,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.carselling.oldcar.exception.ResourceNotFoundException;
-import com.carselling.oldcar.repository.UserRepository;
 import com.carselling.oldcar.service.CarService;
 
 import java.util.List;
@@ -27,10 +27,9 @@ import java.util.Map;
 @Slf4j
 public class FileController {
 
-    private final com.carselling.oldcar.service.CarService carService;
-    private final com.carselling.oldcar.repository.UserRepository userRepository;
-    private final com.carselling.oldcar.service.FileUploadService fileUploadService;
-    private final com.carselling.oldcar.service.FileValidationService fileValidationService;
+    private final CarService carService;
+    private final FileUploadService fileUploadService;
+    private final FileValidationService fileValidationService;
 
     // ... upload single/multiple kept as is (or add validation if needed) ...
 
@@ -69,19 +68,19 @@ public class FileController {
             fileValidationService.validateFile(file);
 
             // Determine Resource Type and Owner ID
-            com.carselling.oldcar.model.ResourceType resourceType = com.carselling.oldcar.model.ResourceType.OTHER;
+            ResourceType resourceType = ResourceType.OTHER;
             Long resourceOwnerId = currentUser.getId();
 
             if (folder.startsWith("users/")) {
                 long pathUserId = extractIdFromPath(folder, "users/");
                 if (pathUserId != -1) {
-                    resourceType = com.carselling.oldcar.model.ResourceType.USER_PROFILE;
+                    resourceType = ResourceType.USER_PROFILE;
                     resourceOwnerId = pathUserId;
                 }
             } else if (folder.startsWith("cars/")) {
                 long carId = extractIdFromPath(folder, "cars/");
                 if (carId != -1) {
-                    resourceType = com.carselling.oldcar.model.ResourceType.CAR_IMAGE;
+                    resourceType = ResourceType.CAR_IMAGE;
                     resourceOwnerId = carId;
                 }
             }
@@ -144,19 +143,19 @@ public class FileController {
             fileValidationService.validateFiles(files);
 
             // Determine Resource Type and Owner ID
-            com.carselling.oldcar.model.ResourceType resourceType = com.carselling.oldcar.model.ResourceType.OTHER;
+            ResourceType resourceType = ResourceType.OTHER;
             Long resourceOwnerId = currentUser.getId();
 
             if (folder.startsWith("users/")) {
                 long pathUserId = extractIdFromPath(folder, "users/");
                 if (pathUserId != -1) {
-                    resourceType = com.carselling.oldcar.model.ResourceType.USER_PROFILE;
+                    resourceType = ResourceType.USER_PROFILE;
                     resourceOwnerId = pathUserId;
                 }
             } else if (folder.startsWith("cars/")) {
                 long carId = extractIdFromPath(folder, "cars/");
                 if (carId != -1) {
-                    resourceType = com.carselling.oldcar.model.ResourceType.CAR_IMAGE;
+                    resourceType = ResourceType.CAR_IMAGE;
                     resourceOwnerId = carId;
                 }
             }
@@ -194,7 +193,7 @@ public class FileController {
             }
 
             // STRICT OWNERSHIP CHECK
-            com.carselling.oldcar.dto.car.CarResponseV2 car = carService.getVehicleById(carId.toString());
+            com.carselling.oldcar.dto.car.CarResponse car = carService.getVehicleById(carId.toString());
             boolean isOwner = car.getDealerId().equals(currentUser.getId().toString());
 
             if (!isOwner && !isAdmin(currentUser)) {
@@ -207,7 +206,7 @@ public class FileController {
             fileValidationService.validateFiles(images);
 
             List<FileUploadResponse> responses = fileUploadService.uploadMultipleFiles(
-                    images, folder, currentUser, com.carselling.oldcar.model.ResourceType.CAR_IMAGE, carId);
+                    images, folder, currentUser, ResourceType.CAR_IMAGE, carId);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                     "message", "Car images uploaded successfully",
@@ -253,7 +252,7 @@ public class FileController {
                     if (carId != -1) {
                         // Check car ownership
                         try {
-                            com.carselling.oldcar.dto.car.CarResponseV2 car = carService
+                            com.carselling.oldcar.dto.car.CarResponse car = carService
                                     .getVehicleById(String.valueOf(carId));
                             if (!car.getDealerId().equals(currentUser.getId().toString())) {
                                 throw new SecurityException("You cannot delete images from cars you do not own");
@@ -331,8 +330,6 @@ public class FileController {
             @RequestParam(value = "expirationMinutes", defaultValue = "60") int expirationMinutes,
             Authentication authentication) {
         try {
-            User currentUser = (User) authentication.getPrincipal();
-
             // Validate parameters
             if (fileUrl == null || fileUrl.trim().isEmpty()) {
                 throw new IllegalArgumentException("File URL cannot be empty");
@@ -381,8 +378,6 @@ public class FileController {
             @RequestParam("fileUrl") String fileUrl,
             Authentication authentication) {
         try {
-            User currentUser = (User) authentication.getPrincipal();
-
             // Validate file URL
             if (fileUrl == null || fileUrl.trim().isEmpty()) {
                 throw new IllegalArgumentException("File URL cannot be empty");

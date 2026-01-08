@@ -3,15 +3,10 @@ package com.carselling.oldcar.controller;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.dto.user.UpdateUserRequest;
 import com.carselling.oldcar.dto.user.UserResponse;
-import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -27,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
         private final UserService userService;
+        private final com.carselling.oldcar.service.DealerVerificationService dealerVerificationService;
 
         /**
          * Get current user's profile
@@ -103,7 +99,7 @@ public class UserController {
          * PUT /api/user/{id}
          */
         @PutMapping("/{id}")
-        @PreAuthorize("hasRole('ADMIN') or @authService.getCurrentUser().id == #id")
+        @PreAuthorize("hasRole('ADMIN') or @authService.isOwner(#id)")
         public ResponseEntity<ApiResponse<UserResponse>> updateUserProfile(
                         @PathVariable Long id,
                         @Valid @RequestBody UpdateUserRequest request) {
@@ -139,7 +135,7 @@ public class UserController {
          * DELETE /api/user/{id}
          */
         @DeleteMapping("/{id}")
-        @PreAuthorize("hasRole('ADMIN') or @authService.getCurrentUser().id == #id")
+        @PreAuthorize("hasRole('ADMIN') or @authService.isOwner(#id)")
         public ResponseEntity<ApiResponse<Object>> deleteUserAccount(@PathVariable Long id) {
                 log.info("Deleting user account for ID: {}", id);
 
@@ -148,135 +144,6 @@ public class UserController {
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Account deleted successfully",
                                 "The user account has been deactivated."));
-        }
-
-        /**
-         * Search users (admin only)
-         * GET /api/user/search
-         */
-        @GetMapping("/search")
-        @PreAuthorize("hasRole('ADMIN')")
-        public ResponseEntity<ApiResponse<Page<UserResponse>>> searchUsers(
-                        @RequestParam(value = "q", required = false) String searchTerm,
-                        @RequestParam(value = "page", defaultValue = "0") int page,
-                        @RequestParam(value = "size", defaultValue = "20") int size,
-                        @RequestParam(value = "sort", defaultValue = "createdAt") String sort,
-                        @RequestParam(value = "direction", defaultValue = "desc") String direction) {
-
-                log.info("Searching users with term: {}", searchTerm);
-
-                Sort.Direction sortDirection = "asc".equalsIgnoreCase(direction)
-                                ? Sort.Direction.ASC
-                                : Sort.Direction.DESC;
-                Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
-
-                Page<UserResponse> users = userService.searchUsers(searchTerm, pageable);
-
-                return ResponseEntity.ok(ApiResponse.success(
-                                "User search completed",
-                                String.format("Found %d users matching the search criteria.", users.getTotalElements()),
-                                users));
-        }
-
-        /**
-         * Get all users with filtering (admin only)
-         * GET /api/user/all
-         */
-        @GetMapping("/all")
-        @PreAuthorize("hasRole('ADMIN')")
-        public ResponseEntity<ApiResponse<Page<UserResponse>>> getAllUsers(
-                        @RequestParam(value = "username", required = false) String username,
-                        @RequestParam(value = "email", required = false) String email,
-                        @RequestParam(value = "role", required = false) String roleString,
-                        @RequestParam(value = "location", required = false) String location,
-                        @RequestParam(value = "isActive", required = false) Boolean isActive,
-                        @RequestParam(value = "page", defaultValue = "0") int page,
-                        @RequestParam(value = "size", defaultValue = "20") int size,
-                        @RequestParam(value = "sort", defaultValue = "createdAt") String sort,
-                        @RequestParam(value = "direction", defaultValue = "desc") String direction) {
-
-                log.info("Getting all users with filters");
-
-                Role role = null;
-                if (roleString != null) {
-                        try {
-                                role = Role.valueOf(roleString.toUpperCase());
-                        } catch (IllegalArgumentException e) {
-                                return ResponseEntity.badRequest()
-                                                .body(ApiResponse.error(
-                                                                "Invalid role parameter",
-                                                                "Valid roles are: USER, DEALER, ADMIN"));
-                        }
-                }
-
-                Sort.Direction sortDirection = "asc".equalsIgnoreCase(direction)
-                                ? Sort.Direction.ASC
-                                : Sort.Direction.DESC;
-                Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
-
-                Page<UserResponse> users = userService.getAllUsers(
-                                username, email, role, location, isActive, pageable);
-
-                return ResponseEntity.ok(ApiResponse.success(
-                                "Users retrieved successfully",
-                                String.format("Retrieved %d users with the specified filters.",
-                                                users.getTotalElements()),
-                                users));
-        }
-
-        /**
-         * Get users by role (admin only)
-         * GET /api/user/role/{role}
-         */
-        @GetMapping("/role/{role}")
-        @PreAuthorize("hasRole('ADMIN')")
-        public ResponseEntity<ApiResponse<Page<UserResponse>>> getUsersByRole(
-                        @PathVariable String role,
-                        @RequestParam(value = "page", defaultValue = "0") int page,
-                        @RequestParam(value = "size", defaultValue = "20") int size,
-                        @RequestParam(value = "sort", defaultValue = "createdAt") String sort,
-                        @RequestParam(value = "direction", defaultValue = "desc") String direction) {
-
-                log.info("Getting users by role: {}", role);
-
-                Role userRole;
-                try {
-                        userRole = Role.valueOf(role.toUpperCase());
-                } catch (IllegalArgumentException e) {
-                        return ResponseEntity.badRequest()
-                                        .body(ApiResponse.error(
-                                                        "Invalid role parameter",
-                                                        "Valid roles are: USER, DEALER, ADMIN"));
-                }
-
-                Sort.Direction sortDirection = "asc".equalsIgnoreCase(direction)
-                                ? Sort.Direction.ASC
-                                : Sort.Direction.DESC;
-                Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
-
-                Page<UserResponse> users = userService.getUsersByRole(userRole, pageable);
-
-                return ResponseEntity.ok(ApiResponse.success(
-                                "Users retrieved successfully",
-                                String.format("Retrieved %d users with role %s.", users.getTotalElements(), userRole),
-                                users));
-        }
-
-        /**
-         * Get user statistics (admin only)
-         * GET /api/user/statistics
-         */
-        @GetMapping("/statistics")
-        @PreAuthorize("hasRole('ADMIN')")
-        public ResponseEntity<ApiResponse<UserService.UserStatistics>> getUserStatistics() {
-                log.info("Getting user statistics");
-
-                UserService.UserStatistics statistics = userService.getUserStatistics();
-
-                return ResponseEntity.ok(ApiResponse.success(
-                                "User statistics retrieved successfully",
-                                "Current system user statistics have been retrieved.",
-                                statistics));
         }
 
         /**
@@ -323,6 +190,7 @@ public class UserController {
          * GET /api/user/{id}/image
          */
         @GetMapping("/{id}/image")
+        @PreAuthorize("hasRole('USER') or hasRole('DEALER') or hasRole('ADMIN')")
         public ResponseEntity<ApiResponse<java.util.Map<String, String>>> getUserProfileImage(@PathVariable Long id) {
                 log.info("Getting profile image for user ID: {}", id);
 
@@ -352,5 +220,57 @@ public class UserController {
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Profile image deleted successfully",
                                 "Your profile image has been removed from the database."));
+        }
+
+        // ============ DEALER VERIFICATION ============
+
+        /**
+         * Submit dealer verification request
+         * POST /api/user/dealer-verification
+         */
+        @PostMapping("/dealer-verification")
+        @PreAuthorize("hasRole('DEALER')")
+        public ResponseEntity<ApiResponse<com.carselling.oldcar.dto.dealer.DealerVerificationResponseDto>> submitVerificationRequest(
+                        @Valid @RequestBody com.carselling.oldcar.dto.dealer.DealerVerificationRequestDto request,
+                        org.springframework.security.core.Authentication authentication) {
+                log.info("Dealer submitting verification request");
+
+                com.carselling.oldcar.model.User dealer = (com.carselling.oldcar.model.User) authentication
+                                .getPrincipal();
+                com.carselling.oldcar.dto.dealer.DealerVerificationResponseDto response = dealerVerificationService
+                                .submitVerificationRequest(dealer.getId(), request);
+
+                return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(ApiResponse.success(
+                                "Verification request submitted",
+                                "Your verification request has been submitted and is pending admin review.",
+                                response));
+        }
+
+        /**
+         * Get current dealer's verification status
+         * GET /api/user/dealer-verification
+         */
+        @GetMapping("/dealer-verification")
+        @PreAuthorize("hasRole('DEALER')")
+        public ResponseEntity<ApiResponse<com.carselling.oldcar.dto.dealer.DealerVerificationResponseDto>> getMyVerificationStatus(
+                        org.springframework.security.core.Authentication authentication) {
+                log.info("Dealer getting verification status");
+
+                com.carselling.oldcar.model.User dealer = (com.carselling.oldcar.model.User) authentication
+                                .getPrincipal();
+                com.carselling.oldcar.dto.dealer.DealerVerificationResponseDto response = dealerVerificationService
+                                .getMyVerificationRequest(dealer.getId());
+
+                if (response == null) {
+                        return ResponseEntity.ok(ApiResponse.success(
+                                        "No verification request found",
+                                        "You have not submitted a verification request yet.",
+                                        null));
+                }
+
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Verification status retrieved",
+                                "Your verification request status: " + response.getStatusDisplayName(),
+                                response));
         }
 }
