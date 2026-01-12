@@ -64,5 +64,8 @@ public class CarRequest {
     @Max(value = 20, message = "Number of owners cannot exceed 20")
     private Integer numberOfOwners;
 
+    @Size(max = 500, message = "Video URL must not exceed 500 characters")
+    private String videoUrl;
+
     private java.util.List<String> images;
 }

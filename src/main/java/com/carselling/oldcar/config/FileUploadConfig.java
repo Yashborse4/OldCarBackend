@@ -20,23 +20,25 @@ public class FileUploadConfig {
     @Min(1)
     private int maxFileSizeMB = 10;
 
+    @Max(200)
+    @Min(1)
+    private int maxVideoSizeMB = 100;
+
     @Max(100)
     @Min(1)
     private int maxRequestSizeMB = 50;
 
     @Max(10)
     @Min(1)
-    private int maxFilesPerRequest = 5;
+    private int maxFilesPerRequest = 10;
 
     private List<String> allowedContentTypes = List.of(
-        "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
-        "application/pdf", "text/plain",
-        "video/mp4", "video/quicktime", "video/x-msvideo"
-    );
+            "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
+            "application/pdf", "text/plain",
+            "video/mp4", "video/quicktime", "video/x-msvideo");
 
     private List<String> allowedExtensions = List.of(
-        "jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "mp4", "mov", "avi"
-    );
+            "jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "mp4", "mov", "avi");
 
     private boolean scanForViruses = true;
     private boolean validateContentType = true;
@@ -49,6 +51,14 @@ public class FileUploadConfig {
 
     public void setMaxFileSizeMB(int maxFileSizeMB) {
         this.maxFileSizeMB = maxFileSizeMB;
+    }
+
+    public int getMaxVideoSizeMB() {
+        return maxVideoSizeMB;
+    }
+
+    public void setMaxVideoSizeMB(int maxVideoSizeMB) {
+        this.maxVideoSizeMB = maxVideoSizeMB;
     }
 
     public int getMaxRequestSizeMB() {

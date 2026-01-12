@@ -58,10 +58,46 @@ public class ChatRoom {
     @Column(name = "last_activity_at")
     private LocalDateTime lastActivityAt;
 
+    // Inquiry specific fields
+    @Enumerated(EnumType.STRING)
+    @Column(length = 50)
+    private InquiryStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private InquiryPriority priority;
+
+    @Column(name = "lead_score")
+    private Integer leadScore;
+
+    @Column(name = "buyer_name")
+    private String buyerName;
+
+    @Column(name = "buyer_phone")
+    private String buyerPhone;
+
+    @Column(name = "buyer_email")
+    private String buyerEmail;
+
     public enum ChatType {
         PRIVATE,
         GROUP,
         CAR_INQUIRY
     }
-}
 
+    public enum InquiryStatus {
+        NEW,
+        CONTACTED,
+        INTERESTED,
+        NOT_INTERESTED,
+        SOLD,
+        CLOSED
+    }
+
+    public enum InquiryPriority {
+        LOW,
+        MEDIUM,
+        HIGH,
+        URGENT
+    }
+}

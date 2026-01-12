@@ -204,7 +204,10 @@ public class ChatService {
             return convertToRoomDto(existingChat);
         }
 
-        String chatName = String.format("Inquiry: %s", car.getFullName());
+        // Calculate initial lead score
+        int leadScore = calculateInitialLeadScore(buyer, request.getMessage());
+
+        String chatName = car.getMake() + " " + car.getModel() + " - " + buyer.getFirstName();
 
         ChatRoom chatRoom = ChatRoom.builder()
                 .name(chatName)
@@ -213,6 +216,12 @@ public class ChatService {
                 .createdBy(buyer)
                 .car(car)
                 .isActive(true)
+                .status(ChatRoom.InquiryStatus.NEW)
+                .priority(ChatRoom.InquiryPriority.MEDIUM)
+                .leadScore(leadScore)
+                .buyerName(buyer.getDisplayName())
+                .buyerPhone(buyer.getPhoneNumber()) // Assuming User has this field, if not handles graceful null
+                .buyerEmail(buyer.getEmail())
                 .build();
 
         chatRoom = chatRoomRepository.save(chatRoom);
@@ -228,6 +237,90 @@ public class ChatService {
 
         log.info("Created car inquiry chat ID: {}", chatRoom.getId());
         return convertToRoomDto(chatRoom);
+    }
+
+    /**
+     * Get Dealer Inquiries
+     */
+    @Transactional(readOnly = true)
+    public Page<ChatRoomDto> getDealerInquiries(Long dealerId, String status, Pageable pageable) {
+        log.info("Fetching inquiries for dealer ID: {}", dealerId);
+
+        // Find chats where:
+        // 1. Type is CAR_INQUIRY
+        // 2. Car belongs to dealer (or dealer is a participant - specifically seller)
+        // Ideally rely on repository method
+
+        ChatRoom.InquiryStatus inquiryStatus = null;
+        if (status != null && !status.equalsIgnoreCase("ALL")) {
+            try {
+                inquiryStatus = ChatRoom.InquiryStatus.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Ignore invalid status
+            }
+        }
+
+        Page<ChatRoom> inquiries;
+        if (inquiryStatus != null) {
+            inquiries = chatRoomRepository.findDealerInquiriesByStatus(dealerId, inquiryStatus, pageable);
+        } else {
+            inquiries = chatRoomRepository.findDealerInquiries(dealerId, pageable);
+        }
+
+        return inquiries.map(this::convertToRoomDto);
+    }
+
+    /**
+     * Update Inquiry Status
+     */
+    public ChatRoomDto updateInquiryStatus(Long chatId, String status, Long dealerId) {
+        log.info("Updating status for chat ID: {} to {}", chatId, status);
+
+        ChatRoom chatRoom = getChatRoomById(chatId);
+
+        // Verify dealer owns the car (security check)
+        if (chatRoom.getCar() == null || !chatRoom.getCar().getOwner().getId().equals(dealerId)) {
+            throw new AccessDeniedException("You can only manage inquiries for your own cars");
+        }
+
+        try {
+            ChatRoom.InquiryStatus newStatus = ChatRoom.InquiryStatus.valueOf(status.toUpperCase());
+            chatRoom.setStatus(newStatus);
+
+            // Adjust lead score based on status progress
+            if (newStatus == ChatRoom.InquiryStatus.CONTACTED) {
+                chatRoom.setLeadScore(Math.min(100, chatRoom.getLeadScore() + 10));
+            } else if (newStatus == ChatRoom.InquiryStatus.INTERESTED) {
+                chatRoom.setLeadScore(Math.min(100, chatRoom.getLeadScore() + 20));
+            }
+
+            chatRoom = chatRoomRepository.save(chatRoom);
+            return convertToRoomDto(chatRoom);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("Invalid inquiry status");
+        }
+    }
+
+    private int calculateInitialLeadScore(User buyer, String message) {
+        int score = 50; // Base score
+
+        // Bonus for verified email
+        if (Boolean.TRUE.equals(buyer.getIsEmailVerified())) {
+            score += 10;
+        }
+
+        // Bonus for having phone number (dummy check as field might not exist on User
+        // entity yet)
+        if (buyer.getPhoneNumber() != null && !buyer.getPhoneNumber().isEmpty()) {
+            score += 20;
+        }
+
+        // Message length analysis
+        if (message != null && message.length() > 50) {
+            score += 5;
+        }
+
+        return Math.min(100, score);
     }
 
     /**
@@ -708,6 +801,19 @@ public class ChatService {
                                 .username(lastMessage.getSender().getUsername())
                                 .build() : null)
                         .createdAt(lastMessage.getCreatedAt())
+                        .build() : null)
+                // Inquiry Specific DTO fields (need to update DTO as well)
+                .status(chatRoom.getStatus() != null ? chatRoom.getStatus().name() : null)
+                .leadScore(chatRoom.getLeadScore())
+                .buyerName(chatRoom.getBuyerName())
+                .buyerPhone(chatRoom.getBuyerPhone())
+                .carInfo(chatRoom.getCar() != null ? ChatRoomDto.CarInfo.builder()
+                        .id(chatRoom.getCar().getId())
+                        .title(chatRoom.getCar().getFullName())
+                        .price(chatRoom.getCar().getPrice() != null ? chatRoom.getCar().getPrice().doubleValue() : 0.0)
+                        .imageUrl(chatRoom.getCar().getImages() != null && !chatRoom.getCar().getImages().isEmpty()
+                                ? chatRoom.getCar().getImages().get(0)
+                                : null)
                         .build() : null)
                 .build();
     }

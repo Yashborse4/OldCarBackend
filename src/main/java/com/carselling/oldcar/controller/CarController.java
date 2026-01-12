@@ -1,8 +1,12 @@
 package com.carselling.oldcar.controller;
 
 import com.carselling.oldcar.dto.CarStatistics;
-import com.carselling.oldcar.dto.car.*;
-import com.carselling.oldcar.dto.car.DealerDashboardResponse;
+import com.carselling.oldcar.dto.car.CarRequest;
+import com.carselling.oldcar.dto.car.CarResponse;
+import com.carselling.oldcar.dto.car.PublicCarDTO;
+import com.carselling.oldcar.dto.car.UpdateCarStatusRequest;
+import com.carselling.oldcar.dto.car.TrackCarShareRequest;
+import com.carselling.oldcar.dto.car.CarAnalyticsResponse;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.service.CarService;
 import com.carselling.oldcar.util.SecurityUtils;
@@ -382,9 +386,10 @@ public class CarController {
 
         @GetMapping("/dealer/dashboard")
         @PreAuthorize("hasAnyRole('DEALER', 'ADMIN')")
-        public ResponseEntity<ApiResponse<DealerDashboardResponse>> getDealerDashboard() {
+        public ResponseEntity<ApiResponse<com.carselling.oldcar.dto.car.DealerDashboardResponse>> getDealerDashboard() {
                 Long currentUserId = SecurityUtils.getCurrentUserId();
-                DealerDashboardResponse stats = carService.getDealerDashboard(currentUserId);
+                com.carselling.oldcar.dto.car.DealerDashboardResponse stats = carService
+                                .getDealerDashboard(currentUserId);
 
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Dealer dashboard statistics retrieved successfully",

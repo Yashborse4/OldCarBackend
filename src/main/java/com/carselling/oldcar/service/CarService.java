@@ -1,6 +1,12 @@
 package com.carselling.oldcar.service;
 
+import com.carselling.oldcar.dto.car.CarResponse;
 import com.carselling.oldcar.dto.car.*;
+import com.carselling.oldcar.dto.car.CarRequest;
+import com.carselling.oldcar.dto.car.PublicCarDTO;
+import com.carselling.oldcar.dto.car.PrivateCarDTO;
+import com.carselling.oldcar.dto.car.CarSearchCriteria;
+import com.carselling.oldcar.dto.car.CarAnalyticsResponse;
 
 import com.carselling.oldcar.dto.CarStatistics;
 import com.carselling.oldcar.dto.user.UserSummary;
@@ -23,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.data.jpa.domain.Specification;
 
 /**
  * Enhanced Car Service V2 with analytics and advanced features
@@ -382,117 +389,28 @@ public class CarService {
      * This method is used by /api/cars/search and is the main entry point for
      * the advanced search experience in the mobile app.
      */
+    /**
+     * Search vehicles with filters and optional free-text query.
+     * Refactored to use JPA Specification to avoid LOWER(bytea) errors and improve
+     * maintainability.
+     */
     @Transactional(readOnly = true)
     public Page<CarResponse> searchVehicles(CarSearchCriteria criteria, Pageable pageable) {
         log.debug("Searching vehicles with criteria: {} and pageable: {}", criteria, pageable);
 
-        Page<Car> cars;
+        Specification<Car> spec = com.carselling.oldcar.specification.CarSpecification.getCarsByCriteria(criteria);
+        Page<Car> cars = carRepository.findAll(spec, pageable);
 
-        // 1) Free-text query: search across make/model/description when `query` is
-        // provided
-        if (criteria != null && criteria.getQuery() != null && !criteria.getQuery().isBlank()) {
-            String searchTerm = criteria.getQuery().trim();
-            cars = carRepository.searchCars(searchTerm, pageable);
-        } else if (criteria != null) {
-            // 2) Structured filters based on make/model/year/price/featured/status
-            java.math.BigDecimal minPrice = criteria.getMinPrice() != null
-                    ? java.math.BigDecimal.valueOf(criteria.getMinPrice())
-                    : null;
-            java.math.BigDecimal maxPrice = criteria.getMaxPrice() != null
-                    ? java.math.BigDecimal.valueOf(criteria.getMaxPrice())
-                    : null;
+        // Apply owner role filtering and visibility checks (though most are now handled
+        // by visibility checks in convert)
+        // Note: The Specification handles the main filtering. Here we do final DTO
+        // conversion and strict visibility checks.
 
-            // Status mapping -> isSold flag; null means "any"
-            Boolean isSold = null;
-            if (criteria.getStatus() != null) {
-                String status = criteria.getStatus().trim().toUpperCase();
-                if ("SOLD".equals(status)) {
-                    isSold = Boolean.TRUE;
-                } else if ("AVAILABLE".equals(status) || "ACTIVE".equals(status)) {
-                    isSold = Boolean.FALSE;
-                }
-            }
-
-            // For now we don't filter by owner role here (null = any role)
-            com.carselling.oldcar.model.Role ownerRole = null;
-
-            cars = carRepository.findCarsByCriteria(
-                    criteria.getMake(),
-                    criteria.getModel(),
-                    criteria.getMinYear(),
-                    criteria.getMaxYear(),
-                    minPrice,
-                    maxPrice,
-                    criteria.getFuelType(),
-                    criteria.getTransmission(),
-                    criteria.getLocation(),
-                    ownerRole,
-                    criteria.getFeatured(),
-                    isSold,
-                    pageable);
-        } else {
-            // 3) No criteria at all – fall back to active cars
-            cars = carRepository.findAllActiveCars(pageable);
-        }
-
-        // 4) Apply in-memory refinements for fields not covered by the repository query
-        List<Car> filteredCars = cars.getContent().stream()
-                .filter(car -> {
-                    if (criteria == null) {
-                        return true;
-                    }
-
-                    // Fuel type filter
-                    if (criteria.getFuelType() != null && car.getFuelType() != null) {
-                        if (!car.getFuelType().equalsIgnoreCase(criteria.getFuelType())) {
-                            return false;
-                        }
-                    }
-
-                    // Transmission filter
-                    if (criteria.getTransmission() != null && car.getTransmission() != null) {
-                        if (!car.getTransmission().equalsIgnoreCase(criteria.getTransmission())) {
-                            return false;
-                        }
-                    }
-
-                    // Location filter (simple city match against owner's location)
-                    if (criteria.getLocation() != null && car.getOwner() != null) {
-                        String ownerLocation = car.getOwner().getLocation();
-                        if (ownerLocation == null || !ownerLocation.toLowerCase()
-                                .contains(criteria.getLocation().toLowerCase())) {
-                            return false;
-                        }
-                    }
-
-                    // Basic mileage range filter if provided
-                    if (criteria.getMinMileage() != null && car.getMileage() != null
-                            && car.getMileage() < criteria.getMinMileage()) {
-                        return false;
-                    }
-                    if (criteria.getMaxMileage() != null && car.getMileage() != null
-                            && car.getMileage() > criteria.getMaxMileage()) {
-                        return false;
-                    }
-
-                    return true;
-                })
-                .collect(Collectors.toList());
-
-        List<CarResponse> carResponses = filteredCars.stream()
-                .filter(car -> {
-                    // Admin can see everything
-                    User currentUser = authService.getCurrentUserOrNull();
-                    if (currentUser != null && currentUser.getRole() == com.carselling.oldcar.model.Role.ADMIN) {
-                        return true;
-                    }
-                    return isVehicleVisible(car);
-                })
+        List<CarResponse> carResponses = cars.getContent().stream()
+                .filter(this::isVehicleVisible) // Ensure basic visibility rules still apply
                 .map(this::convertToResponseV2)
                 .collect(Collectors.toList());
 
-        // Note: totalElements from original page might be inaccurate if valid cars are
-        // hidden
         return new PageImpl<>(carResponses, pageable, cars.getTotalElements());
     }
 

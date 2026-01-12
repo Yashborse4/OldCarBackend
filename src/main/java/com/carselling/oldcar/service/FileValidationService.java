@@ -77,10 +77,25 @@ public class FileValidationService {
     }
 
     private void validateFileSize(MultipartFile file) throws SecurityException {
-        long maxFileSizeBytes = fileUploadConfig.getMaxFileSizeMB() * 1024L * 1024L;
+        // Different limits for Video vs Other files
+        boolean isVideo = isVideoFile(file.getOriginalFilename());
+        long maxFileSizeBytes;
+
+        if (isVideo) {
+            maxFileSizeBytes = fileUploadConfig.getMaxVideoSizeMB() * 1024L * 1024L;
+        } else if (isImageFile(file.getOriginalFilename())) {
+            // 1.5 MB limit for images as per requirement (hardcoded or config driven, using
+            // 1.5MB as requested)
+            maxFileSizeBytes = 1500 * 1024L; // 1.5 MB
+        } else {
+            maxFileSizeBytes = fileUploadConfig.getMaxFileSizeMB() * 1024L * 1024L;
+        }
+
         if (file.getSize() > maxFileSizeBytes) {
+            String limitMsg = isVideo ? fileUploadConfig.getMaxVideoSizeMB() + "MB"
+                    : (isImageFile(file.getOriginalFilename()) ? "1.5MB" : fileUploadConfig.getMaxFileSizeMB() + "MB");
             throw new SecurityException(
-                    "File size exceeds maximum allowed size of " + fileUploadConfig.getMaxFileSizeMB() + "MB");
+                    "File size exceeds maximum allowed size of " + limitMsg);
         }
     }
 
@@ -220,7 +235,11 @@ public class FileValidationService {
         String[] maliciousPatterns = {
                 "<script", "javascript:", "vbscript:", "onload=", "onerror=",
                 "eval(", "exec(", "system(", "shell_exec", "passthru",
-                "<?php", "<%", "<iframe", "<object", "<embed"
+                "<?php", "<%", "<iframe", "<object", "<embed",
+                "cmd.exe", "/bin/sh", "/bin/bash", "powershell",
+                "reflect.assembly", "wscript.shell",
+                "base64_decode", "gzinflate", "str_rot13",
+                "runtime.getruntime", "processbuilder"
         };
 
         String lowerContent = content.toLowerCase();
@@ -255,6 +274,17 @@ public class FileValidationService {
 
         // Entropy > 7.5 is suspicious for most file types
         return entropy > 7.5;
+    }
+
+    /**
+     * Check if filename indicates a video file
+     */
+    private boolean isVideoFile(String filename) {
+        String extension = getFileExtension(filename);
+        return extension != null &&
+                (extension.equalsIgnoreCase("mp4") || extension.equalsIgnoreCase("mov") ||
+                        extension.equalsIgnoreCase("avi") || extension.equalsIgnoreCase("mkv") ||
+                        extension.equalsIgnoreCase("webm"));
     }
 
     /**

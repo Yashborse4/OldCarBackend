@@ -85,6 +85,44 @@ public class ChatController {
         }
     }
 
+    // ========================= DEALER INQUIRIES =========================
+
+    /**
+     * Get dealer inquiries
+     */
+    @GetMapping("/dealer/inquiries")
+    public ResponseEntity<?> getDealerInquiries(
+            @RequestParam(required = false, defaultValue = "ALL") String status,
+            @PageableDefault(size = 20) Pageable pageable,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            Page<ChatRoomDto> inquiries = ChatService.getDealerInquiries(currentUser.getId(), status, pageable);
+            return ResponseEntity.ok(inquiries);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to fetch inquiries", "message", e.getMessage()));
+        }
+    }
+
+    /**
+     * Update status of an inquiry
+     */
+    @PatchMapping("/rooms/{chatRoomId}/inquiry/status")
+    public ResponseEntity<?> updateInquiryStatus(
+            @PathVariable Long chatRoomId,
+            @RequestParam String status,
+            Authentication authentication) {
+        try {
+            User currentUser = (User) authentication.getPrincipal();
+            ChatRoomDto updatedRoom = ChatService.updateInquiryStatus(chatRoomId, status, currentUser.getId());
+            return ResponseEntity.ok(updatedRoom);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Failed to update inquiry status", "message", e.getMessage()));
+        }
+    }
+
     /**
      * Get all chat rooms for the current user
      */

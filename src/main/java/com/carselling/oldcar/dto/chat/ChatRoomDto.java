@@ -29,6 +29,12 @@ public class ChatRoomDto {
     private LastMessage lastMessage;
     private Integer maxParticipants;
 
+    // Inquiry specific fields
+    private String status;
+    private Integer leadScore;
+    private String buyerName;
+    private String buyerPhone;
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -59,5 +65,18 @@ public class ChatRoomDto {
             private Long id;
             private String username;
         }
+    }
+
+    private CarInfo carInfo;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CarInfo {
+        private Long id;
+        private String title;
+        private Double price;
+        private String imageUrl;
     }
 }
