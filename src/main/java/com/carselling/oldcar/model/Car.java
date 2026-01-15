@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -80,6 +81,15 @@ public class Car {
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
+    /**
+     * Optional reference to CarMaster catalog entry.
+     * When set, specs can be auto-populated from the catalog.
+     * Null means dealer manually entered all specs (car not in catalog).
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "car_master_id", nullable = true)
+    private CarMaster carMaster;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
@@ -100,6 +110,14 @@ public class Car {
     @Builder.Default
     private Boolean isApproved = false; // For moderation
 
+    /**
+     * Idempotency key for preventing duplicate car creation on retries.
+     * Unique combination of owner_id + idempotency_key prevents duplicates.
+     */
+    @Size(max = 100, message = "Idempotency key must not exceed 100 characters")
+    @Column(name = "idempotency_key", length = 100)
+    private String idempotencyKey;
+
     @Column(name = "view_count")
     @Builder.Default
     private Long viewCount = 0L;
@@ -111,6 +129,18 @@ public class Car {
     @Column(name = "share_count")
     @Builder.Default
     private Long shareCount = 0L;
+
+    @Column(name = "video_play_count")
+    @Builder.Default
+    private Long videoPlayCount = 0L;
+
+    @Column(name = "image_swipe_count")
+    @Builder.Default
+    private Long imageSwipeCount = 0L;
+
+    @Column(name = "contact_click_count")
+    @Builder.Default
+    private Long contactClickCount = 0L;
 
     @Column(name = "mileage")
     @Min(value = 0, message = "Mileage cannot be negative")
@@ -139,6 +169,28 @@ public class Car {
     @Max(value = 20, message = "Number of owners cannot exceed 20")
     private Integer numberOfOwners;
 
+    @Column(name = "accident_history")
+    private Boolean accidentHistory;
+
+    @Column(name = "repainted_parts")
+    private Boolean repaintedParts;
+
+    @Column(name = "engine_issues")
+    private Boolean engineIssues;
+
+    @Column(name = "flood_damage")
+    private Boolean floodDamage;
+
+    @Column(name = "insurance_claims")
+    private Boolean insuranceClaims;
+
+    @Size(max = 100, message = "Variant must not exceed 100 characters")
+    @Column(name = "variant", length = 100)
+    private String variant;
+
+    @Column(name = "usage_type")
+    private String usage;
+
     @Column(name = "featured_until")
     private LocalDateTime featuredUntil;
 
@@ -163,16 +215,26 @@ public class Car {
     @Column(name = "location", length = 200)
     private String location;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "car_images", joinColumns = @JoinColumn(name = "car_id"))
     @OrderColumn(name = "image_order")
     @Column(name = "image_url")
+    @BatchSize(size = 50)
     @Builder.Default
     private List<String> images = new ArrayList<>();
 
     @Column(name = "is_available")
     @Builder.Default
     private Boolean isAvailable = true;
+
+    @Size(max = 500, message = "Video URL must not exceed 500 characters")
+    @Column(name = "video_url", length = 500)
+    private String videoUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "media_status", length = 20)
+    @Builder.Default
+    private MediaStatus mediaStatus = MediaStatus.PENDING;
 
     // Helper methods for backward compatibility
     public User getUser() {
@@ -209,6 +271,18 @@ public class Car {
 
     public void setViewCount(Long viewCount) {
         this.viewCount = viewCount != null ? viewCount.longValue() : 0L;
+    }
+
+    public void incrementVideoPlayCount() {
+        this.videoPlayCount = this.videoPlayCount == null ? 1 : this.videoPlayCount + 1;
+    }
+
+    public void incrementImageSwipeCount() {
+        this.imageSwipeCount = this.imageSwipeCount == null ? 1 : this.imageSwipeCount + 1;
+    }
+
+    public void incrementContactClickCount() {
+        this.contactClickCount = this.contactClickCount == null ? 1 : this.contactClickCount + 1;
     }
 
     public boolean isOwnedBy(User user) {
@@ -259,5 +333,19 @@ public class Car {
 
     public boolean canBeFeaturedBy(User user) {
         return user.hasRole(Role.DEALER) || user.hasRole(Role.ADMIN);
+    }
+
+    @PrePersist
+    @PreUpdate
+    public void sanitizeFields() {
+        if (this.imageUrl != null && this.imageUrl.trim().isEmpty()) {
+            this.imageUrl = null;
+        }
+        if (this.videoUrl != null && this.videoUrl.trim().isEmpty()) {
+            this.videoUrl = null;
+        }
+        if (this.mediaStatus == null) {
+            this.mediaStatus = MediaStatus.PENDING;
+        }
     }
 }

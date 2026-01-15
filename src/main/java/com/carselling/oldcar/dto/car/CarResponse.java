@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -25,17 +26,21 @@ public class CarResponse {
     private Long mileage;
     private String location;
     private String condition;
-    private List<String> images;
+    @Builder.Default
+    private List<String> images = new ArrayList<>();
     private CarSpecifications specifications;
     private String dealerId;
     private String dealerName;
     private boolean isCoListed;
-    private List<String> coListedIn;
+    @Builder.Default
+    private List<String> coListedIn = new ArrayList<>();
     private Long views;
     private Long inquiries;
     private Long shares;
     private String status;
+    private String mediaStatus;
     private boolean featured;
+    private Long carMasterId; // Reference to catalog entry, if linked
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

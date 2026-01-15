@@ -67,5 +67,20 @@ public class CarRequest {
     @Size(max = 500, message = "Video URL must not exceed 500 characters")
     private String videoUrl;
 
+    private Boolean accidentHistory;
+    private Boolean repaintedParts;
+    private Boolean engineIssues;
+    private Boolean floodDamage;
+    private Boolean insuranceClaims;
+    private String variant;
+    private String status;
+    private String usage;
+
     private java.util.List<String> images;
+
+    /**
+     * Optional: Reference to CarMaster catalog entry for auto-populating specs.
+     * If provided, specs from the catalog can be used as defaults.
+     */
+    private Long carMasterId;
 }
