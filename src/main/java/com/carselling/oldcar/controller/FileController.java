@@ -3,6 +3,7 @@ package com.carselling.oldcar.controller;
 import com.carselling.oldcar.dto.file.FileUploadResponse;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.model.ResourceType;
+import com.carselling.oldcar.model.MediaStatus;
 import com.carselling.oldcar.service.FileUploadService;
 import com.carselling.oldcar.service.FileValidationService;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.carselling.oldcar.exception.ResourceNotFoundException;
 import com.carselling.oldcar.service.CarService;
+import com.carselling.oldcar.security.UserPrincipal;
+import com.carselling.oldcar.repository.UserRepository;
 
 import java.util.List;
 import java.util.Map;
@@ -30,19 +33,21 @@ public class FileController {
     private final CarService carService;
     private final FileUploadService fileUploadService;
     private final FileValidationService fileValidationService;
-
-    // ... upload single/multiple kept as is (or add validation if needed) ...
+    private final UserRepository userRepository;
 
     /**
      * Upload single file
      */
     @PostMapping("/upload")
+    @com.carselling.oldcar.annotation.RateLimit(capacity = 10, refill = 5, refillPeriod = 1)
     public ResponseEntity<?> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "folder", defaultValue = "general") String folder,
             Authentication authentication) {
         try {
-            User currentUser = (User) authentication.getPrincipal();
+            UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+            User currentUser = userRepository.findById(principal.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", principal.getId().toString()));
 
             // Validate folder parameter to prevent path traversal
             validateFolderName(folder);
@@ -114,12 +119,15 @@ public class FileController {
      * Upload multiple files
      */
     @PostMapping("/upload/multiple")
+    @com.carselling.oldcar.annotation.RateLimit(capacity = 10, refill = 5, refillPeriod = 1)
     public ResponseEntity<?> uploadMultipleFiles(
             @RequestParam("files") List<MultipartFile> files,
             @RequestParam(value = "folder", defaultValue = "general") String folder,
             Authentication authentication) {
         try {
-            User currentUser = (User) authentication.getPrincipal();
+            UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+            User currentUser = userRepository.findById(principal.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", principal.getId().toString()));
 
             validateFolderName(folder);
 
@@ -181,12 +189,15 @@ public class FileController {
      * Upload car images
      */
     @PostMapping("/upload/car-images")
+    @com.carselling.oldcar.annotation.RateLimit(capacity = 20, refill = 10, refillPeriod = 1)
     public ResponseEntity<?> uploadCarImages(
             @RequestParam("images") List<MultipartFile> images,
             @RequestParam("carId") Long carId,
             Authentication authentication) {
         try {
-            User currentUser = (User) authentication.getPrincipal();
+            UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+            User currentUser = userRepository.findById(principal.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", principal.getId().toString()));
 
             if (carId == null || carId <= 0) {
                 throw new IllegalArgumentException("Invalid car ID");
@@ -208,6 +219,9 @@ public class FileController {
             List<FileUploadResponse> responses = fileUploadService.uploadMultipleFiles(
                     images, folder, currentUser, ResourceType.CAR_IMAGE, carId);
 
+            // Update Media Status to READY
+            carService.updateMediaStatus(carId.toString(), MediaStatus.READY, currentUser.getId());
+
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                     "message", "Car images uploaded successfully",
                     "carId", carId,
@@ -216,6 +230,22 @@ public class FileController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Access denied", "message", e.getMessage()));
         } catch (Exception e) {
+            // Update Media Status to FAILED if possible
+            try {
+                if (carId != null && carId > 0) {
+                    // We need to fetch user again if authentication is null? verified auth above.
+                    // But strictly speaking, if e happened before auth, currentUser is null.
+                    // We use authentication principal id if available, or just skip updates if
+                    // early fail.
+                    if (authentication != null && authentication.getPrincipal() instanceof UserPrincipal) {
+                        Long userId = ((UserPrincipal) authentication.getPrincipal()).getId();
+                        carService.updateMediaStatus(carId.toString(), MediaStatus.FAILED, userId);
+                    }
+                }
+            } catch (Exception updateEx) {
+                log.error("Failed to update media status to FAILED for car {}", carId, updateEx);
+            }
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Upload failed", "message", e.getMessage()));
         }
@@ -234,7 +264,9 @@ public class FileController {
             @RequestParam("fileUrl") String fileUrl,
             Authentication authentication) {
         try {
-            User currentUser = (User) authentication.getPrincipal();
+            UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+            User currentUser = userRepository.findById(principal.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", principal.getId().toString()));
 
             if (fileUrl == null || fileUrl.trim().isEmpty()) {
                 throw new IllegalArgumentException("File URL cannot be empty");
@@ -294,6 +326,8 @@ public class FileController {
     private boolean isAdmin(User user) {
         return user.getRole().name().equals("ADMIN");
     }
+
+   
 
     private long extractIdFromPath(String path, String prefix) {
         try {

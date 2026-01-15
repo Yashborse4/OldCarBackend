@@ -3,6 +3,7 @@ package com.carselling.oldcar.service;
 import com.carselling.oldcar.dto.file.FileMetadata;
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.Bucket;
+import com.google.cloud.storage.HttpMethod;
 import com.google.cloud.storage.Storage;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.cloud.StorageClient;
@@ -14,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.net.URL;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Map;
@@ -62,20 +64,59 @@ public class FirebaseStorageService {
     }
 
     public String generateSignedUrl(String fileName, int expirationMinutes) {
+        return generateSignedUrl(fileName, expirationMinutes, "GET", null);
+    }
+
+    public String generateSignedUrl(String fileName, int expirationMinutes, String httpMethod, String contentType) {
         Bucket bucket = StorageClient.getInstance(firebaseApp).bucket();
         if (bucket == null) {
             log.warn("Firebase storage bucket is not configured, returning null signed URL");
             return null;
         }
 
-        Blob blob = bucket.get(fileName);
-        if (blob == null) {
-            log.warn("File not found in bucket for name: {}", fileName);
+        // For uploads (PUT), the blob might not exist yet, preventing blob.signUrl()
+        // We must use bucket.signUrl for generic resource signing or create a
+        // dummy/reference?
+        // Actually, bucket.signUrl is the correct way for non-existing objects.
+
+        try {
+            // Note: Cloud Storage for Firebase uses IAM signing usually.
+            // We need to use the Storage object associated with the bucket.
+            Storage storage = bucket.getStorage();
+
+            // Define sign options
+            Storage.SignUrlOption[] options = new Storage.SignUrlOption[] {
+                    Storage.SignUrlOption.httpMethod(HttpMethod.valueOf(httpMethod)),
+                    Storage.SignUrlOption.withV4Signature()
+            };
+
+            if (contentType != null && !contentType.isEmpty()) {
+                // options = java.util.Arrays.copyOf(options, options.length + 1);
+                // options[options.length - 1] = Storage.SignUrlOption.withContentType();
+                // Note: We relaxed strict Content-Type enforcement in signature to prevent 403s
+                // on header mismatch.
+                // MediaController already validates the intent.
+            }
+
+            // We are signing a specific blob path
+            // For PUT, we are authorizing creation/update of this path
+            // Using blobInfo to sign? Or just blob name.
+            // bucket.signUrl is not directly exposed on com.google.cloud.storage.Bucket in
+            // all versions.
+            // The standard way is using the Blob object if it exists, OR crafting the
+            // BlobInfo.
+
+            com.google.cloud.storage.BlobInfo blobInfo = com.google.cloud.storage.BlobInfo
+                    .newBuilder(bucket.getName(), fileName)
+                    .setContentType(contentType)
+                    .build();
+
+            URL url = storage.signUrl(blobInfo, expirationMinutes, TimeUnit.MINUTES, options);
+            return url.toString();
+        } catch (Exception e) {
+            log.error("Error generating signed URL for {}: {}", fileName, e.getMessage());
             return null;
         }
-
-        URL url = blob.signUrl(expirationMinutes, TimeUnit.MINUTES, Storage.SignUrlOption.withV4Signature());
-        return url != null ? url.toString() : null;
     }
 
     public FileMetadata getFileMetadata(String fileName) {
@@ -92,9 +133,9 @@ public class FirebaseStorageService {
         }
 
         LocalDateTime lastModified = null;
-        Long updateTime = blob.getUpdateTime();
+        OffsetDateTime updateTime = blob.getUpdateTimeOffsetDateTime();
         if (updateTime != null) {
-            lastModified = LocalDateTime.ofInstant(Instant.ofEpochMilli(updateTime), ZoneId.systemDefault());
+            lastModified = updateTime.atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
         }
 
         Map<String, String> userMetadata = blob.getMetadata();
