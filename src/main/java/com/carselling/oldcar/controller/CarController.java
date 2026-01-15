@@ -133,16 +133,34 @@ public class CarController {
          * - USER: can create own cars
          * - DEALER: can create cars
          * - ADMIN: can create cars for anyone
+         * 
+         * Supports idempotency key via X-Idempotency-Key header to prevent duplicates
+         * on retries.
          */
         @PostMapping
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
         public ResponseEntity<ApiResponse<CarResponse>> createVehicle(
-                        @Valid @RequestBody CarRequest request) {
+                        @Valid @RequestBody CarRequest request,
+                        @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey) {
 
-                log.info("Creating new vehicle: {} {}", request.getMake(), request.getModel());
+                log.info("Creating new vehicle: {} {} (idempotency key: {})",
+                                request.getMake(), request.getModel(), idempotencyKey);
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
-                CarResponse createdCar = carService.createVehicle(request, currentUserId);
+
+                // Check for duplicate request using idempotency key
+                if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                        CarResponse existingCar = carService.findByIdempotencyKey(idempotencyKey, currentUserId);
+                        if (existingCar != null) {
+                                log.info("Returning existing car for idempotency key: {}", idempotencyKey);
+                                return ResponseEntity.ok(ApiResponse.success(
+                                                "Vehicle already exists",
+                                                "Returning previously created vehicle for this request",
+                                                existingCar));
+                        }
+                }
+
+                CarResponse createdCar = carService.createVehicle(request, currentUserId, idempotencyKey);
 
                 return ResponseEntity.status(HttpStatus.CREATED)
                                 .body(ApiResponse.success(
@@ -194,11 +212,11 @@ public class CarController {
                 log.info("Deleting vehicle: {} (hard: {})", id, hard);
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
-                carService.deleteVehicle(id, currentUserId, hard);
+                carService.deleteVehicle(id, currentUserId);
 
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Vehicle deleted successfully",
-                                hard ? "Vehicle permanently deleted" : "Vehicle moved to inactive status"));
+                                "Vehicle permanently deleted")); // Updated message
         }
 
         /**
@@ -220,6 +238,27 @@ public class CarController {
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Vehicle status updated successfully",
                                 String.format("Vehicle status changed to %s", newStatus),
+                                updatedCar));
+        }
+
+        /**
+         * Update Vehicle Media Status
+         * POST /api/cars/{id}/media-status
+         */
+        @PostMapping("/{id}/media-status")
+        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        public ResponseEntity<ApiResponse<CarResponse>> updateVehicleMediaStatus(
+                        @PathVariable String id,
+                        @Valid @RequestBody com.carselling.oldcar.dto.car.UpdateMediaStatusRequest statusRequest) {
+
+                log.info("Updating vehicle media status: {} to {}", id, statusRequest.getStatus());
+
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                CarResponse updatedCar = carService.updateMediaStatus(id, statusRequest.getStatus(), currentUserId);
+
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Vehicle media status updated successfully",
+                                String.format("Vehicle media status changed to %s", statusRequest.getStatus()),
                                 updatedCar));
         }
 
@@ -424,5 +463,18 @@ public class CarController {
                                 "Car statistics retrieved successfully",
                                 "Aggregated car statistics for admin",
                                 statistics));
+        }
+
+        /**
+         * Increment Car Statistics
+         * POST /api/cars/{id}/stats?type={type}
+         */
+        @PostMapping("/{id}/stats")
+        public ResponseEntity<ApiResponse<Void>> incrementCarStat(
+                        @PathVariable String id,
+                        @RequestParam String type) {
+
+                carService.incrementCarStat(id, type);
+                return ResponseEntity.ok(ApiResponse.success("Stat incremented", null, null));
         }
 }

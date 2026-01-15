@@ -32,6 +32,11 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
 
        Page<Car> findByOwnerId(Long ownerId, Pageable pageable);
 
+       /**
+        * Find car by idempotency key and owner for duplicate prevention on retries.
+        */
+       java.util.Optional<Car> findByIdempotencyKeyAndOwnerId(String idempotencyKey, Long ownerId);
+
        // Find active cars
        @Query("SELECT c FROM Car c WHERE c.isActive = true")
        List<Car> findAllActiveCars();
