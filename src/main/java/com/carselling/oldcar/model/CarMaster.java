@@ -25,14 +25,20 @@ public class CarMaster {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "external_id")
+    private String externalId;
+
     @Column(nullable = false, length = 50)
     private String make;
 
     @Column(nullable = false, length = 100)
     private String model;
 
-    @Column(length = 100)
+    @Column(length = 200)
     private String variant;
+
+    @Column(length = 50)
+    private String segment;
 
     @Column(name = "engine_cc")
     private Integer engineCC;
@@ -46,9 +52,6 @@ public class CarMaster {
     @Column(name = "body_type", length = 50)
     private String bodyType;
 
-    @Column(name = "seating_capacity")
-    private Integer seatingCapacity;
-
     @Column(name = "mileage_arai")
     private Double mileageArai;
 
@@ -57,6 +60,12 @@ public class CarMaster {
 
     @Column(name = "year_end")
     private Integer yearEnd;
+
+    @Column(name = "power_hp")
+    private String powerHp;
+
+    @Column(name = "torque_nm")
+    private String torqueNm;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

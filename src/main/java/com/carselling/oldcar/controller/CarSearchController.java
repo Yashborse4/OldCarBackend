@@ -50,12 +50,26 @@ public class CarSearchController {
                         @RequestParam(value = "maxPrice", required = false) BigDecimal maxPrice,
                         @RequestParam(value = "verifiedDealer", required = false) Boolean verifiedDealer,
                         @RequestParam(value = "page", defaultValue = "0") int page,
-                        @RequestParam(value = "size", defaultValue = "20") int size) {
+                        @RequestParam(value = "size", defaultValue = "20") int size,
+                        @RequestParam(value = "sort", defaultValue = "relevance") String sort) {
 
                 int safeSize = Math.max(1, Math.min(size, 50));
                 int safePage = Math.max(0, page);
 
-                Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+                Sort sortObj = Sort.by(Sort.Direction.DESC, "createdAt");
+                if ("price".equalsIgnoreCase(sort)) {
+                        sortObj = Sort.by(Sort.Direction.ASC, "price");
+                } else if ("year".equalsIgnoreCase(sort)) {
+                        sortObj = Sort.by(Sort.Direction.DESC, "year");
+                } else if ("relevance".equalsIgnoreCase(sort)) {
+                        // Relevance usually implies default ES scoring which happens if we don't sort,
+                        // or if we sort by _score. But here we fallback to createdAt for "newest"
+                        // feeling or just empty?
+                        // If we pass Sort.unsorted(), ES uses default.
+                        sortObj = Sort.by(Sort.Direction.DESC, "createdAt");
+                }
+
+                Pageable pageable = PageRequest.of(safePage, safeSize, sortObj);
 
                 CarSearchRequest criteria = CarSearchRequest.builder()
                                 .keyword(trim(keyword))
