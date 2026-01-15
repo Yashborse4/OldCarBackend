@@ -61,6 +61,11 @@ public class UserPrincipal implements UserDetails {
      */
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
+        if (verifiedDealer && role != Role.DEALER && role != Role.ADMIN) {
+            return List.of(
+                    new SimpleGrantedAuthority("ROLE_" + role.name()),
+                    new SimpleGrantedAuthority("ROLE_DEALER"));
+        }
         return List.of(
                 new SimpleGrantedAuthority("ROLE_" + role.name()));
     }

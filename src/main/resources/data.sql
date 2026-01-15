@@ -53,3 +53,64 @@ INSERT INTO car_master (make, model, variant, engine_cc, fuel_type, transmission
 VALUES 
 ('Toyota', 'Innova Crysta', 'GX', 2393, 'Diesel', 'Manual', 'MPV', 7, 15.10, 2016, NULL, NOW(), NOW()),
 ('Toyota', 'Fortuner', '4x4', 2755, 'Diesel', 'Automatic', 'SUV', 7, 14.40, 2016, NULL, NOW(), NOW());
+
+
+
+
+INSERT INTO car_master
+VALUES
+('Hyundai', 'Venue', 'S', 1197, 'Petrol', 'Manual', 'SUV', 5, 17.52, 2019, NULL, NOW(), NOW()),
+('Hyundai', 'Venue', 'SX', 998, 'Petrol', 'Automatic', 'SUV', 5, 18.15, 2019, NULL, NOW(), NOW()),
+('Hyundai', 'Exter', 'SX', 1197, 'Petrol', 'Manual', 'SUV', 5, 19.40, 2023, NULL, NOW(), NOW()),
+('Hyundai', 'Aura', 'S', 1197, 'Petrol', 'Manual', 'Sedan', 5, 20.50, 2020, NULL, NOW(), NOW());
+
+
+
+INSERT INTO car_master
+VALUES
+('Kia', 'Carens', 'Prestige', 1497, 'Petrol', 'Manual', 'MPV', 7, 16.20, 2022, NULL, NOW(), NOW()),
+('Kia', 'Carens', 'Luxury', 1493, 'Diesel', 'Automatic', 'MPV', 7, 21.30, 2022, NULL, NOW(), NOW());
+
+
+
+INSERT INTO car_master
+VALUES
+('Mahindra', 'Scorpio-N', 'Z4', 1997, 'Petrol', 'Manual', 'SUV', 7, 14.00, 2022, NULL, NOW(), NOW()),
+('Mahindra', 'Scorpio-N', 'Z8', 2184, 'Diesel', 'Automatic', 'SUV', 7, 15.42, 2022, NULL, NOW(), NOW()),
+('Mahindra', 'Bolero', 'B6', 1493, 'Diesel', 'Manual', 'SUV', 7, 16.70, 2018, NULL, NOW(), NOW()),
+('Mahindra', 'XUV300', 'W6', 1197, 'Petrol', 'Manual', 'SUV', 5, 20.00, 2019, NULL, NOW(), NOW());
+
+
+INSERT INTO car_master
+VALUES
+('Tata', 'Punch', 'Pure', 1199, 'Petrol', 'Manual', 'SUV', 5, 20.09, 2021, NULL, NOW(), NOW()),
+('Tata', 'Punch', 'Creative', 1199, 'Petrol', 'Automatic', 'SUV', 5, 20.09, 2021, NULL, NOW(), NOW()),
+('Tata', 'Tiago', 'XT', 1199, 'Petrol', 'Manual', 'Hatchback', 5, 20.09, 2020, NULL, NOW(), NOW()),
+('Tata', 'Tiago EV', 'XZ+', 0, 'Electric', 'Automatic', 'Hatchback', 5, 315.00, 2023, NULL, NOW(), NOW());
+
+
+
+INSERT INTO car_master
+VALUES
+('Volkswagen', 'Virtus', 'Highline', 999, 'Petrol', 'Manual', 'Sedan', 5, 20.08, 2022, NULL, NOW(), NOW()),
+('Volkswagen', 'Taigun', 'GT', 1498, 'Petrol', 'Automatic', 'SUV', 5, 17.23, 2021, NULL, NOW(), NOW());
+
+
+INSERT INTO car_master
+VALUES
+('Skoda', 'Slavia', 'Active', 999, 'Petrol', 'Manual', 'Sedan', 5, 20.32, 2022, NULL, NOW(), NOW()),
+('Skoda', 'Kushaq', 'Style', 1498, 'Petrol', 'Automatic', 'SUV', 5, 18.86, 2021, NULL, NOW(), NOW());
+
+
+INSERT INTO car_master
+VALUES
+('Toyota', 'Glanza', 'G', 1197, 'Petrol', 'Automatic', 'Hatchback', 5, 22.94, 2022, NULL, NOW(), NOW()),
+('Toyota', 'Urban Cruiser Hyryder', 'V', 1462, 'Petrol', 'Automatic', 'SUV', 5, 20.58, 2022, NULL, NOW(), NOW());
+
+
+INSERT INTO car_master
+VALUES
+('Honda', 'City', 'V', 1498, 'Petrol', 'Manual', 'Sedan', 5, 17.80, 2020, NULL, NOW(), NOW()),
+('Honda', 'City', 'ZX', 1498, 'Petrol', 'CVT', 'Sedan', 5, 18.40, 2020, NULL, NOW(), NOW());
+
+

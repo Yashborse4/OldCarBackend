@@ -138,6 +138,10 @@ public class SecurityConfig {
                         // Communication
                         .requestMatchers("/api/chat/**").authenticated()
 
+                        // Media & File Upload APIs
+                        .requestMatchers("/api/media/**").authenticated()
+                        .requestMatchers("/api/files/**").authenticated()
+
                         // Fallback: Secure everything else
                         .anyRequest().authenticated());
 
