@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-@EnableAsync // Enable @Async processing for EmailService
+@EnableAsync
 public class OldCarApplication {
 
     public static void main(String[] args) {
