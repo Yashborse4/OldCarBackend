@@ -7,16 +7,15 @@ import com.carselling.oldcar.dto.car.PublicCarDTO;
 import com.carselling.oldcar.dto.car.UpdateCarStatusRequest;
 import com.carselling.oldcar.dto.car.TrackCarShareRequest;
 import com.carselling.oldcar.dto.car.CarAnalyticsResponse;
+import com.carselling.oldcar.dto.car.*;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.service.CarService;
+import com.carselling.oldcar.service.UserAnalyticsService;
 import com.carselling.oldcar.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -34,6 +33,7 @@ public class CarController {
 
         private final CarService carService;
         private final com.carselling.oldcar.service.CarInteractionEventService carInteractionEventService;
+        private final UserAnalyticsService userAnalyticsService;
 
         /**
          * Get All Vehicles with Enhanced Features
@@ -47,15 +47,9 @@ public class CarController {
 
                 log.debug("Getting all vehicles - page: {}, size: {}, sort: {}", page, size, sort);
 
-                // Parse sort parameter
-                String[] sortParams = sort.split(",");
-                String sortField = sortParams[0];
-                String sortDirection = sortParams.length > 1 ? sortParams[1] : "desc";
+                log.debug("Getting all vehicles - page: {}, size: {}, sort: {}", page, size, sort);
 
-                Sort.Direction direction = "asc".equalsIgnoreCase(sortDirection)
-                                ? Sort.Direction.ASC
-                                : Sort.Direction.DESC;
-                Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortField));
+                Pageable pageable = PageableUtils.createPageable(page, size, sort);
 
                 Page<CarResponse> cars = carService.getAllVehicles(pageable);
 
@@ -77,7 +71,7 @@ public class CarController {
                         @RequestParam(value = "sort", defaultValue = "createdAt,desc") String sort) {
 
                 log.debug("Getting public vehicles - page: {}, size: {}", page, size);
-                Pageable pageable = PageRequest.of(page, size); // Simplified sort for now
+                Pageable pageable = PageableUtils.createPageable(page, size, sort);
                 Page<PublicCarDTO> cars = carService.getPublicVehicles(pageable);
 
                 return ResponseEntity.ok(ApiResponse.success(
@@ -249,7 +243,7 @@ public class CarController {
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
         public ResponseEntity<ApiResponse<CarResponse>> updateVehicleMediaStatus(
                         @PathVariable String id,
-                        @Valid @RequestBody com.carselling.oldcar.dto.car.UpdateMediaStatusRequest statusRequest) {
+                        @Valid @RequestBody UpdateMediaStatusRequest statusRequest) {
 
                 log.info("Updating vehicle media status: {} to {}", id, statusRequest.getStatus());
 
@@ -414,7 +408,9 @@ public class CarController {
 
                 log.info("Getting vehicles by dealer: {} (page: {}, size: {})", dealerId, page, size);
 
-                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+                log.info("Getting vehicles by dealer: {} (page: {}, size: {})", dealerId, page, size);
+
+                Pageable pageable = PageableUtils.createPageable(page, size);
                 Page<CarResponse> vehicles = carService.getVehiclesByDealer(dealerId, status, pageable);
 
                 return ResponseEntity.ok(ApiResponse.success(
@@ -427,8 +423,8 @@ public class CarController {
         @PreAuthorize("hasAnyRole('DEALER', 'ADMIN')")
         public ResponseEntity<ApiResponse<com.carselling.oldcar.dto.car.DealerDashboardResponse>> getDealerDashboard() {
                 Long currentUserId = SecurityUtils.getCurrentUserId();
-                com.carselling.oldcar.dto.car.DealerDashboardResponse stats = carService
-                                .getDealerDashboard(currentUserId);
+                com.carselling.oldcar.dto.car.DealerDashboardResponse stats = userAnalyticsService
+                                .getDealerDashboardStats(currentUserId);
 
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Dealer dashboard statistics retrieved successfully",
@@ -444,7 +440,7 @@ public class CarController {
                         @RequestParam(value = "status", required = false) String status) {
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
-                Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+                Pageable pageable = PageableUtils.createPageable(page, size);
                 Page<CarResponse> vehicles = carService.getVehiclesByDealer(currentUserId.toString(), status,
                                 pageable);
 

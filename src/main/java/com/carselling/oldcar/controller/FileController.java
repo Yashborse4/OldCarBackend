@@ -32,6 +32,7 @@ public class FileController {
 
     private final CarService carService;
     private final FileUploadService fileUploadService;
+    private final com.carselling.oldcar.b2.B2FileService b2FileService;
     private final FileValidationService fileValidationService;
     private final UserRepository userRepository;
 
@@ -89,10 +90,9 @@ public class FileController {
                     resourceOwnerId = carId;
                 }
             }
-            // If chat, need detection logic, but folder structure for chat not defined yet
-            // in this controller snippet.
 
-            FileUploadResponse response = fileUploadService.uploadFile(file, folder, currentUser, resourceType,
+            // Use B2FileService for storage
+            FileUploadResponse response = b2FileService.uploadFile(file, folder, currentUser, resourceType,
                     resourceOwnerId);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -102,13 +102,11 @@ public class FileController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Access denied", "message", e.getMessage()));
         } catch (IllegalArgumentException e) {
-            // ... existing catch ...
             log.warn("Invalid parameters for file upload by user {}: {}",
                     authentication.getName(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", "Invalid request parameters", "message", e.getMessage()));
         } catch (Exception e) {
-            // ... existing catch ...
             log.error("Error uploading file by user {}: {}", authentication.getName(), e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "File upload failed", "message", "An unexpected error occurred"));
@@ -168,7 +166,8 @@ public class FileController {
                 }
             }
 
-            List<FileUploadResponse> responses = fileUploadService.uploadMultipleFiles(files, folder, currentUser,
+            // Use B2FileService for storage
+            List<FileUploadResponse> responses = b2FileService.uploadMultipleFiles(files, folder, currentUser,
                     resourceType, resourceOwnerId);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
@@ -216,7 +215,8 @@ public class FileController {
             String folder = "cars/" + carId + "/images";
             fileValidationService.validateFiles(images);
 
-            List<FileUploadResponse> responses = fileUploadService.uploadMultipleFiles(
+            // Use B2FileService for storage
+            List<FileUploadResponse> responses = b2FileService.uploadMultipleFiles(
                     images, folder, currentUser, ResourceType.CAR_IMAGE, carId);
 
             // Update Media Status to READY
@@ -233,10 +233,6 @@ public class FileController {
             // Update Media Status to FAILED if possible
             try {
                 if (carId != null && carId > 0) {
-                    // We need to fetch user again if authentication is null? verified auth above.
-                    // But strictly speaking, if e happened before auth, currentUser is null.
-                    // We use authentication principal id if available, or just skip updates if
-                    // early fail.
                     if (authentication != null && authentication.getPrincipal() instanceof UserPrincipal) {
                         Long userId = ((UserPrincipal) authentication.getPrincipal()).getId();
                         carService.updateMediaStatus(carId.toString(), MediaStatus.FAILED, userId);
@@ -248,6 +244,134 @@ public class FileController {
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Upload failed", "message", e.getMessage()));
+        }
+    }
+
+    /**
+     * DIRECT UPLOAD: Init
+     */
+    @PostMapping("/direct/init")
+    @com.carselling.oldcar.annotation.RateLimit(capacity = 20, refill = 10, refillPeriod = 1)
+    public ResponseEntity<?> initDirectUpload(
+            @RequestBody com.carselling.oldcar.dto.file.DirectUploadDTOs.InitRequest request,
+            Authentication authentication) {
+        try {
+            UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+            User currentUser = userRepository.findById(principal.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", principal.getId().toString()));
+
+            // Authorization Check (reusing logic or simplified)
+            String folder = request.getFolder();
+            validateFolderName(folder);
+            checkFolderAuthorization(folder, currentUser);
+
+            // Use B2FileService for init
+            com.carselling.oldcar.b2.B2FileService.DirectUploadInitResponse response = b2FileService
+                    .initDirectUpload(request.getFileName(), request.getFolder(), currentUser);
+
+            return ResponseEntity.ok(com.carselling.oldcar.dto.file.DirectUploadDTOs.InitResponse.builder()
+                    .uploadUrl(response.getUploadUrl())
+                    .authorizationToken(response.getAuthorizationToken())
+                    .fileName(response.getFileName())
+                    .fileUrl(response.getFileUrl())
+                    .build());
+
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Init direct upload failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * DIRECT UPLOAD: Complete
+     */
+    @PostMapping("/direct/complete")
+    public ResponseEntity<?> completeDirectUpload(
+            @RequestBody com.carselling.oldcar.dto.file.DirectUploadDTOs.CompleteRequest request,
+            Authentication authentication) {
+        try {
+            UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+            User currentUser = userRepository.findById(principal.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", principal.getId().toString()));
+
+            // Context checks
+            if (request.getFolder() != null) {
+                checkFolderAuthorization(request.getFolder(), currentUser);
+            }
+
+            // Determine Owner
+            ResourceType resourceType = ResourceType.OTHER;
+            Long resourceOwnerId = currentUser.getId();
+
+            if (request.getFolder() != null) {
+                if (request.getFolder().startsWith("cars/")) {
+                    resourceType = ResourceType.CAR_IMAGE;
+                    long carId = extractIdFromPath(request.getFolder(), "cars/");
+                    if (carId != -1)
+                        resourceOwnerId = carId;
+                } else if (request.getFolder().startsWith("users/")) {
+                    resourceType = ResourceType.USER_PROFILE;
+                    long userId = extractIdFromPath(request.getFolder(), "users/");
+                    if (userId != -1)
+                        resourceOwnerId = userId;
+                }
+            }
+            if (request.getCarId() != null) {
+                resourceType = ResourceType.CAR_IMAGE;
+                resourceOwnerId = request.getCarId();
+            }
+
+            com.carselling.oldcar.model.UploadedFile uploadedFile = b2FileService.completeDirectUpload(
+                    request.getB2FileName(),
+                    request.getFileId(),
+                    currentUser,
+                    resourceType,
+                    resourceOwnerId,
+                    request.getFileSize(),
+                    request.getOriginalFileName(),
+                    request.getContentType());
+
+            // If car image, update media status?
+            // Ideally we should process media or set status.
+            if (resourceType == ResourceType.CAR_IMAGE) {
+                carService.updateMediaStatus(resourceOwnerId.toString(), MediaStatus.UPLOADED, currentUser.getId());
+                // Trigger async processing if we had valid path list... but here we have one
+                // file?
+                // Async media service expects list of paths.
+                // We can trigger it for this single file or client calls complete-set?
+                // For now, simple status update.
+            }
+
+            return ResponseEntity.ok(com.carselling.oldcar.dto.file.DirectUploadDTOs.CompleteResponse.builder()
+                    .fileUrl(uploadedFile.getFileUrl())
+                    .fileName(uploadedFile.getFileName())
+                    .success(true)
+                    .build());
+
+        } catch (Exception e) {
+            log.error("Complete direct upload failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private void checkFolderAuthorization(String folder, User currentUser) {
+        // STRICT AUTHORIZATION
+        if (folder.startsWith("users/")) {
+            long pathUserId = extractIdFromPath(folder, "users/");
+            if (pathUserId != -1 && !currentUser.getId().equals(pathUserId) && !isAdmin(currentUser)) {
+                throw new SecurityException("You are not authorized to upload to this folder");
+            }
+        } else if (folder.startsWith("cars/")) {
+            long carId = extractIdFromPath(folder, "cars/");
+            if (carId != -1) {
+                com.carselling.oldcar.dto.car.CarResponse car = carService.getVehicleById(String.valueOf(carId));
+                boolean isOwner = car.getDealerId().equals(currentUser.getId().toString());
+                if (!isOwner && !isAdmin(currentUser)) {
+                    throw new SecurityException("You are not authorized to upload to this car's folder");
+                }
+            }
         }
     }
 
@@ -326,8 +450,6 @@ public class FileController {
     private boolean isAdmin(User user) {
         return user.getRole().name().equals("ADMIN");
     }
-
-   
 
     private long extractIdFromPath(String path, String prefix) {
         try {
