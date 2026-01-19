@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Configuration
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "firebase.enabled", havingValue = "true")
 public class FirebaseConfig {
 
     @Value("${firebase.config.path}")
