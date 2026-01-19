@@ -34,6 +34,8 @@ public class UserAnalyticsService {
     private final UserAnalyticsEventRepository eventRepository;
     private final UserSessionRepository sessionRepository;
     private final CarRepository carRepository;
+    private final com.carselling.oldcar.repository.ChatRoomRepository chatRoomRepository;
+    private final com.carselling.oldcar.repository.ChatParticipantRepository chatParticipantRepository;
 
     // Rate limiting: track events per session per minute
     private final ConcurrentHashMap<String, AtomicInteger> sessionEventCounts = new ConcurrentHashMap<>();
@@ -288,6 +290,31 @@ public class UserAnalyticsService {
         insights.put("totalEngagement", events);
 
         return insights;
+    }
+
+    /**
+     * Get Dealer Dashboard Statistics
+     * Aggregates data from Cars and Chats
+     */
+    @Transactional(readOnly = true)
+    public com.carselling.oldcar.dto.car.DealerDashboardResponse getDealerDashboardStats(Long dealerId) {
+        log.debug("Getting dealer dashboard statistics for user: {}", dealerId);
+
+        long totalCarsAdded = carRepository.countByOwnerId(dealerId);
+        long activeCars = carRepository.countActiveCarsByOwnerId(dealerId);
+        Long totalViewsRaw = carRepository.sumViewCountByOwnerId(dealerId);
+        long totalViews = totalViewsRaw != null ? totalViewsRaw : 0L;
+
+        long contactRequests = chatRoomRepository.countCarInquiryChatsForSeller(dealerId);
+        long totalUniqueVisitors = chatParticipantRepository.countUniqueInquiryUsersForSeller(dealerId);
+
+        return com.carselling.oldcar.dto.car.DealerDashboardResponse.builder()
+                .totalViews(totalViews)
+                .totalUniqueVisitors(totalUniqueVisitors)
+                .totalCarsAdded(totalCarsAdded)
+                .activeCars(activeCars)
+                .contactRequestsReceived(contactRequests)
+                .build();
     }
 
     // =============== CLEANUP ===============
