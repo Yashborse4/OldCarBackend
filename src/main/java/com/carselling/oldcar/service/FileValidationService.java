@@ -347,8 +347,31 @@ public class FileValidationService {
             }
 
         } catch (IOException e) {
-            log.error("Error checking image dimensions", e);
             throw new SecurityException("Unable to validate image dimensions");
+        }
+    }
+
+    /**
+     * Validate file URL for security (SSRF, Path Traversal)
+     */
+    public void validateFileUrl(String url) throws SecurityException {
+        if (url == null || url.isBlank()) {
+            return;
+        }
+
+        // Allow Firebase Storage and Google Cloud Storage URLs
+        boolean isTrusted = url.startsWith("https://storage.googleapis.com/") ||
+                url.startsWith("https://firebasestorage.googleapis.com/") ||
+                url.startsWith("https://lh3.googleusercontent.com/");
+
+        if (!isTrusted) {
+            log.warn("Rejected untrusted file URL: {}", url);
+            throw new SecurityException("File URL must be from a trusted source (Firebase/GCS)");
+        }
+
+        // Additional security: check for path traversal attempts
+        if (url.contains("..") || url.contains("%2e%2e") || url.contains("%252e")) {
+            throw new SecurityException("Invalid file URL: path traversal detected");
         }
     }
 }
