@@ -49,6 +49,7 @@ public class GlobalExceptionHandler {
                                 .timestamp(LocalDateTime.now())
                                 .message(ex.getMessage())
                                 .details("The requested resource could not be found")
+                                .errorCode("RESOURCE_NOT_FOUND")
                                 .success(false)
                                 .build();
 
@@ -67,6 +68,7 @@ public class GlobalExceptionHandler {
                                 .timestamp(LocalDateTime.now())
                                 .message(message)
                                 .details("The resource already exists in the system")
+                                .errorCode("RESOURCE_ALREADY_EXISTS")
                                 .success(false)
                                 .build();
 
@@ -77,30 +79,19 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ApiResponse<Object>> handleAuthenticationFailedException(
                         AuthenticationFailedException ex, HttpServletRequest request) {
 
-                log.error("Authentication failed: {}", ex.getMessage(), ex);
+                log.error("Authentication failed: {}", ex.getMessage());
 
-                String rawMessage = ex.getMessage();
-                String lowerMessage = rawMessage != null ? rawMessage.toLowerCase() : "";
-                Map<String, Object> data = new HashMap<>();
-
-                String errorType = "AUTH_FAILED";
-                if (lowerMessage.contains("user not found")) {
-                        errorType = "USER_NOT_FOUND";
-                } else if (lowerMessage.contains("incorrect password")) {
-                        errorType = "INVALID_PASSWORD";
-                } else if (lowerMessage.contains("email") && lowerMessage.contains("not verified")) {
-                        errorType = "EMAIL_NOT_VERIFIED";
-                        data.put("redirectTo", "EMAIL_VERIFICATION");
-                }
-
-                data.put("errorType", errorType);
+                String message = ex.getMessage();
+                String errorType = ex.getErrorCode();
+                Map<String, Object> data = ex.getData();
 
                 ApiResponse<Object> response = ApiResponse.builder()
                                 .timestamp(LocalDateTime.now())
-                                .message("Authentication failed")
-                                .details(rawMessage != null ? rawMessage
-                                                : "Invalid username/email or password")
+                                .message(message != null ? message : "Authentication failed")
+                                .details("Authentication credentials rejected")
                                 .data(data)
+                                .errorCode(errorType)
+                                .errorType(errorType) // Ensure duplicate specific field is populated if DTO expects it
                                 .success(false)
                                 .build();
 
@@ -293,6 +284,7 @@ public class GlobalExceptionHandler {
                                 .timestamp(LocalDateTime.now())
                                 .message(errorMsg.toString())
                                 .details("Validation failed for one or more fields")
+                                .errorCode("VALIDATION_ERROR")
                                 .fieldErrors(fieldErrors)
                                 .success(false)
                                 .build();

@@ -37,6 +37,10 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
         */
        java.util.Optional<Car> findByIdempotencyKeyAndOwnerId(String idempotencyKey, Long ownerId);
 
+       // Find active cars (Efficient Public Query)
+       @Query("SELECT c FROM Car c JOIN c.owner o WHERE c.isActive = true AND (o.role = 'USER' OR (o.role = 'DEALER' AND o.verifiedDealer = true))")
+       Page<Car> findAllPublicCars(Pageable pageable);
+
        // Find active cars
        @Query("SELECT c FROM Car c WHERE c.isActive = true")
        List<Car> findAllActiveCars();

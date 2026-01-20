@@ -20,12 +20,14 @@ public class ApiResponse<T> {
     @Builder.Default
     @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime timestamp = LocalDateTime.now();
-    
+
     private String message;
     private String details;
+    private String errorCode;
+    private String errorType;
     private T data;
     private java.util.Map<String, String> fieldErrors;
-    
+
     @Builder.Default
     private Boolean success = true;
 
