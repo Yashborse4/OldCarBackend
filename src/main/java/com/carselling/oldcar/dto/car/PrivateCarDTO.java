@@ -22,7 +22,6 @@ import java.util.List;
 public class PrivateCarDTO extends PublicCarDTO {
     private String description;
     private List<String> images;
-    private String vin;
     private Integer numberOfOwners;
     private String color;
     private UserSummary owner;

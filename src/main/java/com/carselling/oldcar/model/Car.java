@@ -159,10 +159,6 @@ public class Car {
     @Column(length = 50)
     private String color;
 
-    @Size(max = 17, message = "VIN must not exceed 17 characters")
-    @Pattern(regexp = "^[A-HJ-NPR-Z0-9]{17}$|^$", message = "Please provide a valid VIN")
-    @Column(length = 17)
-    private String vin;
 
     @Column(name = "number_of_owners")
     @Min(value = 1, message = "Number of owners must be at least 1")

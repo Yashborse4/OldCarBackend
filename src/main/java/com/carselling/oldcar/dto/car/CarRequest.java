@@ -56,9 +56,7 @@ public class CarRequest {
     @Size(max = 50, message = "Color must not exceed 50 characters")
     private String color;
 
-    @Size(max = 17, message = "VIN must not exceed 17 characters")
-    @Pattern(regexp = "^[A-HJ-NPR-Z0-9]{17}$|^$", message = "Please provide a valid VIN")
-    private String vin;
+
 
     @Min(value = 1, message = "Number of owners must be at least 1")
     @Max(value = 20, message = "Number of owners cannot exceed 20")
