@@ -1,6 +1,7 @@
 package com.carselling.oldcar.repository;
 
 import com.carselling.oldcar.model.Car;
+import com.carselling.oldcar.model.DealerStatus; // Added import
 import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.model.User;
 import org.springframework.data.domain.Page;
@@ -11,7 +12,6 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -38,8 +38,13 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        java.util.Optional<Car> findByIdempotencyKeyAndOwnerId(String idempotencyKey, Long ownerId);
 
        // Find active cars (Efficient Public Query)
-       @Query("SELECT c FROM Car c JOIN c.owner o WHERE c.isActive = true AND (o.role = 'USER' OR (o.role = 'DEALER' AND o.verifiedDealer = true))")
-       Page<Car> findAllPublicCars(Pageable pageable);
+       // Find active cars (Efficient Public Query)
+       @Query("SELECT c FROM Car c JOIN c.owner o WHERE c.isActive = true AND " +
+                     "(o.role = :userRole OR (o.role = :dealerRole AND o.dealerStatus = :verifiedStatus))")
+       Page<Car> findAllPublicCars(@Param("userRole") Role userRole,
+                     @Param("dealerRole") Role dealerRole,
+                     @Param("verifiedStatus") DealerStatus verifiedStatus,
+                     Pageable pageable);
 
        // Find active cars
        @Query("SELECT c FROM Car c WHERE c.isActive = true")
