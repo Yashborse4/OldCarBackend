@@ -283,7 +283,7 @@ public class UserService {
     // ... existing methods ...
 
     /**
-     * Upload profile image for current user (stored in Firebase)
+     * Upload profile image for current user
      */
     public String uploadProfileImage(org.springframework.web.multipart.MultipartFile file) {
         log.info("Uploading profile image for current user");
@@ -299,7 +299,7 @@ public class UserService {
     }
 
     /**
-     * Upload profile image for specific user (admin or self) - stored in Firebase
+     * Upload profile image for specific user (admin or self)
      */
     public String uploadProfileImageForUser(Long userId, org.springframework.web.multipart.MultipartFile file) {
         log.info("Uploading profile image for user ID: {}", userId);

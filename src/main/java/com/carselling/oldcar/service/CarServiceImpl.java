@@ -9,6 +9,8 @@ import com.carselling.oldcar.dto.car.CarAnalyticsResponse;
 
 import com.carselling.oldcar.dto.CarStatistics;
 import com.carselling.oldcar.dto.user.UserSummary;
+import com.carselling.oldcar.model.Role;
+import com.carselling.oldcar.model.DealerStatus;
 import com.carselling.oldcar.model.Car;
 import com.carselling.oldcar.model.MediaStatus;
 import com.carselling.oldcar.model.User;
@@ -59,7 +61,7 @@ public class CarServiceImpl implements CarService {
         if (isAdmin) {
             cars = carRepository.findAllActiveCars(pageable);
         } else {
-            cars = carRepository.findAllPublicCars(pageable);
+            cars = carRepository.findAllPublicCars(Role.USER, Role.DEALER, DealerStatus.VERIFIED, pageable);
         }
 
         return cars.map(this::convertToResponseV2);
@@ -100,7 +102,7 @@ public class CarServiceImpl implements CarService {
     public Page<PublicCarDTO> getPublicVehicles(Pageable pageable) {
         // Enforce visibility: USER = Always, DEALER = Only if verified using efficient
         // DB query
-        Page<Car> cars = carRepository.findAllPublicCars(pageable);
+        Page<Car> cars = carRepository.findAllPublicCars(Role.USER, Role.DEALER, DealerStatus.VERIFIED, pageable);
         return cars.map(this::convertToPublicDTO);
     }
 
@@ -171,7 +173,6 @@ public class CarServiceImpl implements CarService {
 
                 .description(car.getDescription())
                 .images(car.getImages())
-                .vin(car.getVin())
                 .numberOfOwners(car.getNumberOfOwners())
                 .color(car.getColor())
                 .owner(UserSummary.builder()
@@ -227,7 +228,6 @@ public class CarServiceImpl implements CarService {
                 .fuelType(request.getFuelType())
                 .transmission(request.getTransmission())
                 .color(request.getColor())
-                .vin(request.getVin())
                 .numberOfOwners(request.getNumberOfOwners())
                 .accidentHistory(request.getAccidentHistory())
                 .repaintedParts(request.getRepaintedParts())
@@ -302,7 +302,6 @@ public class CarServiceImpl implements CarService {
         car.setFuelType(request.getFuelType());
         car.setTransmission(request.getTransmission());
         car.setColor(request.getColor());
-        car.setVin(request.getVin());
         car.setNumberOfOwners(request.getNumberOfOwners());
         car.setAccidentHistory(request.getAccidentHistory());
         car.setRepaintedParts(request.getRepaintedParts());
@@ -347,7 +346,7 @@ public class CarServiceImpl implements CarService {
      * Performs a HARD DELETE after cleaning up associated media files.
      * Analytics are preserved via loose coupling (target_id).
      */
-    public void deleteVehicle(String id, Long currentUserId) { // Removed 'boolean hard' parameter
+    public void deleteVehicle(String id, Long currentUserId, boolean hard) {
         log.debug("Deleting vehicle: {} by user: {} (force hard delete)", id, currentUserId);
 
         Car car = carRepository.findById(Long.parseLong(id))

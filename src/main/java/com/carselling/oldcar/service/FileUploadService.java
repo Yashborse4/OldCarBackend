@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.util.*;
 
 /**
- * Service for handling file uploads to Firebase Storage
+ * Service for handling file uploads to Backblaze B2 Storage
  */
 @Service
 @RequiredArgsConstructor

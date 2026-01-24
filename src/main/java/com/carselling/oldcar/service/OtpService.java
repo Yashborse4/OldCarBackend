@@ -144,6 +144,12 @@ public class OtpService {
             return false;
         }
 
+        // Trim input OTP to avoid whitespace issues
+        inputOtp = inputOtp.trim();
+        log.info("Validating OTP for {}: inputLength={}, inputMasked={}", email, inputOtp.length(),
+                inputOtp.length() >= 2 ? inputOtp.substring(0, 1) + "****" + inputOtp.substring(inputOtp.length() - 1)
+                        : "****");
+
         // Verify using BCrypt password matching (SECURE)
         if (passwordEncoder.matches(inputOtp, otp.getOtpHash())) {
             // Success
@@ -161,7 +167,8 @@ public class OtpService {
             // Failed attempt
             otp.incrementAttempts();
             otpRepository.save(otp);
-            log.warn("Invalid OTP attempt for {} (Attempt {}/{})", email, otp.getAttempts(), otp.getMaxAttempts());
+            log.warn("Invalid OTP attempt for {} (Attempt {}/{}). Hash match failed.", email, otp.getAttempts(),
+                    otp.getMaxAttempts());
             return false;
         }
     }

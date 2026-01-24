@@ -32,7 +32,7 @@ public interface CarService {
 
     CarResponse updateVehicle(String id, CarRequest request, Long currentUserId);
 
-    void deleteVehicle(String id, Long currentUserId);
+    void deleteVehicle(String id, Long currentUserId, boolean hard);
 
     void softDeleteUserCars(Long userId);
 
