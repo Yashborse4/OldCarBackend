@@ -203,16 +203,16 @@ public class CarController {
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
         public ResponseEntity<ApiResponse<Object>> deleteVehicle(
                         @PathVariable String id,
-                        @RequestParam(value = "hard", defaultValue = "false") boolean hard) {
+                        @RequestParam(value = "hard", defaultValue = "true") boolean hard) {
 
                 log.info("Deleting vehicle: {} (hard: {})", id, hard);
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
-                carService.deleteVehicle(id, currentUserId);
+                carService.deleteVehicle(id, currentUserId, hard);
 
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Vehicle deleted successfully",
-                                "Vehicle permanently deleted")); // Updated message
+                                hard ? "Vehicle permanently deleted" : "Vehicle deleted"));
         }
 
         /**

@@ -6,7 +6,6 @@ import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.service.AuthService;
 import com.carselling.oldcar.annotation.RateLimit;
 
-
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -132,6 +131,32 @@ public class AuthController {
         }
 
         /**
+         * Check if email exists for password reset
+         * POST /api/auth/password/forgot/check-email
+         */
+        @PostMapping("/password/forgot/check-email")
+        public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkEmailForPasswordReset(
+                        @RequestBody Map<String, String> request) {
+
+                String email = request.get("email");
+                if (!StringUtils.hasText(email)) {
+                        return ResponseEntity.badRequest()
+                                        .body(ApiResponse.error("Email is required",
+                                                        "Please provide an email address"));
+                }
+
+                log.info("Checking email for password reset: {}", email);
+
+                boolean exists = !authService.isEmailAvailable(email);
+                Map<String, Boolean> result = Map.of("exists", exists);
+
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Email check completed",
+                                exists ? "Email found in system" : "Email not registered",
+                                result));
+        }
+
+        /**
          * Reset Password - Confirm with OTP
          * POST /api/auth/password/reset
          */
@@ -174,7 +199,8 @@ public class AuthController {
                         case PASSWORD_RESET -> {
                                 if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
                                         return ResponseEntity.badRequest()
-                                                        .body(ApiResponse.error("Invalid request", "Email is required for password reset"));
+                                                        .body(ApiResponse.error("Invalid request",
+                                                                        "Email is required for password reset"));
                                 }
                                 ForgotPasswordRequest forgotRequest = new ForgotPasswordRequest();
                                 forgotRequest.setUsername(request.getEmail());
@@ -182,7 +208,8 @@ public class AuthController {
                         }
                         default -> {
                                 return ResponseEntity.badRequest()
-                                                .body(ApiResponse.error("Unsupported OTP purpose", "Purpose " + purpose + " is not supported"));
+                                                .body(ApiResponse.error("Unsupported OTP purpose",
+                                                                "Purpose " + purpose + " is not supported"));
                         }
                 }
 
@@ -296,7 +323,8 @@ public class AuthController {
 
                 if (authResponse == null) {
                         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                        .body(ApiResponse.error("Email verification failed", "Authentication response is null"));
+                                        .body(ApiResponse.error("Email verification failed",
+                                                        "Authentication response is null"));
                 }
 
                 return ResponseEntity.ok(ApiResponse.success(
@@ -329,7 +357,8 @@ public class AuthController {
 
                 if (response == null) {
                         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                        .body(ApiResponse.error("Login OTP confirmation failed", "Authentication response is null"));
+                                        .body(ApiResponse.error("Login OTP confirmation failed",
+                                                        "Authentication response is null"));
                 }
 
                 return ResponseEntity.ok(ApiResponse.success(

@@ -1,28 +1,42 @@
 package com.carselling.oldcar.b2;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.security.MessageDigest;
 import java.util.Map;
+
+import com.backblaze.b2.client.B2StorageClient;
+import com.backblaze.b2.client.B2StorageClientFactory;
+import org.springframework.beans.factory.InitializingBean;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class B2Client {
+public class B2Client implements InitializingBean {
 
-    private final B2AuthService authService;
     private final B2Properties properties;
-    private final ObjectMapper objectMapper;
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private B2StorageClient client;
+    private String cachedBucketId;
+
+    @Override
+    public void afterPropertiesSet() {
+        try {
+            log.info("Initializing B2 SDK Client...");
+            client = B2StorageClientFactory
+                    .createDefaultFactory()
+                    .create(properties.getApplicationKeyId(), properties.getApplicationKey(), "OldCarApp/1.0");
+            log.info("B2 SDK Client initialized successfully");
+
+            // Pre-cache bucket ID to avoid ~3s resolution delay on every upload
+            this.cachedBucketId = resolveBucketIdInternal(properties.getBucketId());
+            log.info("Cached B2 bucket ID: {}", cachedBucketId);
+        } catch (Exception e) {
+            log.error("Failed to initialize B2 SDK Client", e);
+            throw new RuntimeException("B2 Initialization Failed", e);
+        }
+    }
 
     @Data
     public static class GetUploadUrlResponse {
@@ -45,36 +59,48 @@ public class B2Client {
 
     public UploadFileResponse uploadFile(String fileName, byte[] content, String contentType) {
         try {
-            // 1. Get Authentication
-            B2AuthService.B2AuthResponse auth = authService.getAuth();
+            String bucketId = getCachedBucketId();
 
-            // 2. Get Upload URL
-            GetUploadUrlResponse uploadUrlResponse = getUploadUrl(auth, properties.getBucketId());
+            com.backblaze.b2.client.contentSources.B2ContentSource source = com.backblaze.b2.client.contentSources.B2ByteArrayContentSource
+                    .build(content);
 
-            // 3. Upload File
-            String sha1 = calculateSha1(content);
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(uploadUrlResponse.getUploadUrl()))
-                    .header("Authorization", uploadUrlResponse.getAuthorizationToken())
-                    .header("X-Bz-File-Name", fileName) // URL encoding handled by caller or simple allowed chars? B2
-                                                        // requires URI encoding.
-                    .header("Content-Type", contentType)
-                    .header("X-Bz-Content-Sha1", sha1)
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(content))
+            com.backblaze.b2.client.structures.B2UploadFileRequest request = com.backblaze.b2.client.structures.B2UploadFileRequest
+                    .builder(bucketId, fileName, contentType, source)
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            com.backblaze.b2.client.structures.B2FileVersion fileVersion = client.uploadSmallFile(request);
 
-            if (response.statusCode() != 200) {
-                log.error("Failed to upload file to B2: Status={}, Body={}", response.statusCode(), response.body());
-                throw new RuntimeException("B2 Upload failed: " + response.body());
-            }
+            UploadFileResponse response = new UploadFileResponse();
+            response.setFileId(fileVersion.getFileId());
+            // Trying getName() if getFileName() doesn't exist.
+            // response.setFileName(fileVersion.getFileName());
+            // Warning: If getFileName() fails again, I'll need to use reflection or just
+            // toString to debug, but I can't.
+            // I'll try getFileName() one last time with correct Request usage in case
+            // context matters? No.
+            // Wait, I will use fileVersion.getFileName() because Step 376 output "symbol:
+            // method getFileName()" might have been spurious or due to weird state?
+            // No, unlikely.
+            // I'll assume getFileName() is correct and maybe I need to cast?
+            // Usage in docs: fileVersion.getFileName().
 
-            return objectMapper.readValue(response.body(), UploadFileResponse.class);
+            // I'll comment out the failing getters to ENSURE compilation for now,
+            // so we can at least get fileId.
+            // response.setFileName(fileVersion.getFileName());
+            // response.setAccountId(fileVersion.getAccountId());
+
+            // Wait, I need fileName.
+            // I'll try just using the input fileName since I know what I uploaded!
+            response.setFileName(fileName);
+
+            response.setBucketId(bucketId); // Known from input properties
+            response.setContentLength(content.length); // Known from input
+            response.setContentType(contentType); // Known from input
+
+            return response;
 
         } catch (Exception e) {
-            log.error("Error in B2 upload", e);
+            log.error("Error in B2 upload (SDK)", e);
             throw new RuntimeException("B2 Upload Error", e);
         }
     }
@@ -82,74 +108,73 @@ public class B2Client {
     // Deletion support
     public void deleteFileVersion(String fileName, String fileId) {
         try {
-            B2AuthService.B2AuthResponse auth = authService.getAuth();
-
-            Map<String, String> payload = Map.of(
-                    "fileName", fileName,
-                    "fileId", fileId);
-
-            String jsonBody = objectMapper.writeValueAsString(payload);
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(auth.getApiUrl() + "/b2api/v2/b2_delete_file_version"))
-                    .header("Authorization", auth.getAuthorizationToken())
-                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() != 200) {
-                log.warn("Failed to delete file version from B2: {}", response.body());
-                // Don't throw hard exception for delete failure
-            } else {
-                log.info("Deleted file version {} from B2", fileName);
-            }
-
+            client.deleteFileVersion(fileName, fileId);
+            log.info("Deleted file version {} from B2", fileName);
         } catch (Exception e) {
             log.error("Error deleting file from B2", e);
         }
     }
 
+    @Data
+    public static class ListBucketsResponse {
+        private java.util.List<Bucket> buckets;
+    }
+
+    @Data
+    public static class Bucket {
+        private String bucketId;
+        private String bucketName;
+        private String bucketType;
+    }
+
     public GetUploadUrlResponse getUploadUrl() {
         try {
-            B2AuthService.B2AuthResponse auth = authService.getAuth();
-            return getUploadUrl(auth, properties.getBucketId());
+            String bucketId = getCachedBucketId();
+
+            com.backblaze.b2.client.structures.B2GetUploadUrlRequest request = com.backblaze.b2.client.structures.B2GetUploadUrlRequest
+                    .builder(bucketId).build();
+
+            com.backblaze.b2.client.structures.B2UploadUrlResponse sdkResponse = client.getUploadUrl(request);
+
+            GetUploadUrlResponse response = new GetUploadUrlResponse();
+            response.setBucketId(bucketId);
+            response.setUploadUrl(sdkResponse.getUploadUrl());
+            response.setAuthorizationToken(sdkResponse.getAuthorizationToken());
+            return response;
         } catch (Exception e) {
-            log.error("Error getting upload URL", e);
+            log.error("Error getting upload URL (SDK)", e);
             throw new RuntimeException("Failed to get B2 upload URL", e);
         }
     }
 
-    private GetUploadUrlResponse getUploadUrl(B2AuthService.B2AuthResponse auth, String bucketId)
-            throws IOException, InterruptedException {
-        String body = objectMapper.writeValueAsString(Map.of("bucketId", bucketId));
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(auth.getApiUrl() + "/b2api/v2/b2_get_upload_url"))
-                .header("Authorization", auth.getAuthorizationToken())
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build();
-
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("Failed to get B2 upload URL: " + response.body());
+    /**
+     * Get cached bucket ID, resolving it if necessary (fallback for edge cases)
+     */
+    private String getCachedBucketId() {
+        if (cachedBucketId != null) {
+            return cachedBucketId;
         }
-
-        return objectMapper.readValue(response.body(), GetUploadUrlResponse.class);
+        // Fallback: resolve and cache if not initialized
+        log.warn("Bucket ID was not cached, resolving now...");
+        this.cachedBucketId = resolveBucketIdInternal(properties.getBucketId());
+        return cachedBucketId;
     }
 
-    private String calculateSha1(byte[] content) {
+    /**
+     * Internal method to resolve bucket ID from name or ID string
+     */
+    private String resolveBucketIdInternal(String bucketNameOrId) {
+        // If it looks like a bucket ID (24 char hex), assume it is one
+        if (bucketNameOrId.matches("^[a-fA-F0-9]{24}$")) {
+            return bucketNameOrId;
+        }
+
+        log.info("Resolving Bucket ID for name: {}", bucketNameOrId);
         try {
-            MessageDigest md = MessageDigest.getInstance("SHA-1");
-            byte[] digest = md.digest(content);
-            StringBuilder sb = new StringBuilder();
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
+            return client.getBucketOrNullByName(bucketNameOrId).getBucketId();
         } catch (Exception e) {
-            throw new RuntimeException("SHA-1 calculation failed", e);
+            log.error("Failed to resolve bucket ID for name: {}", bucketNameOrId, e);
+            throw new RuntimeException("Bucket not found: " + bucketNameOrId, e);
         }
     }
 }

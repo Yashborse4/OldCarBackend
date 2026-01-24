@@ -260,7 +260,15 @@ public class FileController {
             User currentUser = userRepository.findById(principal.getId())
                     .orElseThrow(() -> new ResourceNotFoundException("User", "id", principal.getId().toString()));
 
-            // Authorization Check (reusing logic or simplified)
+                        // File size validation (200MB limit)
+            final long MAX_FILE_SIZE = 200L * 1024 * 1024;
+            if (request.getContentLength() != null && request.getContentLength() > MAX_FILE_SIZE) {
+                log.warn("File {} exceeds size limit", request.getFileName());
+                return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(Map.of(
+                    "error", "FILE_TOO_LARGE", "message", "File size exceeds 200MB limit"));
+            }
+
+            // Authorization Check
             String folder = request.getFolder();
             validateFolderName(folder);
             checkFolderAuthorization(folder, currentUser);
