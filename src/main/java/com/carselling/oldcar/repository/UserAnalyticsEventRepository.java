@@ -137,6 +137,44 @@ public interface UserAnalyticsEventRepository extends JpaRepository<UserAnalytic
                         @Param("endDate") LocalDateTime endDate,
                         Pageable pageable);
 
+        // =============== DEALER INSIGHTS ===============
+
+        /**
+         * Get monthly stats for dealer's cars (Views)
+         */
+        @Query("SELECT FUNCTION('MONTHNAME', e.createdAt) as month, COUNT(e) as views " +
+                        "FROM UserAnalyticsEvent e " +
+                        "WHERE e.targetType = 'CAR' AND e.targetId IN :carIds AND e.eventType = 'CAR_VIEW' " +
+                        "AND e.createdAt >= :startDate " +
+                        "GROUP BY FUNCTION('MONTHNAME', e.createdAt), FUNCTION('MONTH', e.createdAt) " +
+                        "ORDER BY FUNCTION('MONTH', e.createdAt)")
+        List<Object[]> getDealerMonthlyViews(@Param("carIds") List<String> carIds,
+                        @Param("startDate") LocalDateTime startDate);
+
+        /**
+         * Get monthly stats for dealer's cars (Inquiries)
+         */
+        @Query("SELECT FUNCTION('MONTHNAME', e.createdAt) as month, COUNT(e) as inquiries " +
+                        "FROM UserAnalyticsEvent e " +
+                        "WHERE e.targetType = 'CAR' AND e.targetId IN :carIds AND e.eventType = 'CONTACT_CLICK' " +
+                        "AND e.createdAt >= :startDate " +
+                        "GROUP BY FUNCTION('MONTHNAME', e.createdAt), FUNCTION('MONTH', e.createdAt) " +
+                        "ORDER BY FUNCTION('MONTH', e.createdAt)")
+        List<Object[]> getDealerMonthlyInquiries(@Param("carIds") List<String> carIds,
+                        @Param("startDate") LocalDateTime startDate);
+
+        /**
+         * Get location stats regarding views
+         * Assuming Location is derived from City metadata in events for now as we don't
+         * have Car Location in Events table directly unless we join,
+         * BUT easier: aggregate by Event City.
+         */
+        @Query("SELECT e.city, COUNT(e) FROM UserAnalyticsEvent e " +
+                        "WHERE e.targetType = 'CAR' AND e.targetId IN :carIds AND e.eventType = 'CAR_VIEW' " +
+                        "AND e.city IS NOT NULL " +
+                        "GROUP BY e.city ORDER BY COUNT(e) DESC")
+        List<Object[]> getDealerLocationStats(@Param("carIds") List<String> carIds);
+
         // =============== SCREEN ANALYTICS ===============
 
         /**
