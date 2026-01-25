@@ -779,7 +779,8 @@ public class CarServiceImpl implements CarService {
                 .mileage(car.getMileage() != null ? car.getMileage().longValue() : 0L)
                 .location(car.getOwner().getLocation())
                 .condition("Good") // Default value
-                .images(car.getImages() != null ? car.getImages() : new java.util.ArrayList<>())
+                .images(car.getImages() != null ? new java.util.ArrayList<>(car.getImages())
+                        : new java.util.ArrayList<>())
                 .specifications(CarResponse.CarSpecifications.builder()
                         .fuelType(car.getFuelType())
                         .transmission(car.getTransmission())

@@ -434,6 +434,19 @@ public class CarController {
                                 stats));
         }
 
+        @GetMapping("/dealer/analytics")
+        @PreAuthorize("hasAnyRole('DEALER', 'ADMIN')")
+        public ResponseEntity<ApiResponse<com.carselling.oldcar.dto.car.DealerAnalyticsResponse>> getDealerAnalytics() {
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                com.carselling.oldcar.dto.car.DealerAnalyticsResponse analytics = userAnalyticsService
+                                .getDealerAnalytics(currentUserId);
+
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Dealer analytics retrieved successfully",
+                                "Detailed analytics for your account",
+                                analytics));
+        }
+
         @GetMapping("/dealer/my-cars")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
         public ResponseEntity<ApiResponse<Page<CarResponse>>> getDealerCars(

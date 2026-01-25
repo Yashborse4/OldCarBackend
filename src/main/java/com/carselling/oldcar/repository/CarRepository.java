@@ -28,8 +28,10 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
 
        Page<Car> findByOwner(User owner, Pageable pageable);
 
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "images" })
        List<Car> findByOwnerId(Long ownerId);
 
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "images" })
        Page<Car> findByOwnerId(Long ownerId, Pageable pageable);
 
        /**
@@ -39,7 +41,7 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
 
        // Find active cars (Efficient Public Query)
        // Find active cars (Efficient Public Query)
-       @Query("SELECT c FROM Car c JOIN c.owner o WHERE c.isActive = true AND " +
+       @Query("SELECT c FROM Car c JOIN FETCH c.owner o WHERE c.isActive = true AND " +
                      "(o.role = :userRole OR (o.role = :dealerRole AND o.dealerStatus = :verifiedStatus))")
        Page<Car> findAllPublicCars(@Param("userRole") Role userRole,
                      @Param("dealerRole") Role dealerRole,
@@ -54,16 +56,16 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        Page<Car> findAllActiveCars(Pageable pageable);
 
        // Find active cars by owner
-       @Query("SELECT c FROM Car c WHERE c.owner = :owner AND c.isActive = true")
+       @Query("SELECT c FROM Car c JOIN FETCH c.owner WHERE c.owner = :owner AND c.isActive = true")
        List<Car> findActiveCarsByOwner(@Param("owner") User owner);
 
-       @Query("SELECT c FROM Car c WHERE c.owner = :owner AND c.isActive = true")
+       @Query("SELECT c FROM Car c JOIN FETCH c.owner WHERE c.owner = :owner AND c.isActive = true")
        Page<Car> findActiveCarsByOwner(@Param("owner") User owner, Pageable pageable);
 
-       @Query("SELECT c FROM Car c WHERE c.owner.id = :ownerId AND c.isActive = true")
+       @Query("SELECT c FROM Car c JOIN FETCH c.owner WHERE c.owner.id = :ownerId AND c.isActive = true")
        List<Car> findActiveCarsByOwnerId(@Param("ownerId") Long ownerId);
 
-       @Query("SELECT c FROM Car c WHERE c.owner.id = :ownerId AND c.isActive = true")
+       @Query("SELECT c FROM Car c JOIN FETCH c.owner WHERE c.owner.id = :ownerId AND c.isActive = true")
        Page<Car> findActiveCarsByOwnerId(@Param("ownerId") Long ownerId, Pageable pageable);
 
        // Find cars by make and model

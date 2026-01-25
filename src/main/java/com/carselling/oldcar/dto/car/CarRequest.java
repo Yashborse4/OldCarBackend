@@ -56,8 +56,6 @@ public class CarRequest {
     @Size(max = 50, message = "Color must not exceed 50 characters")
     private String color;
 
-
-
     @Min(value = 1, message = "Number of owners must be at least 1")
     @Max(value = 20, message = "Number of owners cannot exceed 20")
     private Integer numberOfOwners;
