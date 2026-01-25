@@ -16,6 +16,7 @@ public class DirectUploadDTOs {
         private String folder; // e.g., "cars/123/images"
         private String contentType;
         private Long contentLength; // Optional: for pre-upload size validation
+        private Long carId; // Optional: for context/auth checks when uploading car media
     }
 
     @Data

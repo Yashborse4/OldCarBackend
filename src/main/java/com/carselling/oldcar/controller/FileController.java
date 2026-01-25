@@ -260,22 +260,28 @@ public class FileController {
             User currentUser = userRepository.findById(principal.getId())
                     .orElseThrow(() -> new ResourceNotFoundException("User", "id", principal.getId().toString()));
 
-                        // File size validation (200MB limit)
+            // File size validation (200MB limit)
             final long MAX_FILE_SIZE = 200L * 1024 * 1024;
             if (request.getContentLength() != null && request.getContentLength() > MAX_FILE_SIZE) {
                 log.warn("File {} exceeds size limit", request.getFileName());
                 return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(Map.of(
-                    "error", "FILE_TOO_LARGE", "message", "File size exceeds 200MB limit"));
+                        "error", "FILE_TOO_LARGE", "message", "File size exceeds 200MB limit"));
             }
 
             // Authorization Check
             String folder = request.getFolder();
+
+            // Auto-redirect videos to correct folder
+            if (request.getContentType() != null && request.getContentType().startsWith("video/")
+                    && folder.startsWith("cars/")) {
+                folder = folder.replaceAll("/images/?$", "/videos");
+            }
             validateFolderName(folder);
             checkFolderAuthorization(folder, currentUser);
 
             // Use B2FileService for init
             com.carselling.oldcar.b2.B2FileService.DirectUploadInitResponse response = b2FileService
-                    .initDirectUpload(request.getFileName(), request.getFolder(), currentUser);
+                    .initDirectUpload(request.getFileName(), folder, currentUser);
 
             return ResponseEntity.ok(com.carselling.oldcar.dto.file.DirectUploadDTOs.InitResponse.builder()
                     .uploadUrl(response.getUploadUrl())
