@@ -15,8 +15,15 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.carselling.oldcar.exception.ResourceNotFoundException;
 import com.carselling.oldcar.service.CarService;
+import com.carselling.oldcar.service.ChecksumService;
 import com.carselling.oldcar.security.UserPrincipal;
 import com.carselling.oldcar.repository.UserRepository;
+import com.carselling.oldcar.annotation.RateLimit;
+import com.carselling.oldcar.b2.B2FileService;
+import com.carselling.oldcar.dto.file.DirectUploadDTOs;
+import com.carselling.oldcar.dto.car.CarResponse;
+import com.carselling.oldcar.model.UploadedFile;
+import com.carselling.oldcar.model.TemporaryFile;
 
 import java.util.List;
 import java.util.Map;
@@ -32,16 +39,16 @@ public class FileController {
 
     private final CarService carService;
     private final FileUploadService fileUploadService;
-    private final com.carselling.oldcar.b2.B2FileService b2FileService;
+    private final B2FileService b2FileService;
     private final FileValidationService fileValidationService;
-    private final com.carselling.oldcar.service.ChecksumService checksumService;
+    private final ChecksumService checksumService;
     private final UserRepository userRepository;
 
     /**
      * Upload single file
      */
     @PostMapping("/upload")
-    @com.carselling.oldcar.annotation.RateLimit(capacity = 10, refill = 5, refillPeriod = 1)
+    @RateLimit(capacity = 10, refill = 5, refillPeriod = 1)
     public ResponseEntity<?> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "folder", defaultValue = "general") String folder,
@@ -125,7 +132,7 @@ public class FileController {
      * Upload multiple files
      */
     @PostMapping("/upload/multiple")
-    @com.carselling.oldcar.annotation.RateLimit(capacity = 10, refill = 5, refillPeriod = 1)
+    @RateLimit(capacity = 10, refill = 5, refillPeriod = 1)
     public ResponseEntity<?> uploadMultipleFiles(
             @RequestParam("files") List<MultipartFile> files,
             @RequestParam(value = "folder", defaultValue = "general") String folder,
@@ -196,7 +203,7 @@ public class FileController {
      * Upload car images
      */
     @PostMapping("/upload/car-images")
-    @com.carselling.oldcar.annotation.RateLimit(capacity = 20, refill = 10, refillPeriod = 1)
+    @RateLimit(capacity = 20, refill = 10, refillPeriod = 1)
     public ResponseEntity<?> uploadCarImages(
             @RequestParam("images") List<MultipartFile> images,
             @RequestParam("carId") Long carId,
@@ -211,7 +218,7 @@ public class FileController {
             }
 
             // STRICT OWNERSHIP CHECK
-            com.carselling.oldcar.dto.car.CarResponse car = carService.getVehicleById(carId.toString());
+            CarResponse car = carService.getVehicleById(carId.toString());
             boolean isOwner = car.getDealerId().equals(currentUser.getId().toString());
 
             if (!isOwner && !isAdmin(currentUser)) {
@@ -259,9 +266,9 @@ public class FileController {
      * DIRECT UPLOAD: Init
      */
     @PostMapping("/direct/init")
-    @com.carselling.oldcar.annotation.RateLimit(capacity = 20, refill = 10, refillPeriod = 1)
+    @RateLimit(capacity = 20, refill = 10, refillPeriod = 1)
     public ResponseEntity<?> initDirectUpload(
-            @RequestBody com.carselling.oldcar.dto.file.DirectUploadDTOs.InitRequest request,
+            @RequestBody DirectUploadDTOs.InitRequest request,
             Authentication authentication) {
         try {
             UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
@@ -288,10 +295,10 @@ public class FileController {
             checkFolderAuthorization(folder, currentUser);
 
             // Use B2FileService for init
-            com.carselling.oldcar.b2.B2FileService.DirectUploadInitResponse response = b2FileService
+            B2FileService.DirectUploadInitResponse response = b2FileService
                     .initDirectUpload(request.getFileName(), folder, currentUser);
 
-            return ResponseEntity.ok(com.carselling.oldcar.dto.file.DirectUploadDTOs.InitResponse.builder()
+            return ResponseEntity.ok(DirectUploadDTOs.InitResponse.builder()
                     .uploadUrl(response.getUploadUrl())
                     .authorizationToken(response.getAuthorizationToken())
                     .fileName(response.getFileName())
@@ -311,7 +318,7 @@ public class FileController {
      */
     @PostMapping("/direct/complete")
     public ResponseEntity<?> completeDirectUpload(
-            @RequestBody com.carselling.oldcar.dto.file.DirectUploadDTOs.CompleteRequest request,
+            @RequestBody DirectUploadDTOs.CompleteRequest request,
             Authentication authentication) {
         try {
             UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
@@ -359,13 +366,13 @@ public class FileController {
             String responseFileName;
             Long responseId;
 
-            if (result instanceof com.carselling.oldcar.model.UploadedFile) {
-                com.carselling.oldcar.model.UploadedFile uf = (com.carselling.oldcar.model.UploadedFile) result;
+            if (result instanceof UploadedFile) {
+                UploadedFile uf = (UploadedFile) result;
                 responseFileUrl = uf.getFileUrl();
                 responseFileName = uf.getFileName();
                 responseId = uf.getId();
-            } else if (result instanceof com.carselling.oldcar.model.TemporaryFile) {
-                com.carselling.oldcar.model.TemporaryFile tf = (com.carselling.oldcar.model.TemporaryFile) result;
+            } else if (result instanceof TemporaryFile) {
+                TemporaryFile tf = (TemporaryFile) result;
                 responseFileUrl = tf.getFileUrl();
                 responseFileName = tf.getFileName();
                 responseId = tf.getId();
@@ -379,7 +386,7 @@ public class FileController {
                 carService.updateMediaStatus(resourceOwnerId.toString(), MediaStatus.UPLOADED, currentUser.getId());
             }
 
-            return ResponseEntity.ok(com.carselling.oldcar.dto.file.DirectUploadDTOs.CompleteResponse.builder()
+            return ResponseEntity.ok(DirectUploadDTOs.CompleteResponse.builder()
                     .fileUrl(responseFileUrl)
                     .fileName(responseFileName)
                     .id(responseId)
@@ -402,7 +409,7 @@ public class FileController {
         } else if (folder.startsWith("cars/")) {
             long carId = extractIdFromPath(folder, "cars/");
             if (carId != -1) {
-                com.carselling.oldcar.dto.car.CarResponse car = carService.getVehicleById(String.valueOf(carId));
+                CarResponse car = carService.getVehicleById(String.valueOf(carId));
                 boolean isOwner = car.getDealerId().equals(currentUser.getId().toString());
                 if (!isOwner && !isAdmin(currentUser)) {
                     throw new SecurityException("You are not authorized to upload to this car's folder");

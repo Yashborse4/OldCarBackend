@@ -4,7 +4,9 @@ import com.carselling.oldcar.dto.file.FileUploadResponse;
 import com.carselling.oldcar.model.ResourceType;
 import com.carselling.oldcar.model.UploadedFile;
 import com.carselling.oldcar.model.User;
+import com.carselling.oldcar.model.TemporaryFile;
 import com.carselling.oldcar.repository.UploadedFileRepository;
+import com.carselling.oldcar.repository.TemporaryFileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,9 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -87,9 +92,9 @@ public class B2FileService {
                 .build();
     }
 
-    public java.util.List<FileUploadResponse> uploadMultipleFiles(java.util.List<MultipartFile> files, String folder,
+    public List<FileUploadResponse> uploadMultipleFiles(List<MultipartFile> files, String folder,
             User uploader, ResourceType ownerType, Long ownerId) {
-        java.util.List<FileUploadResponse> responses = new java.util.ArrayList<>();
+        List<FileUploadResponse> responses = new ArrayList<>();
         for (MultipartFile file : files) {
             try {
                 responses.add(uploadFile(file, folder, uploader, ownerType, ownerId));
@@ -125,7 +130,7 @@ public class B2FileService {
         private String fileUrl; // Public URL (future)
     }
 
-    private final com.carselling.oldcar.repository.TemporaryFileRepository temporaryFileRepository;
+    private final TemporaryFileRepository temporaryFileRepository;
 
     public DirectUploadInitResponse initDirectUpload(String originalFileName, String folder, User uploader) {
         // Enforce temp folder for direct uploads
@@ -181,7 +186,7 @@ public class B2FileService {
         // Basic implementation assumes small-ish files with SHA1.
 
         if (fileHash != null && !fileHash.equals("none")) {
-            java.util.Optional<UploadedFile> existing = uploadedFileRepository.findByFileHashAndUploadedById(fileHash,
+            Optional<UploadedFile> existing = uploadedFileRepository.findByFileHashAndUploadedById(fileHash,
                     uploader.getId());
             if (existing.isPresent()) {
                 log.info("Duplicate file detected for user {}: {}", uploader.getId(), fileHash);
@@ -212,7 +217,7 @@ public class B2FileService {
         }
         String publicUrl = domain + "/" + decodedPath;
 
-        com.carselling.oldcar.model.TemporaryFile tempFile = com.carselling.oldcar.model.TemporaryFile.builder()
+        TemporaryFile tempFile = TemporaryFile.builder()
                 .fileUrl(publicUrl)
                 .fileId(fileId) // Store B2 File ID
                 .fileName(fileName)
