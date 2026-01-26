@@ -143,30 +143,55 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
      * Prioritizes real client IP over proxy addresses
      */
     private String getClientIdentifier(HttpServletRequest request) {
+        // 1. Check for Authenticated User
+        try {
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
+                    .getContext().getAuthentication();
+
+            if (auth != null && auth.isAuthenticated() &&
+                    !(auth instanceof org.springframework.security.authentication.AnonymousAuthenticationToken)) {
+
+                Object principal = auth.getPrincipal();
+                if (principal instanceof com.carselling.oldcar.security.UserPrincipal) {
+                    Long userId = ((com.carselling.oldcar.security.UserPrincipal) principal).getId();
+                    return "user:" + userId;
+                } else if (principal instanceof org.springframework.security.core.userdetails.UserDetails) {
+                    return "user:"
+                            + ((org.springframework.security.core.userdetails.UserDetails) principal).getUsername();
+                } else {
+                    return "user:" + auth.getName();
+                }
+            }
+        } catch (Exception e) {
+            // Ignore security context errors, fall back to IP
+            log.trace("Could not retrieve user from security context", e);
+        }
+
+        // 2. Fall back to IP-based identification
         // Check for X-Forwarded-For header (common with proxies/load balancers)
         String forwardedFor = request.getHeader("X-Forwarded-For");
         if (forwardedFor != null && !forwardedFor.trim().isEmpty()) {
             // Take the first IP in the chain (original client)
             String clientIp = forwardedFor.split(",")[0].trim();
             if (!clientIp.isEmpty() && !"unknown".equalsIgnoreCase(clientIp)) {
-                return clientIp;
+                return "ip:" + clientIp;
             }
         }
 
         // Check for X-Real-IP header (common with Nginx)
         String realIp = request.getHeader("X-Real-IP");
         if (realIp != null && !realIp.trim().isEmpty() && !"unknown".equalsIgnoreCase(realIp)) {
-            return realIp;
+            return "ip:" + realIp;
         }
 
         // Check for Cloudflare specific header
         String cfConnectingIp = request.getHeader("CF-Connecting-IP");
         if (cfConnectingIp != null && !cfConnectingIp.trim().isEmpty()) {
-            return cfConnectingIp;
+            return "ip:" + cfConnectingIp;
         }
 
         // Fall back to remote address
         String remoteAddr = request.getRemoteAddr();
-        return remoteAddr != null ? remoteAddr : "unknown";
+        return "ip:" + (remoteAddr != null ? remoteAddr : "unknown");
     }
 }

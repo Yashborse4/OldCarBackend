@@ -270,13 +270,15 @@ public class JwtTokenProvider {
         try {
             Jwts.parserBuilder()
                     .setSigningKey(key)
+                    .setAllowedClockSkewSeconds(60) // Allow 60 seconds of skew for device time differences
                     .build()
                     .parseClaimsJws(token);
             return true;
         } catch (MalformedJwtException e) {
             log.error("Invalid JWT token format", e);
         } catch (ExpiredJwtException e) {
-            log.error("Expired JWT token", e);
+            // Log with less severity if it's just expired, but maybe useful for debug
+            log.info("Expired JWT token: {}", e.getMessage());
         } catch (UnsupportedJwtException e) {
             log.error("Unsupported JWT token", e);
         } catch (IllegalArgumentException e) {
