@@ -51,6 +51,7 @@ public class DirectUploadDTOs {
     public static class CompleteResponse {
         private String fileUrl;
         private String fileName;
+        private Long id; // DB ID of TemporaryFile or UploadedFile
         private boolean success;
     }
 }

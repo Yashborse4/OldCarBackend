@@ -34,6 +34,7 @@ public class FileController {
     private final FileUploadService fileUploadService;
     private final com.carselling.oldcar.b2.B2FileService b2FileService;
     private final FileValidationService fileValidationService;
+    private final com.carselling.oldcar.service.ChecksumService checksumService;
     private final UserRepository userRepository;
 
     /**
@@ -44,8 +45,15 @@ public class FileController {
     public ResponseEntity<?> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "folder", defaultValue = "general") String folder,
+            @RequestHeader(value = "X-File-Checksum", required = false) String checksum,
             Authentication authentication) {
         try {
+            // Verify checksum if provided
+            if (checksum != null && !checksumService.validateChecksum(file, checksum)) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Map.of("error", "Invalid Checksum", "message",
+                                "The file checksum does not match provided MD5"));
+            }
             UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
             User currentUser = userRepository.findById(principal.getId())
                     .orElseThrow(() -> new ResourceNotFoundException("User", "id", principal.getId().toString()));
@@ -337,7 +345,7 @@ public class FileController {
                 resourceOwnerId = request.getCarId();
             }
 
-            com.carselling.oldcar.model.UploadedFile uploadedFile = b2FileService.completeDirectUpload(
+            Object result = b2FileService.completeDirectUpload(
                     request.getB2FileName(),
                     request.getFileId(),
                     currentUser,
@@ -347,20 +355,34 @@ public class FileController {
                     request.getOriginalFileName(),
                     request.getContentType());
 
+            String responseFileUrl;
+            String responseFileName;
+            Long responseId;
+
+            if (result instanceof com.carselling.oldcar.model.UploadedFile) {
+                com.carselling.oldcar.model.UploadedFile uf = (com.carselling.oldcar.model.UploadedFile) result;
+                responseFileUrl = uf.getFileUrl();
+                responseFileName = uf.getFileName();
+                responseId = uf.getId();
+            } else if (result instanceof com.carselling.oldcar.model.TemporaryFile) {
+                com.carselling.oldcar.model.TemporaryFile tf = (com.carselling.oldcar.model.TemporaryFile) result;
+                responseFileUrl = tf.getFileUrl();
+                responseFileName = tf.getFileName();
+                responseId = tf.getId();
+            } else {
+                throw new RuntimeException("Unknown upload result type");
+            }
+
             // If car image, update media status?
             // Ideally we should process media or set status.
             if (resourceType == ResourceType.CAR_IMAGE) {
                 carService.updateMediaStatus(resourceOwnerId.toString(), MediaStatus.UPLOADED, currentUser.getId());
-                // Trigger async processing if we had valid path list... but here we have one
-                // file?
-                // Async media service expects list of paths.
-                // We can trigger it for this single file or client calls complete-set?
-                // For now, simple status update.
             }
 
             return ResponseEntity.ok(com.carselling.oldcar.dto.file.DirectUploadDTOs.CompleteResponse.builder()
-                    .fileUrl(uploadedFile.getFileUrl())
-                    .fileName(uploadedFile.getFileName())
+                    .fileUrl(responseFileUrl)
+                    .fileName(responseFileName)
+                    .id(responseId)
                     .success(true)
                     .build());
 
