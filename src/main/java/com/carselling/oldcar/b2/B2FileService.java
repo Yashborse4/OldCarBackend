@@ -125,20 +125,33 @@ public class B2FileService {
         private String fileUrl; // Public URL (future)
     }
 
-    public DirectUploadInitResponse initDirectUpload(String originalFileName, String folder, User uploader) {
-        String uniqueFileName = generateUniqueFileName(originalFileName, uploader.getId());
-        String fullPath = folder + "/" + uniqueFileName;
+    private final com.carselling.oldcar.repository.TemporaryFileRepository temporaryFileRepository;
 
-        // Ensure path is URL encoded for B2 if needed, but for "X-Bz-File-Name" header,
-        // B2 expects percent-encoded UTF-8.
-        // We will pass the RAW unique filename to the client, and the Client MUST send
-        // it in X-Bz-File-Name header.
+    public DirectUploadInitResponse initDirectUpload(String originalFileName, String folder, User uploader) {
+        // Enforce temp folder for direct uploads
+        // Format: temp/{userId}/
+        String tempFolder = "temp/" + uploader.getId();
+
+        String uniqueFileName = generateUniqueFileName(originalFileName, uploader.getId());
+        String fullPath = tempFolder + "/" + uniqueFileName;
+
+        // B2 requires the file name to be URL-encoded for the upload request header if
+        // it contains special chars
+        // But the path itself is the "file name" in B2 concept (including folders)
         String b2FileName = URLEncoder.encode(fullPath, StandardCharsets.UTF_8).replace("+", "%20");
 
         // 1. Get One-Time Upload URL from B2
         B2Client.GetUploadUrlResponse uploadUrl = b2Client.getUploadUrl();
 
-        // 2. Construct future public URL
+        // 2. Construct future public URL (though it might not be public yet for temp)
+        // Note: Temp files might need a different path or authentication if they
+        // shouldn't be public.
+        // For now, assuming standard CDN path but we might restrict access logic
+        // elsewhere or via B2 buckets.
+        // B2 bucket is usually either all public or all private. If public, "temp/" is
+        // public.
+        // We will assume "temp/" is public for the user to verify (preview) before
+        // finalizing.
         String domain = properties.getCdnDomain();
         if (domain.endsWith("/")) {
             domain = domain.substring(0, domain.length() - 1);
@@ -153,14 +166,43 @@ public class B2FileService {
                 .build();
     }
 
-    public UploadedFile completeDirectUpload(String b2FileName, String fileId, User uploader, ResourceType ownerType,
+    public Object completeDirectUpload(String b2FileName, String fileId, User uploader, ResourceType ownerType,
             Long ownerId, Long fileSize, String originalFileName, String contentType) {
-        // Decode filename to get original path if needed, but we stored it encoded-ish.
-        // Actually we told client to use b2FileName. Client returns it.
+        // 1. Get File Info from B2 to verify and get Hash (contentSha1)
+        B2Client.B2FileInfo fileInfo = b2Client.getFileInfo(fileId);
+        String fileHash = fileInfo.getContentSha1();
 
+        // 2. DUPLICATE DETECTION
+        // Check if this hash already exists in PERMANENT files for this user (or
+        // globally if public)
+        // Checking mostly for this user to avoid re-uploading same file
+        // NOTE: hash might be "none" for large files uploaded via multi-part in B2,
+        // handle that?
+        // Basic implementation assumes small-ish files with SHA1.
+
+        if (fileHash != null && !fileHash.equals("none")) {
+            java.util.Optional<UploadedFile> existing = uploadedFileRepository.findByFileHashAndUploadedById(fileHash,
+                    uploader.getId());
+            if (existing.isPresent()) {
+                log.info("Duplicate file detected for user {}: {}", uploader.getId(), fileHash);
+                // We should ideally DELETE the temp file just uploaded to save space, and
+                // return the existing one.
+                // Or just point to existing.
+                // Let's delete the 'temp' file that was just uploaded.
+                try {
+                    b2Client.deleteFileVersion(b2FileName, fileId);
+                } catch (Exception e) {
+                    log.error("Failed to delete duplicate temp file from B2: {}", b2FileName, e);
+                }
+
+                // Return existing file as "UploadedFile" directly?
+                // The caller expects confirmation. We can reuse.
+                return existing.get();
+            }
+        }
+
+        // 3. Save as TemporaryFile
         String decodedPath = java.net.URLDecoder.decode(b2FileName, StandardCharsets.UTF_8);
-        // fullPath = folder/uniqueName
-
         String fileName = decodedPath.contains("/") ? decodedPath.substring(decodedPath.lastIndexOf("/") + 1)
                 : decodedPath;
 
@@ -170,18 +212,18 @@ public class B2FileService {
         }
         String publicUrl = domain + "/" + decodedPath;
 
-        UploadedFile uploadedFile = UploadedFile.builder()
+        com.carselling.oldcar.model.TemporaryFile tempFile = com.carselling.oldcar.model.TemporaryFile.builder()
                 .fileUrl(publicUrl)
-                .fileName(fileName) // Unique name
-                .originalFileName(originalFileName != null ? originalFileName : fileName) // Use provided or fallback
-                .contentType(contentType != null ? contentType : "application/octet-stream") // Use provided or fallback
-                .size(fileSize != null ? fileSize : 0L)
+                .fileId(fileId) // Store B2 File ID
+                .fileName(fileName)
+                .originalFileName(originalFileName != null ? originalFileName : fileName)
+                .contentType(contentType != null ? contentType : "application/octet-stream")
+                .fileSize(fileSize != null ? fileSize : 0L)
                 .uploadedBy(uploader)
-                .ownerType(ownerType)
-                .ownerId(ownerId)
+                .fileHash(fileHash)
                 .build();
 
-        return uploadedFileRepository.save(uploadedFile);
+        return temporaryFileRepository.save(tempFile);
     }
 
     private String generateUniqueFileName(String originalFilename, Long userId) {

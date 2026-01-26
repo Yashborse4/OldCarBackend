@@ -160,6 +160,70 @@ public class B2Client implements InitializingBean {
         return cachedBucketId;
     }
 
+    @Data
+    public static class B2FileInfo {
+        private String fileId;
+        private String fileName;
+        private String contentSha1;
+        private Map<String, String> fileInfo;
+    }
+
+    public B2FileInfo getFileInfo(String fileId) {
+        try {
+            com.backblaze.b2.client.structures.B2FileVersion fileVersion = client.getFileInfo(fileId);
+
+            B2FileInfo info = new B2FileInfo();
+            info.setFileId(fileVersion.getFileId());
+            info.setFileName(fileVersion.getFileName());
+            info.setContentSha1(fileVersion.getContentSha1());
+            info.setFileInfo(fileVersion.getFileInfo());
+
+            return info;
+        } catch (Exception e) {
+            log.error("Error getting file info from B2", e);
+            throw new RuntimeException("Failed to get file info", e);
+        }
+    }
+
+    public void copyFile(String sourceFileId, String targetFileName) {
+        try {
+            String bucketId = getCachedBucketId();
+
+            // Construct request using Builder pattern
+            // Assuming builder(sourceFileId, fileName) defaults to same bucket or infers it
+            // Removing explicit bucket setter as it caused compilation error
+            com.backblaze.b2.client.structures.B2CopyFileRequest request = com.backblaze.b2.client.structures.B2CopyFileRequest
+                    .builder(sourceFileId, targetFileName)
+                    .build();
+
+            // Retry logic for copy operation
+            int maxRetries = 3;
+            int attempt = 0;
+            while (attempt < maxRetries) {
+                try {
+                    client.copySmallFile(request);
+                    log.info("Copied file {} to {}", sourceFileId, targetFileName);
+                    return;
+                } catch (Exception e) {
+                    attempt++;
+                    if (attempt >= maxRetries) {
+                        throw e; // Rethrow last exception
+                    }
+                    log.warn("Copy attempt {} failed for file {}, retrying...", attempt, sourceFileId);
+                    try {
+                        Thread.sleep(1000 * attempt);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("Error copying file in B2", e);
+            throw new RuntimeException("Failed to copy file in B2", e);
+        }
+    }
+
     /**
      * Internal method to resolve bucket ID from name or ID string
      */
