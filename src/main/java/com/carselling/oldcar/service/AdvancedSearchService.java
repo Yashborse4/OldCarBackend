@@ -4,10 +4,11 @@ import com.carselling.oldcar.document.VehicleSearchDocument;
 import com.carselling.oldcar.model.Car;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.CarRepository;
+import com.carselling.oldcar.dto.car.CarSearchCriteria;
+import com.carselling.oldcar.dto.car.CarSearchDtos.CarSearchHitDto;
+import com.carselling.oldcar.mapper.VehicleSearchResultMapper;
 
 import com.carselling.oldcar.search.VehicleSearchRepository;
-import lombok.Builder;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -33,23 +35,7 @@ public class AdvancedSearchService {
 
     private final VehicleSearchRepository vehicleSearchRepository;
     private final CarRepository carRepository;
-
-    @Data
-    @Builder
-    public static class CarSearchCriteria {
-        private String keyword;
-        private List<String> brands;
-        private List<String> models;
-        private String variant;
-        private List<String> fuelTypes;
-        private List<String> transmissions;
-        private List<String> cities;
-        private Integer minYear;
-        private Integer maxYear;
-        private BigDecimal minPrice;
-        private BigDecimal maxPrice;
-        private Boolean verifiedDealer;
-    }
+    private final VehicleSearchResultMapper vehicleSearchResultMapper;
 
     /**
      * Search cars using Elasticsearch with keyword + boosting and apply filters
@@ -57,21 +43,25 @@ public class AdvancedSearchService {
      * This avoids direct dependencies on low-level Elasticsearch APIs.
      */
     @Transactional(readOnly = true)
-    public Page<VehicleSearchDocument> searchCars(CarSearchCriteria criteria, Pageable pageable) {
+    public Page<CarSearchHitDto> searchCars(CarSearchCriteria criteria,
+            Pageable pageable, User currentUser) {
         log.debug("Searching cars with criteria: {}", criteria);
 
         Page<VehicleSearchDocument> basePage;
-        if (criteria.getKeyword() != null && !criteria.getKeyword().isBlank()) {
-            String q = criteria.getKeyword().trim();
-            
+        if (criteria.getQuery() != null && !criteria.getQuery().isBlank()) {
+            String q = criteria.getQuery().trim();
+
             // Use security-conscious method that enforces public visibility rules
-            if (criteria.getBrands() != null || criteria.getModels() != null) {
-                basePage = vehicleSearchRepository.findWithBoostingSearchAndFilters(q, criteria.getBrands(), criteria.getModels(), pageable);
+            if (criteria.getMake() != null || criteria.getModel() != null) {
+                basePage = vehicleSearchRepository.findWithBoostingSearchAndFilters(q, criteria.getMake(),
+                        criteria.getModel(), pageable);
             } else {
-                basePage = vehicleSearchRepository.findWithBoostingSearchAndActiveTrueAndDealerVerifiedTrue(q, pageable);
+                basePage = vehicleSearchRepository.findWithBoostingSearchAndActiveTrueAndDealerVerifiedTrue(q,
+                        pageable);
             }
         } else {
-            // Push basic visibility (active + verified dealer) into Elasticsearch when possible
+            // Push basic visibility (active + verified dealer) into Elasticsearch when
+            // possible
             if (criteria.getVerifiedDealer() == null || Boolean.TRUE.equals(criteria.getVerifiedDealer())) {
                 basePage = vehicleSearchRepository.findByActiveTrueAndDealerVerifiedTrue(pageable);
             } else {
@@ -82,14 +72,16 @@ public class AdvancedSearchService {
 
         // Apply additional filters in-memory for fields not handled by ES queries
         List<VehicleSearchDocument> filtered = basePage.getContent().stream()
-                .filter(doc -> matchesAny(criteria.getBrands(), doc.getBrand()))
-                .filter(doc -> matchesAny(criteria.getModels(), doc.getModel()))
+                .filter(doc -> matchesAny(criteria.getMake(), doc.getBrand()))
+                .filter(doc -> matchesAny(criteria.getModel(), doc.getModel()))
                 .filter(doc -> matches(criteria.getVariant(), doc.getVariant()))
-                .filter(doc -> matchesAny(criteria.getFuelTypes(), doc.getFuelType()))
-                .filter(doc -> matchesAny(criteria.getTransmissions(), doc.getTransmission()))
-                .filter(doc -> matchesAny(criteria.getCities(), doc.getCity()))
+                .filter(doc -> matchesAny(criteria.getFuelType(), doc.getFuelType()))
+                .filter(doc -> matchesAny(criteria.getTransmission(), doc.getTransmission()))
+                .filter(doc -> matchesAny(criteria.getLocation(), doc.getCity()))
                 .filter(doc -> inRange(criteria.getMinYear(), criteria.getMaxYear(), doc.getYear()))
-                .filter(doc -> inRange(criteria.getMinPrice(), criteria.getMaxPrice(),
+                .filter(doc -> inRange(
+                        criteria.getMinPrice() != null ? BigDecimal.valueOf(criteria.getMinPrice()) : null,
+                        criteria.getMaxPrice() != null ? BigDecimal.valueOf(criteria.getMaxPrice()) : null,
                         doc.getPrice() != null ? BigDecimal.valueOf(doc.getPrice()) : null))
                 // Security: These should already be filtered by ES, but double-check
                 .filter(doc -> doc.isActive()) // Enforce Status = ACTIVE
@@ -104,7 +96,12 @@ public class AdvancedSearchService {
 
         List<VehicleSearchDocument> pageContent = filtered.subList(fromIndex, toIndex);
 
-        return new PageImpl<>(pageContent, pageable, totalElements);
+        // Map to DTO
+        List<CarSearchHitDto> hitDtos = pageContent.stream()
+                .map(vehicleSearchResultMapper::toDto)
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(hitDtos, pageable, totalElements);
     }
 
     private boolean matches(String expected, String actual) {
@@ -231,7 +228,7 @@ public class AdvancedSearchService {
                 .active(Boolean.TRUE.equals(car.getIsActive()) && !Boolean.TRUE.equals(car.getIsSold()))
                 .dealerVerified(verifiedDealer)
                 .carApproved(true) // Default to true or add logic if 'isApproved' exists
-                .createdAt(car.getCreatedAt() != null ? car.getCreatedAt().toInstant(java.time.ZoneOffset.UTC) : null)
+                .createdAt(car.getCreatedAt() != null ? car.getCreatedAt().toInstant(ZoneOffset.UTC) : null)
                 .normalizedBrand(car.getMake() != null ? car.getMake().toLowerCase() : null)
                 .normalizedModel(car.getModel() != null ? car.getModel().toLowerCase() : null)
                 .normalizedCity(owner != null && owner.getLocation() != null ? owner.getLocation().toLowerCase() : null)
