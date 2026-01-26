@@ -42,6 +42,8 @@ public interface CarService {
 
     CarResponse updateMediaStatus(String id, MediaStatus status, Long currentUserId);
 
+    CarResponse uploadMedia(String id, java.util.List<String> imageUrls, String videoUrl, Long currentUserId);
+
     Page<CarResponse> searchVehicles(CarSearchCriteria criteria, Pageable pageable);
 
     CarAnalyticsResponse getVehicleAnalytics(String id, Long currentUserId);
@@ -59,4 +61,6 @@ public interface CarService {
     CarStatistics getCarStatistics();
 
     void incrementCarStat(String id, String statType);
+
+    CarResponse finalizeMedia(String id, java.util.List<Long> tempFileIds, Long currentUserId);
 }

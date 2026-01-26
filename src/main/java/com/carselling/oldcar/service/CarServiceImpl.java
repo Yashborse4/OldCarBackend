@@ -10,6 +10,7 @@ import com.carselling.oldcar.dto.car.CarAnalyticsResponse;
 import com.carselling.oldcar.dto.CarStatistics;
 import com.carselling.oldcar.dto.user.UserSummary;
 import com.carselling.oldcar.model.Role;
+import com.carselling.oldcar.model.CarStatus;
 import com.carselling.oldcar.model.DealerStatus;
 import com.carselling.oldcar.model.Car;
 import com.carselling.oldcar.model.MediaStatus;
@@ -47,6 +48,7 @@ public class CarServiceImpl implements CarService {
     private final CarMasterRepository carMasterRepository;
     private final com.carselling.oldcar.b2.B2FileService b2FileService; // Injected instead of Firebase
     private final FileValidationService fileValidationService;
+    private final com.carselling.oldcar.service.MediaFinalizationService mediaFinalizationService;
 
     /**
      * Get all vehicles with pagination
@@ -183,10 +185,13 @@ public class CarServiceImpl implements CarService {
                         .build())
                 .sellerPhone(owner.getPhoneNumber())
                 .isFeatured(car.getIsFeatured())
+                .status(car.getStatus() != null ? car.getStatus().name() : null)
+                .mediaStatus(car.getMediaStatus() != null ? car.getMediaStatus().name() : null)
                 .isSold(car.getIsSold())
+                .isAvailable(car.getIsAvailable())
+                .isApproved(car.getIsApproved())
                 .viewCount(car.getViewCount())
                 .location(car.getLocation())
-                .isApproved(car.getIsApproved())
                 .updatedAt(car.getUpdatedAt())
                 .build();
     }
@@ -247,7 +252,8 @@ public class CarServiceImpl implements CarService {
                 .owner(owner)
                 // Ignore images in initial creation - they must be uploaded via upload API
                 .images(new java.util.ArrayList<>())
-                .mediaStatus(MediaStatus.PENDING)
+                .status(CarStatus.DRAFT)
+                .mediaStatus(MediaStatus.INIT)
                 .idempotencyKey(idempotencyKey)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
@@ -263,16 +269,54 @@ public class CarServiceImpl implements CarService {
                     });
         }
 
-        // 1. If imageUrl (Banner) is NOT provided, but we have images, use the first
+        Car savedCar = carRepository.save(car); // Save first to get ID for folder structure
+
+        // Finalize Temporary Media if provided
+        if (request.getTempFileIds() != null && !request.getTempFileIds().isEmpty()) {
+            try {
+                log.info("Finalizing {} temporary files for car {}", request.getTempFileIds().size(), savedCar.getId());
+                String targetFolder = "cars/" + savedCar.getId() + "/images";
+
+                java.util.List<com.carselling.oldcar.model.UploadedFile> finalizedFiles = mediaFinalizationService
+                        .finalizeUploads(request.getTempFileIds(), targetFolder,
+                                com.carselling.oldcar.model.ResourceType.CAR_IMAGE, savedCar.getId(), owner);
+
+                java.util.List<String> finalizedUrls = finalizedFiles.stream()
+                        .map(com.carselling.oldcar.model.UploadedFile::getFileUrl)
+                        .collect(Collectors.toList());
+
+                car.setImages(finalizedUrls);
+                car.setMediaStatus(MediaStatus.COMPLETED); // Or READY?
+
+                // If we have images, set the first as banner
+                if (!finalizedUrls.isEmpty()) {
+                    car.setImageUrl(finalizedUrls.get(0));
+                    car.setMediaStatus(MediaStatus.READY);
+                    // If verified dealer, auto active? logic duplicated from uploadMedia
+                    if (owner.canListCarsPublicly()) {
+                        car.setIsActive(true);
+                        car.setIsAvailable(true);
+                    }
+                }
+
+                // Save again with images
+                savedCar = carRepository.save(car);
+
+            } catch (Exception e) {
+                log.error("Failed to finalize media for car {}: {}", savedCar.getId(), e.getMessage());
+                // Don't fail car creation? Or should we?
+                // If media fails, car exists but has no images.
+            }
+        }
+
+        // Legacy fallback:If imageUrl (Banner) is NOT provided, but we have images, use
+        // the first
         // one as banner
         if ((car.getImageUrl() == null || car.getImageUrl().isBlank()) && !car.getImages().isEmpty()) {
             car.setImageUrl(car.getImages().get(0));
+            carRepository.save(car); // Save update
         }
 
-        log.info("Saving new car. MediaStatus: {}, ImageUrl: '{}', VideoUrl: '{}'",
-                car.getMediaStatus(), car.getImageUrl(), car.getVideoUrl());
-
-        Car savedCar = carRepository.save(car);
         log.info("Created new vehicle with ID: {} for user: {}", savedCar.getId(), currentUserId);
 
         return convertToResponseV2(savedCar);
@@ -437,42 +481,47 @@ public class CarServiceImpl implements CarService {
         }
 
         // Update status based on string value
-        switch (status.toUpperCase()) {
-            case "AVAILABLE":
-                car.setIsSold(false);
-                car.setIsAvailable(true);
-                // Only activate if Verified
-                if (car.getOwner().canListCarsPublicly()) {
+        try {
+            CarStatus newStatus = CarStatus.valueOf(status.toUpperCase());
+            car.setStatus(newStatus);
+
+            // Sync legacy booleans based on status
+            switch (newStatus) {
+                case PUBLISHED: // Was AVAILABLE
+                    car.setIsSold(false);
+                    car.setIsAvailable(true);
+                    if (car.getOwner().canListCarsPublicly()) {
+                        car.setIsActive(true);
+                    } else {
+                        car.setIsActive(false); // Pending verification
+                    }
+                    break;
+                case SOLD:
+                    car.setIsSold(true);
+                    car.setIsAvailable(false);
+                    // car.setIsActive(true); // Sold cars can be visible
+                    break;
+                case RESERVED:
+                    car.setIsAvailable(false);
+                    car.setIsSold(false);
                     car.setIsActive(true);
-                } else {
+                    break;
+                case PROCESSING:
                     car.setIsActive(false);
-                    log.info("Dealer {} is not verified, keeping vehicle {} inactive despite AVAILABLE status",
-                            currentUserId, id);
-                }
-                break;
-            case "SOLD":
-                car.setIsSold(true);
-                car.setIsAvailable(false);
-                break;
-            case "RESERVED":
-                car.setIsAvailable(false);
-                car.setIsSold(false);
-                car.setIsActive(true); // Reserved cars might still be visible (just not 'available')? Adjust if
-                                       // needed.
-                break;
-            case "PROCESSING":
-                // Processing = active but not yet ready (media uploading)
-                car.setIsActive(false);
-                car.setIsSold(false);
-                car.setIsAvailable(false);
-                break;
-            case "INACTIVE":
-            case "ARCHIVED":
-                car.setIsActive(false);
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid status: " + status +
-                        ". Valid statuses: AVAILABLE, SOLD, RESERVED, PROCESSING, INACTIVE, ARCHIVED");
+                    car.setIsSold(false);
+                    car.setIsAvailable(false);
+                    break;
+                case DRAFT:
+                case ARCHIVED:
+                    car.setIsActive(false);
+                    car.setIsAvailable(false);
+                    break;
+                case DELETED:
+                    car.setIsActive(false);
+                    break;
+            }
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid status: " + status);
         }
 
         car.setUpdatedAt(LocalDateTime.now());
@@ -542,6 +591,57 @@ public class CarServiceImpl implements CarService {
 
         } else if (status == MediaStatus.FAILED) {
             car.setIsActive(false);
+        }
+
+        car.setUpdatedAt(LocalDateTime.now());
+        Car updatedCar = carRepository.save(car);
+
+        return convertToResponseV2(updatedCar);
+    }
+
+    /**
+     * Upload Media Logic - Separated from Creation
+     */
+    public CarResponse uploadMedia(String id, java.util.List<String> imageUrls, String videoUrl, Long currentUserId) {
+        log.info("Processing media upload for car: {} by user: {}", id, currentUserId);
+
+        Car car = carRepository.findById(Long.parseLong(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
+
+        // Check ownership or admin role
+        if (!car.getOwner().getId().equals(currentUserId) && !isAdmin(currentUserId)) {
+            throw new UnauthorizedActionException("You can only upload media for your own vehicles");
+        }
+
+        // Validate URLs
+        if (imageUrls != null) {
+            for (String url : imageUrls) {
+                fileValidationService.validateFileUrl(url);
+            }
+            car.setImages(imageUrls);
+
+            // Set first image as banner if not set
+            if (!imageUrls.isEmpty() && (car.getImageUrl() == null || car.getImageUrl().isBlank())) {
+                car.setImageUrl(imageUrls.get(0));
+            }
+        }
+
+        if (videoUrl != null && !videoUrl.isBlank()) {
+            fileValidationService.validateFileUrl(videoUrl);
+            car.setVideoUrl(videoUrl);
+        }
+
+        // Update status flow: INIT -> COMPLETED (bypassing PROCESSING for synchronous
+        // update of URLs)
+        car.setMediaStatus(MediaStatus.COMPLETED);
+
+        // Auto-activate if verified dealer
+        if (car.getOwner().canListCarsPublicly()) {
+            car.setIsActive(true);
+            car.setIsAvailable(true);
+        } else {
+            log.info("Media completed for vehicle {}, but dealer {} is unverified. Keeping inactive.", id,
+                    currentUserId);
         }
 
         car.setUpdatedAt(LocalDateTime.now());
@@ -795,7 +895,7 @@ public class CarServiceImpl implements CarService {
                 .shares(car.getShareCount() != null ? (long) car.getShareCount() : 0L)
                 .status(getCarStatus(car))
                 .mediaStatus(car.getMediaStatus() != null ? car.getMediaStatus().name() : "NONE")
-                .featured(Boolean.TRUE.equals(car.getIsFeatured()) &&
+                .isFeatured(Boolean.TRUE.equals(car.getIsFeatured()) &&
                         (car.getFeaturedUntil() == null || car.getFeaturedUntil().isAfter(LocalDateTime.now())))
                 .createdAt(car.getCreatedAt())
                 .updatedAt(car.getUpdatedAt())
@@ -909,5 +1009,63 @@ public class CarServiceImpl implements CarService {
         }
 
         carRepository.save(car);
+    }
+
+    /**
+     * Finalize media for existing car
+     */
+    public CarResponse finalizeMedia(String id, java.util.List<Long> tempFileIds, Long currentUserId) {
+        log.info("Finalizing media for car: {} by user: {}", id, currentUserId);
+
+        Car car = carRepository.findById(Long.parseLong(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
+
+        // Check ownership or admin role
+        if (!car.getOwner().getId().equals(currentUserId) && !isAdmin(currentUserId)) {
+            throw new UnauthorizedActionException("You can only upload media for your own vehicles");
+        }
+
+        if (tempFileIds != null && !tempFileIds.isEmpty()) {
+            try {
+                log.info("Finalizing {} temporary files for car {}", tempFileIds.size(), id);
+                String targetFolder = "cars/" + id + "/images";
+
+                java.util.List<com.carselling.oldcar.model.UploadedFile> finalizedFiles = mediaFinalizationService
+                        .finalizeUploads(tempFileIds, targetFolder, com.carselling.oldcar.model.ResourceType.CAR_IMAGE,
+                                car.getId(), car.getOwner());
+
+                java.util.List<String> finalizedUrls = finalizedFiles.stream()
+                        .map(com.carselling.oldcar.model.UploadedFile::getFileUrl)
+                        .collect(Collectors.toList());
+
+                // Append to existing images
+                java.util.List<String> currentImages = new java.util.ArrayList<>(car.getImages());
+                currentImages.addAll(finalizedUrls);
+                car.setImages(currentImages);
+
+                car.setMediaStatus(MediaStatus.COMPLETED); // As per uploadMedia
+
+                // If we have images, ensure banner set
+                if (!currentImages.isEmpty() && (car.getImageUrl() == null || car.getImageUrl().isBlank())) {
+                    car.setImageUrl(currentImages.get(0));
+                    car.setMediaStatus(MediaStatus.READY);
+
+                    if (car.getOwner().canListCarsPublicly()) {
+                        car.setIsActive(true);
+                        car.setIsAvailable(true);
+                    }
+                }
+
+                car.setUpdatedAt(LocalDateTime.now());
+                Car updatedCar = carRepository.save(car);
+                return convertToResponseV2(updatedCar);
+
+            } catch (Exception e) {
+                log.error("Failed to finalize media for car {}: {}", id, e.getMessage());
+                throw new RuntimeException("Media finalization failed", e);
+            }
+        }
+
+        return convertToResponseV2(car);
     }
 }
