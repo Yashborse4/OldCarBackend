@@ -1,6 +1,7 @@
 package com.carselling.oldcar.util;
 
 import com.carselling.oldcar.model.Role;
+import com.carselling.oldcar.security.UserPrincipal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -39,8 +40,8 @@ public class SecurityUtils {
             Object principal = authentication.getPrincipal();
 
             // If principal is a UserPrincipal (our custom class), use getId() directly
-            if (principal instanceof com.carselling.oldcar.security.UserPrincipal) {
-                com.carselling.oldcar.security.UserPrincipal userPrincipal = (com.carselling.oldcar.security.UserPrincipal) principal;
+            if (principal instanceof UserPrincipal) {
+                UserPrincipal userPrincipal = (UserPrincipal) principal;
                 return userPrincipal.getId();
             }
 

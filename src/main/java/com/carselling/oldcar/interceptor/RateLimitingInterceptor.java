@@ -9,9 +9,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
+import com.carselling.oldcar.security.UserPrincipal;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -145,19 +150,19 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
     private String getClientIdentifier(HttpServletRequest request) {
         // 1. Check for Authenticated User
         try {
-            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
+            Authentication auth = SecurityContextHolder
                     .getContext().getAuthentication();
 
             if (auth != null && auth.isAuthenticated() &&
-                    !(auth instanceof org.springframework.security.authentication.AnonymousAuthenticationToken)) {
+                    !(auth instanceof AnonymousAuthenticationToken)) {
 
                 Object principal = auth.getPrincipal();
-                if (principal instanceof com.carselling.oldcar.security.UserPrincipal) {
-                    Long userId = ((com.carselling.oldcar.security.UserPrincipal) principal).getId();
+                if (principal instanceof UserPrincipal) {
+                    Long userId = ((UserPrincipal) principal).getId();
                     return "user:" + userId;
-                } else if (principal instanceof org.springframework.security.core.userdetails.UserDetails) {
+                } else if (principal instanceof UserDetails) {
                     return "user:"
-                            + ((org.springframework.security.core.userdetails.UserDetails) principal).getUsername();
+                            + ((UserDetails) principal).getUsername();
                 } else {
                     return "user:" + auth.getName();
                 }
