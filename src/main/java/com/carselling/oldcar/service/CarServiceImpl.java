@@ -20,6 +20,10 @@ import com.carselling.oldcar.exception.UnauthorizedActionException;
 import com.carselling.oldcar.repository.CarRepository;
 import com.carselling.oldcar.repository.UserRepository;
 import com.carselling.oldcar.repository.CarMasterRepository;
+import com.carselling.oldcar.b2.B2FileService;
+import com.carselling.oldcar.model.UploadedFile;
+import com.carselling.oldcar.model.ResourceType;
+import com.carselling.oldcar.specification.CarSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -29,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.data.jpa.domain.Specification;
@@ -46,9 +51,9 @@ public class CarServiceImpl implements CarService {
     private final UserRepository userRepository;
     private final AuthService authService;
     private final CarMasterRepository carMasterRepository;
-    private final com.carselling.oldcar.b2.B2FileService b2FileService; // Injected instead of Firebase
+    private final B2FileService b2FileService; // Injected instead of Firebase
     private final FileValidationService fileValidationService;
-    private final com.carselling.oldcar.service.MediaFinalizationService mediaFinalizationService;
+    private final MediaFinalizationService mediaFinalizationService;
 
     /**
      * Get all vehicles with pagination
@@ -57,7 +62,7 @@ public class CarServiceImpl implements CarService {
         log.debug("Getting all vehicles with pagination: {}", pageable);
 
         User currentUser = authService.getCurrentUserOrNull();
-        boolean isAdmin = currentUser != null && currentUser.getRole() == com.carselling.oldcar.model.Role.ADMIN;
+        boolean isAdmin = currentUser != null && currentUser.getRole() == Role.ADMIN;
 
         Page<Car> cars;
         if (isAdmin) {
@@ -82,7 +87,7 @@ public class CarServiceImpl implements CarService {
         // Strict Access Control
         User currentUser = authService.getCurrentUserOrNull();
         boolean isOwner = currentUser != null && car.getOwner().getId().equals(currentUser.getId());
-        boolean isAdmin = currentUser != null && currentUser.getRole() == com.carselling.oldcar.model.Role.ADMIN;
+        boolean isAdmin = currentUser != null && currentUser.getRole() == Role.ADMIN;
         boolean isVerifiedPublic = isVehicleVisible(car);
 
         if (!isAdmin && !isOwner && !isVerifiedPublic) {
@@ -251,7 +256,7 @@ public class CarServiceImpl implements CarService {
                 .viewCount(0L)
                 .owner(owner)
                 // Ignore images in initial creation - they must be uploaded via upload API
-                .images(new java.util.ArrayList<>())
+                .images(new ArrayList<>())
                 .status(CarStatus.DRAFT)
                 .mediaStatus(MediaStatus.INIT)
                 .idempotencyKey(idempotencyKey)
@@ -277,12 +282,12 @@ public class CarServiceImpl implements CarService {
                 log.info("Finalizing {} temporary files for car {}", request.getTempFileIds().size(), savedCar.getId());
                 String targetFolder = "cars/" + savedCar.getId() + "/images";
 
-                java.util.List<com.carselling.oldcar.model.UploadedFile> finalizedFiles = mediaFinalizationService
+                List<UploadedFile> finalizedFiles = mediaFinalizationService
                         .finalizeUploads(request.getTempFileIds(), targetFolder,
-                                com.carselling.oldcar.model.ResourceType.CAR_IMAGE, savedCar.getId(), owner);
+                                ResourceType.CAR_IMAGE, savedCar.getId(), owner);
 
-                java.util.List<String> finalizedUrls = finalizedFiles.stream()
-                        .map(com.carselling.oldcar.model.UploadedFile::getFileUrl)
+                List<String> finalizedUrls = finalizedFiles.stream()
+                        .map(UploadedFile::getFileUrl)
                         .collect(Collectors.toList());
 
                 car.setImages(finalizedUrls);
@@ -665,7 +670,7 @@ public class CarServiceImpl implements CarService {
     public Page<CarResponse> searchVehicles(CarSearchCriteria criteria, Pageable pageable) {
         log.debug("Searching vehicles with criteria: {} and pageable: {}", criteria, pageable);
 
-        Specification<Car> spec = com.carselling.oldcar.specification.CarSpecification.getCarsByCriteria(criteria);
+        Specification<Car> spec = CarSpecification.getCarsByCriteria(criteria);
         Page<Car> cars = carRepository.findAll(spec, pageable);
 
         // Apply owner role filtering and visibility checks (though most are now handled
@@ -929,19 +934,19 @@ public class CarServiceImpl implements CarService {
             return false;
 
         User owner = car.getOwner();
-        com.carselling.oldcar.model.Role role = owner.getRole();
+        Role role = owner.getRole();
 
-        if (role == com.carselling.oldcar.model.Role.ADMIN) {
+        if (role == Role.ADMIN) {
             return true;
         }
 
-        if (role == com.carselling.oldcar.model.Role.USER) {
+        if (role == Role.USER) {
             return Boolean.TRUE.equals(car.getIsActive())
                     && !Boolean.TRUE.equals(car.getIsSold())
                     && car.getMediaStatus() == MediaStatus.READY;
         }
 
-        if (role == com.carselling.oldcar.model.Role.DEALER) {
+        if (role == Role.DEALER) {
             return owner.canListCarsPublicly()
                     && Boolean.TRUE.equals(car.getIsActive())
                     && !Boolean.TRUE.equals(car.getIsSold())
@@ -1030,16 +1035,16 @@ public class CarServiceImpl implements CarService {
                 log.info("Finalizing {} temporary files for car {}", tempFileIds.size(), id);
                 String targetFolder = "cars/" + id + "/images";
 
-                java.util.List<com.carselling.oldcar.model.UploadedFile> finalizedFiles = mediaFinalizationService
-                        .finalizeUploads(tempFileIds, targetFolder, com.carselling.oldcar.model.ResourceType.CAR_IMAGE,
+                List<UploadedFile> finalizedFiles = mediaFinalizationService
+                        .finalizeUploads(tempFileIds, targetFolder, ResourceType.CAR_IMAGE,
                                 car.getId(), car.getOwner());
 
-                java.util.List<String> finalizedUrls = finalizedFiles.stream()
-                        .map(com.carselling.oldcar.model.UploadedFile::getFileUrl)
+                List<String> finalizedUrls = finalizedFiles.stream()
+                        .map(UploadedFile::getFileUrl)
                         .collect(Collectors.toList());
 
                 // Append to existing images
-                java.util.List<String> currentImages = new java.util.ArrayList<>(car.getImages());
+                List<String> currentImages = new ArrayList<>(car.getImages());
                 currentImages.addAll(finalizedUrls);
                 car.setImages(currentImages);
 
