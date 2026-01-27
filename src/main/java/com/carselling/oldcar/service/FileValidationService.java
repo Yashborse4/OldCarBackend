@@ -20,6 +20,7 @@ import java.util.List;
 public class FileValidationService {
 
     private final FileUploadConfig fileUploadConfig;
+    private final VirusScanService virusScanService;
     private final Tika tika = new Tika();
 
     /**
@@ -53,7 +54,7 @@ public class FileValidationService {
 
         // Scan for viruses if enabled
         if (fileUploadConfig.isScanForViruses()) {
-            scanForViruses(file);
+            virusScanService.scanFile(file);
         }
 
         // Validate image dimensions if it's an image
@@ -198,85 +199,6 @@ public class FileValidationService {
     }
 
     /**
-     * Scan file for viruses and malware
-     */
-    private void scanForViruses(MultipartFile file) throws SecurityException {
-        try {
-            // Basic virus scanning - in production, integrate with actual antivirus service
-            byte[] fileBytes = file.getBytes();
-
-            // Check for common malicious signatures
-            if (containsMaliciousSignatures(fileBytes)) {
-                throw new SecurityException("File contains potential malware signatures");
-            }
-
-            // Check file entropy (high entropy might indicate encryption/obfuscation)
-            if (hasHighEntropy(fileBytes)) {
-                log.warn("File {} has high entropy, potential obfuscation detected", file.getOriginalFilename());
-            }
-
-            // Check for embedded scripts in images (polyglot files)
-            if (isImageFile(file.getOriginalFilename()) && containsScriptContent(fileBytes)) {
-                throw new SecurityException("Image file contains embedded scripts");
-            }
-
-        } catch (IOException e) {
-            log.error("Error scanning file for viruses", e);
-            throw new SecurityException("Unable to scan file for viruses");
-        }
-    }
-
-    /**
-     * Check if file contains known malicious signatures
-     */
-    private boolean containsMaliciousSignatures(byte[] fileBytes) {
-        // Basic check for common malicious patterns
-        String content = new String(fileBytes);
-        String[] maliciousPatterns = {
-                "<script", "javascript:", "vbscript:", "onload=", "onerror=",
-                "eval(", "exec(", "system(", "shell_exec", "passthru",
-                "<?php", "<%", "<iframe", "<object", "<embed",
-                "cmd.exe", "/bin/sh", "/bin/bash", "powershell",
-                "reflect.assembly", "wscript.shell",
-                "base64_decode", "gzinflate", "str_rot13",
-                "runtime.getruntime", "processbuilder"
-        };
-
-        String lowerContent = content.toLowerCase();
-        for (String pattern : maliciousPatterns) {
-            if (lowerContent.contains(pattern.toLowerCase())) {
-                log.warn("Malicious pattern detected in file: {}", pattern);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Calculate file entropy to detect potential obfuscation
-     */
-    private boolean hasHighEntropy(byte[] fileBytes) {
-        if (fileBytes.length == 0)
-            return false;
-
-        int[] frequency = new int[256];
-        for (byte b : fileBytes) {
-            frequency[b & 0xFF]++;
-        }
-
-        double entropy = 0.0;
-        for (int freq : frequency) {
-            if (freq > 0) {
-                double probability = (double) freq / fileBytes.length;
-                entropy -= probability * (Math.log(probability) / Math.log(2));
-            }
-        }
-
-        // Entropy > 7.5 is suspicious for most file types
-        return entropy > 7.5;
-    }
-
-    /**
      * Check if filename indicates a video file
      */
     private boolean isVideoFile(String filename) {
@@ -296,23 +218,6 @@ public class FileValidationService {
                 (extension.equalsIgnoreCase("jpg") || extension.equalsIgnoreCase("jpeg") ||
                         extension.equalsIgnoreCase("png") || extension.equalsIgnoreCase("gif") ||
                         extension.equalsIgnoreCase("webp"));
-    }
-
-    /**
-     * Check if image file contains script content
-     */
-    private boolean containsScriptContent(byte[] fileBytes) {
-        String content = new String(fileBytes);
-        String[] scriptIndicators = {
-                "<script", "javascript:", "eval(", "function(", "alert(", "document."
-        };
-
-        for (String indicator : scriptIndicators) {
-            if (content.toLowerCase().contains(indicator.toLowerCase())) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -372,6 +277,26 @@ public class FileValidationService {
         // Additional security: check for path traversal attempts
         if (url.contains("..") || url.contains("%2e%2e") || url.contains("%252e")) {
             throw new SecurityException("Invalid file URL: path traversal detected");
+        }
+    }
+
+    /**
+     * Validate folder name to prevent directory traversal
+     */
+    public void validateFolderName(String folder) throws SecurityException {
+        if (folder == null || folder.trim().isEmpty()) {
+            throw new SecurityException("Folder name cannot be empty");
+        }
+
+        if (folder.contains("..") || folder.contains("\\") || folder.startsWith("/") || folder.contains("//")) {
+            throw new SecurityException("Invalid folder name: " + folder);
+        }
+
+        // Allow basic alphanumeric, hyphens, underscores, and single forward slashes
+        // for subfolders
+        // Example: "users/123", "cars/456/images"
+        if (!folder.matches("^[a-zA-Z0-9/_\\-]+$")) {
+            throw new SecurityException("Folder name contains invalid characters");
         }
     }
 }

@@ -17,7 +17,6 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,8 +30,33 @@ public class B2FileService {
     private final UploadedFileRepository uploadedFileRepository;
     private final B2Properties properties;
 
+    private final java.util.concurrent.ExecutorService executorService = java.util.concurrent.Executors
+            .newFixedThreadPool(10);
+
     public FileUploadResponse uploadFile(MultipartFile file, String folder, User uploader, ResourceType ownerType,
             Long ownerId) throws IOException {
+
+        // 1. Calculate Checksum (SHA-1) for Idempotency
+        String fileHash = calculateSha1(file);
+
+        // 2. Check for Duplicate (Idempotency)
+        Optional<UploadedFile> existing = uploadedFileRepository.findByFileHashAndUploadedById(fileHash,
+                uploader.getId());
+        if (existing.isPresent()) {
+            UploadedFile existingFile = existing.get();
+            log.info("Idempotency hit: Returning existing file {} (hash: {}) for user {}", existingFile.getFileName(),
+                    fileHash, uploader.getId());
+            return FileUploadResponse.builder()
+                    .fileName(existingFile.getFileName())
+                    .originalFileName(existingFile.getOriginalFileName())
+                    .fileUrl(existingFile.getFileUrl())
+                    .fileSize(existingFile.getSize())
+                    .contentType(existingFile.getContentType())
+                    .folder(folder) // Note: folder might be different, but content is same.
+                    .uploadedAt(existingFile.getCreatedAt())
+                    .build();
+        }
+
         String originalFileName = file.getOriginalFilename();
         String uniqueFileName = generateUniqueFileName(originalFileName, uploader.getId());
         String fullPath = folder + "/" + uniqueFileName;
@@ -45,8 +69,17 @@ public class B2FileService {
 
         log.info("Uploading file to B2: {}", fullPath);
 
+        // Build ownership metadata for B2 tagging
+        java.util.Map<String, String> fileMetadata = new java.util.HashMap<>();
+        fileMetadata.put("uploaded-by-user-id", String.valueOf(uploader.getId()));
+        fileMetadata.put("owner-type", ownerType.name());
+        if (ownerId != null) {
+            fileMetadata.put("owner-id", String.valueOf(ownerId));
+        }
+        fileMetadata.put("upload-timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+
         b2Client.uploadFile(b2FileName, file.getBytes(),
-                file.getContentType());
+                file.getContentType(), fileMetadata);
 
         // Construct CDN URL
         // User Requirement: "domain name + file name" directly hit Cloudflare.
@@ -77,6 +110,7 @@ public class B2FileService {
                 .uploadedBy(uploader)
                 .ownerType(ownerType)
                 .ownerId(ownerId)
+                .fileHash(fileHash) // Save hash for future idempotency
                 .build();
 
         uploadedFileRepository.save(uploadedFile);
@@ -94,21 +128,42 @@ public class B2FileService {
 
     public List<FileUploadResponse> uploadMultipleFiles(List<MultipartFile> files, String folder,
             User uploader, ResourceType ownerType, Long ownerId) {
-        List<FileUploadResponse> responses = new ArrayList<>();
-        for (MultipartFile file : files) {
-            try {
-                responses.add(uploadFile(file, folder, uploader, ownerType, ownerId));
-            } catch (IOException e) {
-                log.error("Failed to upload file: {}", file.getOriginalFilename(), e);
-                // Return failed response indicator if needed, or structured error
-                responses.add(FileUploadResponse.builder()
-                        .originalFileName(file.getOriginalFilename())
-                        .fileUrl(null)
-                        .fileName("FAILED: " + e.getMessage())
-                        .build()); // Using minimal fields for error
+
+        List<java.util.concurrent.CompletableFuture<FileUploadResponse>> futures = files.stream()
+                .map(file -> java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return uploadFile(file, folder, uploader, ownerType, ownerId);
+                    } catch (IOException e) {
+                        log.error("Failed to upload file: {}", file.getOriginalFilename(), e);
+                        return FileUploadResponse.builder()
+                                .originalFileName(file.getOriginalFilename())
+                                .fileUrl(null)
+                                .fileName("FAILED: " + e.getMessage())
+                                .build();
+                    }
+                }, executorService))
+                .collect(java.util.stream.Collectors.toList());
+
+        return futures.stream()
+                .map(java.util.concurrent.CompletableFuture::join)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    private String calculateSha1(MultipartFile file) throws IOException {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-1");
+            byte[] hash = digest.digest(file.getBytes());
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1)
+                    hexString.append('0');
+                hexString.append(hex);
             }
+            return hexString.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-1 algorithm not found", e);
         }
-        return responses;
     }
 
     public boolean deleteFile(String fileUrl) {
