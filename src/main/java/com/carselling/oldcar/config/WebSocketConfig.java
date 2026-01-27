@@ -1,6 +1,7 @@
 package com.carselling.oldcar.config;
 
 import com.carselling.oldcar.security.jwt.JwtTokenProvider;
+import com.carselling.oldcar.websocket.WebSocketErrorHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
@@ -16,12 +17,8 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-import java.util.Collection;
-import java.util.stream.Collectors;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
@@ -40,6 +37,9 @@ import java.security.Principal;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final com.carselling.oldcar.security.CustomUserDetailsService userDetailsService;
+    private final WebSocketAuthInterceptor webSocketAuthInterceptor;
+    private final WebSocketErrorHandler webSocketErrorHandler;
 
     /**
      * Configure message broker for WebSocket communication
@@ -55,6 +55,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
         // User-specific destination prefix
         config.setUserDestinationPrefix("/user");
+        
+        // Set custom error handler
+        config.configureBrokerChannel().errorHandler(webSocketErrorHandler);
 
         log.info("WebSocket message broker configured with prefixes: /topic, /queue, /user, /app");
     }
@@ -84,7 +87,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
      */
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(new ChannelInterceptor() {
+        registration.interceptors(webSocketAuthInterceptor, new ChannelInterceptor() {
             @Override
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
                 StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
@@ -101,31 +104,23 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                             if (jwtTokenProvider.validateToken(token)) {
                                 // Extract user information
                                 Long userIdLong = jwtTokenProvider.getUserIdFromToken(token);
-                                String userId = userIdLong != null ? userIdLong.toString() : null;
 
-                                if (userId != null) {
-                                    // Create authentication object with converted authorities
-                                    Collection<? extends GrantedAuthority> authorities = jwtTokenProvider
-                                            .getAuthoritiesFromToken(token)
-                                            .stream()
-                                            .map(SimpleGrantedAuthority::new)
-                                            .collect(Collectors.toList());
+                                if (userIdLong != null) {
+                                    // Load full user details to match REST API security context
+                                    // This ensures Principal is always UserPrincipal
+                                    org.springframework.security.core.userdetails.UserDetails userDetails = userDetailsService
+                                            .loadUserById(userIdLong);
 
                                     Authentication auth = new UsernamePasswordAuthenticationToken(
-                                            userId, null, authorities);
+                                            userDetails, null, userDetails.getAuthorities());
 
                                     // Set authentication in security context
                                     SecurityContextHolder.getContext().setAuthentication(auth);
 
                                     // Set user principal for WebSocket session
-                                    accessor.setUser(new Principal() {
-                                        @Override
-                                        public String getName() {
-                                            return userId;
-                                        }
-                                    });
+                                    accessor.setUser(auth);
 
-                                    log.debug("WebSocket authenticated user: {}", userId);
+                                    log.debug("WebSocket authenticated user: {}", userIdLong);
                                 } else {
                                     log.warn("Could not extract user ID from JWT token");
                                     return null; // Reject the connection

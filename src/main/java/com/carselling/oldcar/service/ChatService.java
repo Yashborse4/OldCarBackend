@@ -358,6 +358,16 @@ public class ChatService {
     public ChatMessageDto sendMessage(SendMessageRequest request, Long senderId) {
         log.info("Sending message to chat ID: {} from user ID: {}", request.getChatId(), senderId);
 
+        if (request.getClientMessageId() != null && !request.getClientMessageId().isBlank()) {
+            ChatMessage existing = chatMessageRepository
+                    .findBySenderIdAndClientMessageId(senderId, request.getClientMessageId())
+                    .orElse(null);
+            if (existing != null && existing.getChatRoom() != null
+                    && existing.getChatRoom().getId().equals(request.getChatId())) {
+                return convertToMessageDto(existing);
+            }
+        }
+
         ChatRoom chatRoom = getChatRoomById(request.getChatId());
         if (!hasAccessToChat(chatRoom, senderId)) {
             throw new AccessDeniedException("Access denied to chat room");
@@ -381,6 +391,7 @@ public class ChatService {
                 .sender(sender)
                 .content(request.getContent())
                 .messageType(messageType)
+                .clientMessageId(request.getClientMessageId())
                 .build();
 
         // Handle reply
@@ -696,10 +707,14 @@ public class ChatService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
     }
 
-    private boolean hasAccessToChat(ChatRoom chatRoom, Long userId) {
+    public boolean isParticipant(Long chatId, Long userId) {
         return chatParticipantRepository
-                .findByChatRoomIdAndUserIdAndIsActiveTrue(chatRoom.getId(), userId)
+                .findByChatRoomIdAndUserIdAndIsActiveTrue(chatId, userId)
                 .isPresent();
+    }
+
+    public boolean hasAccessToChat(ChatRoom chatRoom, Long userId) {
+        return isParticipant(chatRoom.getId(), userId);
     }
 
     private void addParticipant(ChatRoom chatRoom, User user, ChatParticipant.ParticipantRole role) {
