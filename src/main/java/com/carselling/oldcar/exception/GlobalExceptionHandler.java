@@ -195,6 +195,57 @@ public class GlobalExceptionHandler {
                 return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
         }
 
+        @ExceptionHandler(CarNotFoundException.class)
+        public ResponseEntity<ApiResponse<Object>> handleCarNotFoundException(
+                        CarNotFoundException ex, HttpServletRequest request) {
+
+                log.error("Car not found: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Car not found")
+                                .details(ex.getMessage())
+                                .errorCode("CAR_NOT_FOUND")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+        }
+
+        @ExceptionHandler(MediaUploadNotAllowedException.class)
+        public ResponseEntity<ApiResponse<Object>> handleMediaUploadNotAllowedException(
+                        MediaUploadNotAllowedException ex, HttpServletRequest request) {
+
+                log.error("Media upload not allowed: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Media upload not allowed")
+                                .details(ex.getMessage())
+                                .errorCode("MEDIA_UPLOAD_DENIED")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.CONFLICT);
+        }
+
+        @ExceptionHandler(DealerNotVerifiedException.class)
+        public ResponseEntity<ApiResponse<Object>> handleDealerNotVerifiedException(
+                        DealerNotVerifiedException ex, HttpServletRequest request) {
+
+                log.error("Dealer not verified: {}", ex.getMessage(), ex);
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Dealer not verified")
+                                .details(ex.getMessage())
+                                .errorCode("DEALER_NOT_VERIFIED")
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+        }
+
         // Spring Security Exceptions
 
         @ExceptionHandler(BadCredentialsException.class)
