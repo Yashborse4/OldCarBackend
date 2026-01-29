@@ -38,24 +38,33 @@ public class ChatWebSocketController {
     public void sendMessage(@DestinationVariable Long chatRoomId,
             @Payload SendMessageRequest messageRequest,
             SimpMessageHeaderAccessor headerAccessor,
-            Authentication authentication) {
-        UserPrincipal userPrincipal = resolveUser(authentication);
-        if (userPrincipal == null) {
-            log.warn("Unauthorized WebSocket message attempt");
-            throw new SecurityException("User not authenticated");
+            Authentication authentication) { // Use Authentication directly if possible, or Principal and cast
+        try {
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal == null) {
+                log.warn("Unauthorized WebSocket message attempt");
+                return;
+            }
+
+            Long userId = userPrincipal.getId();
+            log.debug("User {} sending message to chat room {}", userId, chatRoomId);
+
+            // Send message through service
+            ChatMessageDto message = ChatService.sendMessage(messageRequest, userId);
+
+            // Broadcast message to all participants in the chat room
+            broadcastMessageToChatRoom(chatRoomId, message);
+
+            // Send real-time notification for unread count updates
+            updateUnreadCountsForParticipants(chatRoomId, message.getSender().getId());
+
+        } catch (Exception e) {
+            log.error("Error sending WebSocket message: {}", e.getMessage(), e);
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal != null) {
+                sendErrorToUser(userPrincipal.getUsername(), "Failed to send message: " + e.getMessage());
+            }
         }
-
-        Long userId = userPrincipal.getId();
-        log.debug("User {} sending message to chat room {}", userId, chatRoomId);
-
-        // Send message through service
-        ChatMessageDto message = ChatService.sendMessage(messageRequest, userId);
-
-        // Broadcast message to all participants in the chat room
-        broadcastMessageToChatRoom(chatRoomId, message);
-
-        // Send real-time notification for unread count updates
-        updateUnreadCountsForParticipants(chatRoomId, message.getSender().getId());
     }
 
     /**
@@ -65,24 +74,33 @@ public class ChatWebSocketController {
     public void editMessage(@DestinationVariable Long messageId,
             @Payload EditMessageRequest editRequest,
             Authentication authentication) {
-        UserPrincipal userPrincipal = resolveUser(authentication);
-        if (userPrincipal == null) {
-            log.warn("Unauthorized WebSocket edit attempt");
-            throw new SecurityException("User not authenticated");
+        try {
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal == null) {
+                log.warn("Unauthorized WebSocket edit attempt");
+                return;
+            }
+
+            Long userId = userPrincipal.getId();
+            ChatMessageDto updatedMessage = ChatService.editMessage(messageId, editRequest.getNewContent(), userId);
+
+            // Create message update DTO
+            MessageUpdateDto updateDto = MessageUpdateDto.builder()
+                    .action("EDIT")
+                    .message(updatedMessage)
+                    .timestamp(java.time.LocalDateTime.now())
+                    .build();
+
+            // Broadcast edit to all participants in the chat room
+            broadcastMessageUpdateToChatRoom(updatedMessage.getChatRoomId(), updateDto);
+
+        } catch (Exception e) {
+            log.error("Error editing WebSocket message: {}", e.getMessage(), e);
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal != null) {
+                sendErrorToUser(userPrincipal.getUsername(), "Failed to edit message: " + e.getMessage());
+            }
         }
-
-        Long userId = userPrincipal.getId();
-        ChatMessageDto updatedMessage = ChatService.editMessage(messageId, editRequest.getNewContent(), userId);
-
-        // Create message update DTO
-        MessageUpdateDto updateDto = MessageUpdateDto.builder()
-                .action("EDIT")
-                .message(updatedMessage)
-                .timestamp(java.time.LocalDateTime.now())
-                .build();
-
-        // Broadcast edit to all participants in the chat room
-        broadcastMessageUpdateToChatRoom(updatedMessage.getChatRoomId(), updateDto);
     }
 
     /**
@@ -90,30 +108,39 @@ public class ChatWebSocketController {
      */
     @MessageMapping("/chat/message/{messageId}/delete")
     public void deleteMessage(@DestinationVariable Long messageId, Authentication authentication) {
-        UserPrincipal userPrincipal = resolveUser(authentication);
-        if (userPrincipal == null) {
-            log.warn("Unauthorized WebSocket delete attempt");
-            throw new SecurityException("User not authenticated");
+        try {
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal == null) {
+                log.warn("Unauthorized WebSocket delete attempt");
+                return;
+            }
+
+            Long userId = userPrincipal.getId();
+
+            // Get message details before deletion
+            ChatMessageDto messageToDelete = ChatService.getChatMessage(messageId, userId);
+            Long chatRoomId = messageToDelete.getChatRoomId();
+
+            // Delete the message
+            ChatService.deleteMessage(messageId, userId);
+
+            // Create message update DTO
+            MessageUpdateDto updateDto = MessageUpdateDto.builder()
+                    .action("DELETE")
+                    .message(null) // No message content for delete
+                    .timestamp(java.time.LocalDateTime.now())
+                    .build();
+
+            // Broadcast deletion to all participants in the chat room
+            broadcastMessageUpdateToChatRoom(chatRoomId, updateDto);
+
+        } catch (Exception e) {
+            log.error("Error deleting WebSocket message: {}", e.getMessage(), e);
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal != null) {
+                sendErrorToUser(userPrincipal.getUsername(), "Failed to delete message: " + e.getMessage());
+            }
         }
-
-        Long userId = userPrincipal.getId();
-
-        // Get message details before deletion
-        ChatMessageDto messageToDelete = ChatService.getChatMessage(messageId, userId);
-        Long chatRoomId = messageToDelete.getChatRoomId();
-
-        // Delete the message
-        ChatService.deleteMessage(messageId, userId);
-
-        // Create message update DTO
-        MessageUpdateDto updateDto = MessageUpdateDto.builder()
-                .action("DELETE")
-                .message(null) // No message content for delete
-                .timestamp(java.time.LocalDateTime.now())
-                .build();
-
-        // Broadcast deletion to all participants in the chat room
-        broadcastMessageUpdateToChatRoom(chatRoomId, updateDto);
     }
 
     /**
@@ -123,33 +150,38 @@ public class ChatWebSocketController {
     public void handleTyping(@DestinationVariable Long chatRoomId,
             @Payload Map<String, Boolean> typingStatus,
             Authentication authentication) {
-        UserPrincipal userPrincipal = resolveUser(authentication);
-        if (userPrincipal == null) {
-            throw new SecurityException("User not authenticated");
+        try {
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal == null) {
+                return;
+            }
+
+            Long userId = userPrincipal.getId();
+            boolean isTyping = typingStatus.getOrDefault("isTyping", false);
+
+            // Update typing status in service
+            ChatService.sendTypingIndicator(chatRoomId, userId, isTyping);
+
+            // Get user details
+            User user = userService.findById(userId);
+
+            // Create typing indicator DTO
+            TypingIndicatorDto typingIndicator = TypingIndicatorDto.builder()
+                    .chatId(chatRoomId)
+                    .userId(userId)
+                    .userName(user.getDisplayName())
+                    .isTyping(isTyping)
+                    .timestamp(java.time.LocalDateTime.now())
+                    .build();
+
+            // Broadcast typing indicator to all participants except sender
+            messagingTemplate.convertAndSend(
+                    "/topic/chat/" + chatRoomId + "/typing",
+                    typingIndicator);
+
+        } catch (Exception e) {
+            log.error("Error handling typing indicator: {}", e.getMessage(), e);
         }
-
-        Long userId = userPrincipal.getId();
-        boolean isTyping = typingStatus.getOrDefault("isTyping", false);
-
-        // Update typing status in service
-        ChatService.sendTypingIndicator(chatRoomId, userId, isTyping);
-
-        // Get user details
-        User user = userService.findById(userId);
-
-        // Create typing indicator DTO
-        TypingIndicatorDto typingIndicator = TypingIndicatorDto.builder()
-                .chatId(chatRoomId)
-                .userId(userId)
-                .userName(user.getDisplayName())
-                .isTyping(isTyping)
-                .timestamp(java.time.LocalDateTime.now())
-                .build();
-
-        // Broadcast typing indicator to all participants except sender
-        messagingTemplate.convertAndSend(
-                "/topic/chat/" + chatRoomId + "/typing",
-                typingIndicator);
     }
 
     /**
@@ -159,26 +191,35 @@ public class ChatWebSocketController {
     public void markMessagesAsRead(@DestinationVariable Long chatRoomId,
             @Payload MarkMessagesReadRequest readRequest,
             Authentication authentication) {
-        UserPrincipal userPrincipal = resolveUser(authentication);
-        if (userPrincipal == null) {
-            throw new SecurityException("User not authenticated");
+        try {
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal == null) {
+                return;
+            }
+
+            Long userId = userPrincipal.getId();
+            ChatService.markMessagesAsRead(chatRoomId, readRequest.getMessageIds(), userId);
+
+            // Broadcast read receipts to other participants
+            ReadReceiptDto readReceipt = new ReadReceiptDto();
+            readReceipt.setChatRoomId(chatRoomId);
+            readReceipt.setUserId(userId);
+            readReceipt.setMessageIds(readRequest.getMessageIds());
+
+            messagingTemplate.convertAndSend(
+                    "/topic/chat/" + chatRoomId + "/read",
+                    readReceipt);
+
+            // Update unread counts for the user
+            sendUnreadCountUpdate(userId);
+
+        } catch (Exception e) {
+            log.error("Error marking messages as read: {}", e.getMessage(), e);
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal != null) {
+                sendErrorToUser(userPrincipal.getUsername(), "Failed to mark messages as read: " + e.getMessage());
+            }
         }
-
-        Long userId = userPrincipal.getId();
-        ChatService.markMessagesAsRead(chatRoomId, readRequest.getMessageIds(), userId);
-
-        // Broadcast read receipts to other participants
-        ReadReceiptDto readReceipt = new ReadReceiptDto();
-        readReceipt.setChatRoomId(chatRoomId);
-        readReceipt.setUserId(userId);
-        readReceipt.setMessageIds(readRequest.getMessageIds());
-
-        messagingTemplate.convertAndSend(
-                "/topic/chat/" + chatRoomId + "/read",
-                readReceipt);
-
-        // Update unread counts for the user
-        sendUnreadCountUpdate(userId);
     }
 
     // ========================= SUBSCRIPTION HANDLING =========================
@@ -188,20 +229,29 @@ public class ChatWebSocketController {
      */
     @SubscribeMapping("/topic/chat/{chatRoomId}")
     public void subscribeToChat(@DestinationVariable Long chatRoomId, Authentication authentication) {
-        UserPrincipal userPrincipal = resolveUser(authentication);
-        if (userPrincipal == null) {
-            throw new SecurityException("User not authenticated");
+        try {
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal == null) {
+                return;
+            }
+
+            Long userId = userPrincipal.getId();
+
+            // Verify user has access to this chat room
+            ChatService.getChatRoom(chatRoomId, userId);
+
+            // Register user session for this chat room
+            sessionManager.addUserToChat(userId, chatRoomId);
+
+            log.debug("User {} subscribed to chat room {}", userId, chatRoomId);
+
+        } catch (Exception e) {
+            log.error("Error subscribing to chat room: {}", e.getMessage(), e);
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal != null) {
+                sendErrorToUser(userPrincipal.getUsername(), "Failed to subscribe to chat room");
+            }
         }
-
-        Long userId = userPrincipal.getId();
-
-        // Verify user has access to this chat room
-        ChatService.getChatRoom(chatRoomId, userId);
-
-        // Register user session for this chat room
-        sessionManager.addUserToChat(userId, chatRoomId);
-
-        log.debug("User {} subscribed to chat room {}", userId, chatRoomId);
     }
 
     /**
@@ -209,15 +259,20 @@ public class ChatWebSocketController {
      */
     @SubscribeMapping("/user/queue/presence")
     public void subscribeToPresence(Authentication authentication) {
-        UserPrincipal userPrincipal = resolveUser(authentication);
-        if (userPrincipal == null) {
-            throw new SecurityException("User not authenticated");
+        try {
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal == null) {
+                return;
+            }
+
+            Long userId = userPrincipal.getId();
+            sessionManager.setUserOnline(userId);
+
+            log.debug("User {} subscribed to presence updates", userId);
+
+        } catch (Exception e) {
+            log.error("Error subscribing to presence: {}", e.getMessage(), e);
         }
-
-        Long userId = userPrincipal.getId();
-        sessionManager.setUserOnline(userId);
-
-        log.debug("User {} subscribed to presence updates", userId);
     }
 
     private UserPrincipal resolveUser(Authentication authentication) {
@@ -249,24 +304,33 @@ public class ChatWebSocketController {
      * Update unread counts for all participants except sender
      */
     private void updateUnreadCountsForParticipants(Long chatRoomId, Long senderId) {
-        // Get all participants
-        var participants = ChatService.getChatRoomParticipants(chatRoomId, senderId);
+        try {
+            // Get all participants
+            var participants = ChatService.getChatRoomParticipants(chatRoomId, senderId);
 
-        // Send unread count updates to each participant (except sender)
-        participants.stream()
-                .filter(p -> !p.getUserId().equals(senderId))
-                .forEach(participant -> sendUnreadCountUpdate(participant.getUserId()));
+            // Send unread count updates to each participant (except sender)
+            participants.stream()
+                    .filter(p -> !p.getUserId().equals(senderId))
+                    .forEach(participant -> sendUnreadCountUpdate(participant.getUserId()));
+
+        } catch (Exception e) {
+            log.error("Error updating unread counts: {}", e.getMessage());
+        }
     }
 
     /**
      * Send unread count update to specific user
      */
     private void sendUnreadCountUpdate(Long userId) {
-        UnreadCountResponse unreadCount = ChatService.getUnreadMessageCount(userId);
-        messagingTemplate.convertAndSendToUser(
-                userId.toString(),
-                "/queue/unread-count",
-                unreadCount);
+        try {
+            UnreadCountResponse unreadCount = ChatService.getUnreadMessageCount(userId);
+            messagingTemplate.convertAndSendToUser(
+                    userId.toString(),
+                    "/queue/unread-count",
+                    unreadCount);
+        } catch (Exception e) {
+            log.error("Error sending unread count update to user {}: {}", userId, e.getMessage());
+        }
     }
 
     /**

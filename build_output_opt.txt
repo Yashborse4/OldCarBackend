@@ -1,0 +1,47 @@
+Starting a Gradle Daemon, 2 incompatible and 1 stopped Daemons could not be reused, use --status for details
+> Task :clean FAILED
+
+[Incubating] Problems report is available at: file:///D:/Startup/Car%20Frontend%20Backend/Sell-the-old-Car/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':clean'.
+> java.io.IOException: Unable to delete directory 'D:\Startup\Car Frontend Backend\Sell-the-old-Car\build'
+    Failed to delete some children. This might happen because a process has files open or has its working directory set in the target directory.
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\resources\main\carimages-9cf9a-firebase-adminsdk-fbsvc-e1758d62b8.json
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\resources\main\data.sql
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\resources\main\elasticsearch.properties
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\resources\main\graphql
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\resources\main\messages
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\resources\main
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\resources\test
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\resources
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\test-results
+    New files were found. This might happen because a process is still writing to the target directory.
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\generated
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\generated\sources
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\generated\sources\headers
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\generated\sources\headers\java
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\generated\sources\headers\java\main
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\generated\sources\annotationProcessor
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\generated\sources\annotationProcessor\java
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\generated\sources\annotationProcessor\java\main
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\classes
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\classes\java
+    - D:\Startup\Car Frontend Backend\Sell-the-old-Car\build\classes\java\main
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 1m 22s
+1 actionable task: 1 executed

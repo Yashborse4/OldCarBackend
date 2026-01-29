@@ -58,44 +58,40 @@ public class B2Client implements InitializingBean {
     }
 
     public UploadFileResponse uploadFile(String fileName, byte[] content, String contentType) {
+        return uploadFile(fileName, content, contentType, Map.of());
+    }
+
+    /**
+     * Upload file with custom metadata (ownership tagging).
+     */
+    public UploadFileResponse uploadFile(String fileName, byte[] content, String contentType,
+            Map<String, String> fileInfo) {
         try {
             String bucketId = getCachedBucketId();
 
             com.backblaze.b2.client.contentSources.B2ContentSource source = com.backblaze.b2.client.contentSources.B2ByteArrayContentSource
                     .build(content);
 
-            com.backblaze.b2.client.structures.B2UploadFileRequest request = com.backblaze.b2.client.structures.B2UploadFileRequest
-                    .builder(bucketId, fileName, contentType, source)
-                    .build();
+            var requestBuilder = com.backblaze.b2.client.structures.B2UploadFileRequest
+                    .builder(bucketId, fileName, contentType, source);
 
+            // Add custom file info (metadata)
+            if (fileInfo != null && !fileInfo.isEmpty()) {
+                for (Map.Entry<String, String> entry : fileInfo.entrySet()) {
+                    requestBuilder.setCustomField(entry.getKey(), entry.getValue());
+                }
+            }
+
+            com.backblaze.b2.client.structures.B2UploadFileRequest request = requestBuilder.build();
             com.backblaze.b2.client.structures.B2FileVersion fileVersion = client.uploadSmallFile(request);
 
             UploadFileResponse response = new UploadFileResponse();
             response.setFileId(fileVersion.getFileId());
-            // Trying getName() if getFileName() doesn't exist.
-            // response.setFileName(fileVersion.getFileName());
-            // Warning: If getFileName() fails again, I'll need to use reflection or just
-            // toString to debug, but I can't.
-            // I'll try getFileName() one last time with correct Request usage in case
-            // context matters? No.
-            // Wait, I will use fileVersion.getFileName() because Step 376 output "symbol:
-            // method getFileName()" might have been spurious or due to weird state?
-            // No, unlikely.
-            // I'll assume getFileName() is correct and maybe I need to cast?
-            // Usage in docs: fileVersion.getFileName().
-
-            // I'll comment out the failing getters to ENSURE compilation for now,
-            // so we can at least get fileId.
-            // response.setFileName(fileVersion.getFileName());
-            // response.setAccountId(fileVersion.getAccountId());
-
-            // Wait, I need fileName.
-            // I'll try just using the input fileName since I know what I uploaded!
             response.setFileName(fileName);
-
-            response.setBucketId(bucketId); // Known from input properties
-            response.setContentLength(content.length); // Known from input
-            response.setContentType(contentType); // Known from input
+            response.setBucketId(bucketId);
+            response.setContentLength(content.length);
+            response.setContentType(contentType);
+            response.setFileInfo(fileInfo);
 
             return response;
 
@@ -187,7 +183,7 @@ public class B2Client implements InitializingBean {
 
     public void copyFile(String sourceFileId, String targetFileName) {
         try {
-            String bucketId = getCachedBucketId();
+            // String bucketId = getCachedBucketId(); // Unused
 
             // Construct request using Builder pattern
             // Assuming builder(sourceFileId, fileName) defaults to same bucket or infers it

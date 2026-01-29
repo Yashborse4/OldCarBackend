@@ -13,18 +13,19 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CarSearchCriteria {
-    private String make;
-    private String model;
+    private java.util.List<String> make;
+    private java.util.List<String> model;
     private Integer minYear;
     private Integer maxYear;
     private Long minPrice;
     private Long maxPrice;
-    private String location;
+    private java.util.List<String> location;
     private String condition;
     private String status;
     private Boolean featured;
-    private String fuelType;
-    private String transmission;
+    private Boolean verifiedDealer;
+    private java.util.List<String> fuelType;
+    private java.util.List<String> transmission;
     private String variant; // Car variant (e.g., LX, EX, Sport, etc.)
     private String bodyType;
     private String color;

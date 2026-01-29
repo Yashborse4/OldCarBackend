@@ -26,8 +26,10 @@ public class CarResponse {
     private Long mileage;
     private String location;
     private String condition;
+    private String description;
     @Builder.Default
     private List<String> images = new ArrayList<>();
+    private String videoUrl;
     private CarSpecifications specifications;
     private String dealerId;
     private String dealerName;
@@ -39,7 +41,9 @@ public class CarResponse {
     private Long shares;
     private String status;
     private String mediaStatus;
-    private boolean featured;
+    private Boolean isSold;
+    private Boolean isAvailable;
+    private Boolean isFeatured;
     private Long carMasterId; // Reference to catalog entry, if linked
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

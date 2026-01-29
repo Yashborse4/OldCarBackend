@@ -31,5 +31,8 @@ public class PrivateCarDTO extends PublicCarDTO {
     private Long viewCount;
     private String location; // Full location details
     private Boolean isApproved;
+    private String status;
+    private String mediaStatus;
+    private Boolean isAvailable;
     private LocalDateTime updatedAt;
 }

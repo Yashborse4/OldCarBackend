@@ -2,7 +2,6 @@ package com.carselling.oldcar.security;
 
 import com.carselling.oldcar.security.jwt.JwtAuthenticationEntryPoint;
 import com.carselling.oldcar.security.jwt.JwtAuthenticationFilter;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,6 +26,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.carselling.oldcar.security.jwt.JwtTokenProvider;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 
 /**
  * Comprehensive Spring Security Configuration
@@ -35,12 +36,7 @@ import java.util.stream.Collectors;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)
-@RequiredArgsConstructor
 public class SecurityConfig {
-
-    private final CustomUserDetailsService userDetailsService;
-    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080}")
     private String corsAllowedOrigins;
@@ -58,7 +54,9 @@ public class SecurityConfig {
     private long corsMaxAge;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http,
+            JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
+            JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
                 // Disable CSRF for REST API
                 .csrf(AbstractHttpConfigurer::disable)
@@ -142,6 +140,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/media/**").authenticated()
                         .requestMatchers("/api/files/**").authenticated()
 
+                        // Observability (Admin Only)
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
+
                         // Fallback: Secure everything else
                         .anyRequest().authenticated());
 
@@ -153,12 +154,18 @@ public class SecurityConfig {
 
     @Bean
     @SuppressWarnings("deprecation")
-    public DaoAuthenticationProvider authenticationProvider() {
+    public DaoAuthenticationProvider authenticationProvider(CustomUserDetailsService userDetailsService) {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
         authProvider.setUserDetailsService(userDetailsService);
         authProvider.setPasswordEncoder(passwordEncoder());
         authProvider.setHideUserNotFoundExceptions(false); // For better error messages
         return authProvider;
+    }
+
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter(JwtTokenProvider tokenProvider,
+            CustomUserDetailsService userDetailsService) {
+        return new JwtAuthenticationFilter(tokenProvider, userDetailsService);
     }
 
     @Bean
@@ -211,5 +218,17 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", configuration);
 
         return source;
+    }
+
+    /**
+     * Disable automatic servlet registration of JwtAuthenticationFilter.
+     * We only want it in the Spring Security filter chain, not as a separate
+     * servlet filter.
+     */
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration(JwtAuthenticationFilter filter) {
+        FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 }

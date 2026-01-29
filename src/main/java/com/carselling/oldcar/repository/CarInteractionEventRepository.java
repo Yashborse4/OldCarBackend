@@ -73,4 +73,12 @@ public interface CarInteractionEventRepository extends JpaRepository<CarInteract
     @Query("SELECT COUNT(e) > 0 FROM CarInteractionEvent e WHERE e.car.id = :carId AND e.user.id = :userId AND e.eventType = 'CAR_VIEW' AND e.createdAt >= :todayStart")
     boolean existsViewByCarIdAndUserIdToday(@Param("carId") Long carId, @Param("userId") Long userId,
             @Param("todayStart") LocalDateTime todayStart);
+
+    /**
+     * Check if a specific event already exists for a user and car
+     */
+    @Query("SELECT COUNT(e) > 0 FROM CarInteractionEvent e WHERE e.car.id = :carId AND e.user.id = :userId AND e.eventType = :eventType")
+    boolean existsByCarIdAndUserIdAndEventType(@Param("carId") Long carId,
+            @Param("userId") Long userId,
+            @Param("eventType") EventType eventType);
 }

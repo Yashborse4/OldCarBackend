@@ -31,6 +31,14 @@ public class CarSearchDtos {
         private BigDecimal minPrice;
         private BigDecimal maxPrice;
         private Boolean verifiedDealer;
+
+        // Pagination & Sorting
+        @Builder.Default
+        private Integer page = 0;
+        @Builder.Default
+        private Integer size = 20;
+        @Builder.Default
+        private String sort = "relevance";
     }
 
     @Data
@@ -55,6 +63,8 @@ public class CarSearchDtos {
         private String condition;
         private Integer views;
         private LocalDateTime createdAt;
+        private String dealerId;
+        private Boolean isPromoted;
 
         public static CarSearchHitDto fromDocument(VehicleSearchDocument doc) {
             return CarSearchHitDto.builder()

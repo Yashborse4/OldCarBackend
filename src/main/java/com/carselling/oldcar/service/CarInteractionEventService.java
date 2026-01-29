@@ -52,11 +52,25 @@ public class CarInteractionEventService {
                 user = userRepository.findById(userId).orElse(null);
             }
 
+            // Exclude Dealer's own views from analytics
+            if (user != null && car.getOwner().getId().equals(user.getId())) {
+                log.debug("Skipping event tracking for owner viewing own car {} (user {})", carId, userId);
+                return;
+            }
+
             // Prevent duplicate view counts for same user on same day
             if (eventType == EventType.CAR_VIEW && user != null) {
                 LocalDateTime todayStart = LocalDate.now().atStartOfDay();
                 if (eventRepository.existsViewByCarIdAndUserIdToday(carId, userId, todayStart)) {
                     log.debug("Duplicate view event skipped for car {} by user {}", carId, userId);
+                    return;
+                }
+            }
+
+            // Ensure SAVE events are idempotent per user and car
+            if (eventType == EventType.SAVE && user != null) {
+                if (eventRepository.existsByCarIdAndUserIdAndEventType(carId, userId, eventType)) {
+                    log.debug("Duplicate SAVE event skipped for car {} by user {}", carId, userId);
                     return;
                 }
             }

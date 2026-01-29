@@ -92,6 +92,16 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        Page<Car> findByPriceBetween(BigDecimal minPrice, BigDecimal maxPrice, Pageable pageable);
 
        // Find featured cars
+       @Query("SELECT c FROM Car c WHERE c.isActive = true AND c.id <> :excludeId AND " +
+                     "(c.make = :make OR c.model = :model) AND " +
+                     "c.price BETWEEN :minPrice AND :maxPrice")
+       List<Car> findSimilarCars(@Param("make") String make,
+                     @Param("model") String model,
+                     @Param("minPrice") BigDecimal minPrice,
+                     @Param("maxPrice") BigDecimal maxPrice,
+                     @Param("excludeId") Long excludeId,
+                     Pageable pageable);
+
        @Query("SELECT c FROM Car c WHERE c.isFeatured = true AND c.isActive = true AND " +
                      "(c.featuredUntil IS NULL OR c.featuredUntil > CURRENT_TIMESTAMP)")
        List<Car> findCurrentlyFeaturedCars();
@@ -205,6 +215,14 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        long countByOwner(User owner);
 
        long countByOwnerId(Long ownerId);
+
+       boolean existsByIdAndOwnerId(Long id, Long ownerId);
+
+       @Query("SELECT c.id FROM Car c WHERE c.owner.id = :ownerId")
+       List<Long> findCarIdsByOwnerId(@Param("ownerId") Long ownerId);
+
+       @Query("SELECT AVG(CAST(DATEDIFF(CURRENT_DATE, c.createdAt) AS double)) FROM Car c WHERE c.owner.id = :ownerId")
+       Double getAverageCarAgeInDaysByOwnerId(@Param("ownerId") Long ownerId);
 
        @Query("SELECT COUNT(c) FROM Car c WHERE c.owner.id = :ownerId AND c.isActive = true")
        long countActiveCarsByOwnerId(@Param("ownerId") Long ownerId);

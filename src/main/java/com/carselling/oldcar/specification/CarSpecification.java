@@ -3,9 +3,6 @@ package com.carselling.oldcar.specification;
 import com.carselling.oldcar.dto.car.CarSearchCriteria;
 import com.carselling.oldcar.model.Car;
 
-import com.carselling.oldcar.model.User;
-import jakarta.persistence.criteria.Join;
-import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
@@ -27,9 +24,6 @@ public class CarSpecification {
                 return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
             }
 
-            // JOIN for Owner fields
-            Join<Car, User> ownerJoin = root.join("owner", JoinType.LEFT);
-
             // 1. Text Search (Query) - Applies to Make, Model, or Description
             if (StringUtils.hasText(criteria.getQuery())) {
                 String searchTerm = "%" + criteria.getQuery().trim().toLowerCase() + "%";
@@ -41,31 +35,26 @@ public class CarSpecification {
 
             // 2. Exact/Partial Filters
 
-            if (StringUtils.hasText(criteria.getMake())) {
-                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("make")),
-                        "%" + criteria.getMake().trim().toLowerCase() + "%"));
+            if (criteria.getMake() != null && !criteria.getMake().isEmpty()) {
+                predicates.add(root.get("make").in(criteria.getMake()));
+            }
+            if (criteria.getModel() != null && !criteria.getModel().isEmpty()) {
+                predicates.add(root.get("model").in(criteria.getModel()));
+            }
+            // Add variant search if needed
+            if (StringUtils.hasText(criteria.getVariant())) {
+                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("variant")),
+                        "%" + criteria.getVariant().toLowerCase().trim() + "%"));
             }
 
-            if (StringUtils.hasText(criteria.getModel())) {
-                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("model")),
-                        "%" + criteria.getModel().trim().toLowerCase() + "%"));
+            if (criteria.getLocation() != null && !criteria.getLocation().isEmpty()) {
+                predicates.add(root.get("location").in(criteria.getLocation()));
             }
-
-            if (StringUtils.hasText(criteria.getFuelType())) {
-                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("fuelType")),
-                        "%" + criteria.getFuelType().trim().toLowerCase() + "%"));
+            if (criteria.getFuelType() != null && !criteria.getFuelType().isEmpty()) {
+                predicates.add(root.get("fuelType").in(criteria.getFuelType()));
             }
-
-            if (StringUtils.hasText(criteria.getTransmission())) {
-                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("transmission")),
-                        "%" + criteria.getTransmission().trim().toLowerCase() + "%"));
-            }
-
-            if (StringUtils.hasText(criteria.getLocation())) {
-                String locTerm = "%" + criteria.getLocation().trim().toLowerCase() + "%";
-                Predicate carLoc = criteriaBuilder.like(criteriaBuilder.lower(root.get("location")), locTerm);
-                Predicate ownerLoc = criteriaBuilder.like(criteriaBuilder.lower(ownerJoin.get("location")), locTerm);
-                predicates.add(criteriaBuilder.or(carLoc, ownerLoc));
+            if (criteria.getTransmission() != null && !criteria.getTransmission().isEmpty()) {
+                predicates.add(root.get("transmission").in(criteria.getTransmission()));
             }
 
             // 3. Range Filters

@@ -71,8 +71,9 @@ app:
   # JWT Configuration (shorter expiration for development)
   jwt:
     secret: myDevSecretKey123456789012345678901234567890
-    access-token-expiration: 3600000 # 1 hour for development
-    refresh-token-expiration: 86400000 # 1 day for development
+    # Consistent keys with JwtTokenProvider
+    expiration-ms: 86400000 # 24 hours for development
+    refresh-token-expiration-ms: 86400000 # 24 hours for development
     
   # File Upload Configuration
   upload:

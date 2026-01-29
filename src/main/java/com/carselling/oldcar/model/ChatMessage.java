@@ -11,7 +11,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "chat_messages_v2")
+@Table(name = "chat_messages_v2",
+       uniqueConstraints = {
+               @UniqueConstraint(columnNames = {"sender_id", "client_message_id"})
+       })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -75,6 +78,9 @@ public class ChatMessage {
     @Enumerated(EnumType.STRING)
     @Column(name = "delivery_status", length = 50)
     private DeliveryStatus deliveryStatus;
+
+    @Column(name = "client_message_id", length = 100)
+    private String clientMessageId;
 
     public enum MessageType {
         TEXT,

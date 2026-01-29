@@ -1,7 +1,6 @@
 package com.carselling.oldcar.config;
 
 import com.carselling.oldcar.security.jwt.JwtTokenProvider;
-import com.carselling.oldcar.websocket.WebSocketErrorHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
@@ -39,7 +38,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final JwtTokenProvider jwtTokenProvider;
     private final com.carselling.oldcar.security.CustomUserDetailsService userDetailsService;
     private final WebSocketAuthInterceptor webSocketAuthInterceptor;
-    private final WebSocketErrorHandler webSocketErrorHandler;
 
     /**
      * Configure message broker for WebSocket communication
@@ -55,9 +53,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
         // User-specific destination prefix
         config.setUserDestinationPrefix("/user");
-        
-        // Set custom error handler
-        config.configureBrokerChannel().errorHandler(webSocketErrorHandler);
 
         log.info("WebSocket message broker configured with prefixes: /topic, /queue, /user, /app");
     }

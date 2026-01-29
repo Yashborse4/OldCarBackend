@@ -22,6 +22,7 @@ public class FileUploadResponse {
     private String contentType;
     private String folder;
     private LocalDateTime uploadedAt;
+    private String fileId;
     private String presignedUrl;
 
     // Additional metadata

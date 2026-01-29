@@ -30,8 +30,7 @@ public class B2FileService {
     private final UploadedFileRepository uploadedFileRepository;
     private final B2Properties properties;
 
-    private final java.util.concurrent.ExecutorService executorService = java.util.concurrent.Executors
-            .newFixedThreadPool(10);
+    private final java.util.concurrent.Executor taskExecutor;
 
     public FileUploadResponse uploadFile(MultipartFile file, String folder, User uploader, ResourceType ownerType,
             Long ownerId) throws IOException {
@@ -50,6 +49,7 @@ public class B2FileService {
                     .fileName(existingFile.getFileName())
                     .originalFileName(existingFile.getOriginalFileName())
                     .fileUrl(existingFile.getFileUrl())
+                    .fileId(existingFile.getFileId())
                     .fileSize(existingFile.getSize())
                     .contentType(existingFile.getContentType())
                     .folder(folder) // Note: folder might be different, but content is same.
@@ -78,7 +78,7 @@ public class B2FileService {
         }
         fileMetadata.put("upload-timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
 
-        b2Client.uploadFile(b2FileName, file.getBytes(),
+        B2Client.UploadFileResponse b2Response = b2Client.uploadFile(b2FileName, file.getBytes(),
                 file.getContentType(), fileMetadata);
 
         // Construct CDN URL
@@ -111,6 +111,7 @@ public class B2FileService {
                 .ownerType(ownerType)
                 .ownerId(ownerId)
                 .fileHash(fileHash) // Save hash for future idempotency
+                .fileId(b2Response.getFileId())
                 .build();
 
         uploadedFileRepository.save(uploadedFile);
@@ -119,6 +120,7 @@ public class B2FileService {
                 .fileName(uniqueFileName)
                 .originalFileName(originalFileName)
                 .fileUrl(publicUrl)
+                .fileId(b2Response.getFileId())
                 .fileSize(file.getSize())
                 .contentType(file.getContentType())
                 .folder(folder)
@@ -141,7 +143,7 @@ public class B2FileService {
                                 .fileName("FAILED: " + e.getMessage())
                                 .build();
                     }
-                }, executorService))
+                }, taskExecutor))
                 .collect(java.util.stream.Collectors.toList());
 
         return futures.stream()
@@ -152,7 +154,14 @@ public class B2FileService {
     private String calculateSha1(MultipartFile file) throws IOException {
         try {
             java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-1");
-            byte[] hash = digest.digest(file.getBytes());
+            try (java.io.InputStream is = file.getInputStream()) {
+                byte[] buffer = new byte[8192];
+                int n;
+                while ((n = is.read(buffer)) != -1) {
+                    digest.update(buffer, 0, n);
+                }
+            }
+            byte[] hash = digest.digest();
             StringBuilder hexString = new StringBuilder();
             for (byte b : hash) {
                 String hex = Integer.toHexString(0xff & b);
@@ -167,8 +176,33 @@ public class B2FileService {
     }
 
     public boolean deleteFile(String fileUrl) {
-        // Implementation requires extracting fileName/ID.
-        // Skipping strict delete logic for now as focus is upload migration.
+        if (fileUrl == null || fileUrl.isEmpty()) {
+            return false;
+        }
+
+        Optional<UploadedFile> fileOpt = uploadedFileRepository.findByFileUrl(fileUrl);
+        if (fileOpt.isPresent()) {
+            UploadedFile file = fileOpt.get();
+            try {
+                // If we have a fileId, delete that specific version (safer/cleaner in B2)
+                if (file.getFileId() != null) {
+                    b2Client.deleteFileVersion(file.getFileName(), file.getFileId());
+                } else {
+                    // Fallback or just log warning?
+                    // Without fileId, we might need to hide it or find it by name.
+                    // For now, attempting delete by name IF your client supported it, but B2
+                    // requires fileId.
+                    // We'll leave it as "cannot delete from storage" but delete record.
+                    log.warn("No B2 fileId for {}, skipping storage deletion.", file.getFileName());
+                }
+
+                uploadedFileRepository.delete(file);
+                return true;
+            } catch (Exception e) {
+                log.error("Failed to delete file: {}", fileUrl, e);
+                return false;
+            }
+        }
         return false;
     }
 

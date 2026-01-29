@@ -3,15 +3,15 @@ package com.carselling.oldcar.service;
 import com.carselling.oldcar.model.Car;
 import com.carselling.oldcar.model.MediaStatus;
 import com.carselling.oldcar.repository.CarRepository;
+import com.carselling.oldcar.b2.B2FileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -20,80 +20,52 @@ public class AsyncMediaService {
 
     private final CarRepository carRepository;
     private final TransactionTemplate transactionTemplate;
+    // Assuming B2FileService can provide public URLs
+    private final B2FileService b2FileService;
 
     @Async
-    public void processMedia(Long carId, List<String> filePaths) {
+    public void processMedia(Long carId, List<String> fileUrls) {
         log.info("Starting async media processing for car: {}", carId);
 
-        // Run outside transaction first for long-running tasks
         try {
             // Step 1: Set Status PROCESSING
             updateStatus(carId, MediaStatus.PROCESSING);
 
-            // Step 2: Validate Size (Simulated)
-            Thread.sleep(1000);
-            log.info("Size validation passed for car: {}", carId);
+            // Step 2: Validate Files exist (and potentially scan them)
+            // For now, we assume they are valid B2 URLs or paths.
+            // In a real scenario, we would download, scan (ClamAV), and verify dimensions.
+            // Here we just verify reasonable URL format.
 
-            // Step 3: Compress (Simulated)
-            Thread.sleep(1500);
-            log.info("Server-side compression completed for car: {}", carId);
+            List<String> validImageUrls = new ArrayList<>();
+            String videoUrl = null;
 
-            // Step 4: Generate Thumbnails (Simulated)
-            Thread.sleep(1000);
-            log.info("Thumbnail generation completed for car: {}", carId);
+            for (String url : fileUrls) {
+                if (url == null || url.isBlank())
+                    continue;
 
-        } catch (InterruptedException e) {
-            log.error("Processing interrupted for car: {}", carId);
-            updateStatus(carId, MediaStatus.FAILED);
-            return;
-        }
-
-        // Final Transactional Update
-        transactionTemplate.execute(status -> {
-            Car car = carRepository.findById(carId).orElse(null);
-            if (car == null)
-                return null;
-
-            try {
-                List<String> validImageUrls = new ArrayList<>();
-                String videoUrl = null;
-
-                for (String path : filePaths) {
-                    boolean isVideo = path.toLowerCase().endsWith(".mp4") || path.toLowerCase().endsWith(".mov");
-                    // In a real app, this would point to the *processed* file location, not the raw
-                    // one.
-                    // Since frontend did the work, we assume these are the 'final' files for now.
-                    String publicUrl = "https://storage.googleapis.com/" + getBucketNameFromService() + "/" + path;
-
-                    if (isVideo) {
-                        videoUrl = publicUrl;
-                    } else {
-                        validImageUrls.add(publicUrl);
-                    }
+                if (isSuspicious(url)) {
+                    log.warn("Suspicious file detected for car {}: {}", carId, url);
+                    continue; // Skip suspicious files
                 }
 
-                if (!validImageUrls.isEmpty()) {
-                    car.setImages(validImageUrls);
-                    car.setImageUrl(validImageUrls.get(0));
+                // Basic extension check
+                String lowerUrl = url.toLowerCase();
+                if (lowerUrl.endsWith(".mp4") || lowerUrl.endsWith(".mov") || lowerUrl.endsWith(".avi")) {
+                    videoUrl = url;
+                } else {
+                    validImageUrls.add(url);
                 }
-                if (videoUrl != null) {
-                    car.setVideoUrl(videoUrl);
-                }
-
-                car.setMediaStatus(MediaStatus.READY);
-                car.setIsActive(true);
-                car.setIsAvailable(true);
-                carRepository.save(car);
-
-                log.info("Media processing pipeline FINISHED. Car {} is READY.", carId);
-
-            } catch (Exception e) {
-                log.error("DB Update failed for car: {}", carId, e);
-                car.setMediaStatus(MediaStatus.FAILED);
-                carRepository.save(car);
             }
-            return null;
-        });
+
+            // Step 3: Update Car with Validated Media
+            updateCarMedia(carId, validImageUrls, videoUrl);
+
+            log.info("Media processing completed for car: {}", carId);
+
+        } catch (Exception e) {
+            log.error("Media processing failed for car: {}", carId, e);
+            updateStatus(carId, MediaStatus.FAILED);
+        }
     }
 
     private void updateStatus(Long carId, MediaStatus status) {
@@ -106,13 +78,39 @@ public class AsyncMediaService {
         });
     }
 
-    // Helper to get bucket name - somewhat hacky as the service doesn't expose it
-    // directly public
-    // We'll assume the environment variable or config property is available,
-    // but for now let's just use a placeholder or derived one.
-    private String getBucketNameFromService() {
-        // This is a placeholder. In a real app, inject
-        // @Value("${firebase.storage.bucket}")
-        return "car-sales-app.appspot.com";
+    private void updateCarMedia(Long carId, List<String> imageUrls, String videoUrl) {
+        transactionTemplate.execute(tx -> {
+            Car car = carRepository.findById(carId).orElse(null);
+            if (car == null)
+                return null;
+
+            if (!imageUrls.isEmpty()) {
+                car.setImages(imageUrls);
+                // Set first image as banner if not set
+                if (car.getImageUrl() == null || car.getImageUrl().isBlank()) {
+                    car.setImageUrl(imageUrls.get(0));
+                }
+            }
+
+            if (videoUrl != null) {
+                car.setVideoUrl(videoUrl);
+            }
+
+            car.setMediaStatus(MediaStatus.READY);
+
+            // Auto-activate if verified dealer
+            if (car.getOwner().canListCarsPublicly()) {
+                car.setIsActive(true);
+                car.setIsAvailable(true);
+            }
+
+            carRepository.save(car);
+            return null;
+        });
+    }
+
+    private boolean isSuspicious(String url) {
+        // Simple security check
+        return url.contains("..") || url.contains(".exe") || url.contains(".sh");
     }
 }

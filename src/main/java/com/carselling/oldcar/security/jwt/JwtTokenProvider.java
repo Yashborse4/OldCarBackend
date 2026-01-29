@@ -43,10 +43,9 @@ public class JwtTokenProvider {
     public void init() {
         try {
             if (jwtSecret == null || jwtSecret.trim().isEmpty()) {
-                log.warn(
-                        "JWT_SECRET not configured. Using fallback development secret. THIS IS NOT SECURE FOR PRODUCTION!");
-                // Fallback 32-byte secret for development only
-                jwtSecret = "jRdTUfn4xlZsyrpJvsn3ScbbCdh5ziaXReuetz9r0QF";
+                log.error("JWT_SECRET is not configured in application properties or environment variables.");
+                throw new IllegalStateException(
+                        "JWT_SECRET configuration is missing. Application cannot start securely.");
             }
 
             byte[] keyBytes;

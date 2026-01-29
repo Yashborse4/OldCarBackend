@@ -21,7 +21,7 @@ public interface UserAnalyticsEventRepository extends JpaRepository<UserAnalytic
 
         // =============== BASIC QUERIES ===============
 
-        Page<UserAnalyticsEvent> findByUserId(Long userId, Pageable pageable);
+        Page<UserAnalyticsEvent> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
         Page<UserAnalyticsEvent> findBySessionId(String sessionId, Pageable pageable);
 
@@ -156,12 +156,24 @@ public interface UserAnalyticsEventRepository extends JpaRepository<UserAnalytic
          */
         @Query("SELECT FUNCTION('MONTHNAME', e.createdAt) as month, COUNT(e) as inquiries " +
                         "FROM UserAnalyticsEvent e " +
-                        "WHERE e.targetType = 'CAR' AND e.targetId IN :carIds AND e.eventType = 'CONTACT_CLICK' " +
+                        "WHERE e.targetType = 'CAR' AND e.targetId IN :carIds " +
+                        "AND e.eventType IN ('CAR_CONTACT_CLICK', 'CAR_CALL_CLICK', 'CAR_CHAT_OPEN', 'CAR_WHATSAPP_CLICK') "
+                        +
                         "AND e.createdAt >= :startDate " +
                         "GROUP BY FUNCTION('MONTHNAME', e.createdAt), FUNCTION('MONTH', e.createdAt) " +
                         "ORDER BY FUNCTION('MONTH', e.createdAt)")
         List<Object[]> getDealerMonthlyInquiries(@Param("carIds") List<String> carIds,
                         @Param("startDate") LocalDateTime startDate);
+
+        /**
+         * Get top performed car IDs (most views)
+         */
+        @Query("SELECT e.targetId FROM UserAnalyticsEvent e " +
+                        "WHERE e.targetType = 'CAR' AND e.eventType = 'CAR_VIEW' " +
+                        "AND e.targetId IN :carIds " +
+                        "GROUP BY e.targetId " +
+                        "ORDER BY COUNT(e) DESC")
+        List<String> findTopPerformedCarIds(@Param("carIds") List<String> carIds, Pageable pageable);
 
         /**
          * Get location stats regarding views

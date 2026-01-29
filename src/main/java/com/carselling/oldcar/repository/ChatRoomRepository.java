@@ -59,4 +59,18 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
        Page<ChatRoom> findDealerInquiriesByStatus(@Param("dealerId") Long dealerId,
                      @Param("status") ChatRoom.InquiryStatus status,
                      Pageable pageable);
+
+       // Optimized query to fetch Chat Rooms with Participant Count and optionally
+       // Unread Count if joined
+       // Note: Fetching last message efficiently is complex in JPQL across multiple
+       // rooms.
+       // Strategy: Fetch Room + Participants, then Batch Fetch Last Messages in
+       // Service?
+       // OR: Use EntityGraph to eagerness loaded participants.
+       // Let's use EntityGraph for participants first to solve N+1 on participants
+       // loop.
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
+                     "car", "car.images" })
+       @Query("SELECT DISTINCT r FROM ChatRoom r JOIN r.participants p WHERE p.user.id = :userId ORDER BY r.lastActivityAt DESC")
+       Page<ChatRoom> findChatRoomsWithParticipants(@Param("userId") Long userId, Pageable pageable);
 }

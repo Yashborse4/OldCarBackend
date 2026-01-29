@@ -75,6 +75,12 @@ public class CarRequest {
     private java.util.List<String> images;
 
     /**
+     * List of Temporary File IDs to finalize and attach to this car.
+     * Used for new secure upload flow.
+     */
+    private java.util.List<Long> tempFileIds;
+
+    /**
      * Optional: Reference to CarMaster catalog entry for auto-populating specs.
      * If provided, specs from the catalog can be used as defaults.
      */

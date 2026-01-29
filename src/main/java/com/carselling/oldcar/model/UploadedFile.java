@@ -25,6 +25,9 @@ public class UploadedFile {
     @Column(nullable = false, length = 500)
     private String fileUrl;
 
+    @Column(name = "file_id", length = 200) // B2 file IDs can be long
+    private String fileId;
+
     @Column(nullable = false, length = 255)
     private String fileName;
 
@@ -48,6 +51,9 @@ public class UploadedFile {
     @Column(name = "owner_id")
     private Long ownerId;
 
+    @Column(name = "file_hash", length = 64)
+    private String fileHash; // SHA-1 or SHA-256
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -56,4 +62,3 @@ public class UploadedFile {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 }
-

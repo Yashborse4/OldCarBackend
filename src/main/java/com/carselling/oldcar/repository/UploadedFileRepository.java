@@ -6,5 +6,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface UploadedFileRepository extends JpaRepository<UploadedFile, Long> {
-}
 
+    java.util.Optional<UploadedFile> findByFileHashAndUploadedById(String fileHash, Long uploadedById);
+
+    java.util.Optional<UploadedFile> findByFileUrl(String fileUrl);
+}

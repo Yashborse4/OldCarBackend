@@ -29,6 +29,8 @@ public class SendMessageRequest {
 
     private Long replyToId;
 
+    private String clientMessageId;
+
     private String fileUrl;
     private String fileName;
     private Long fileSize;

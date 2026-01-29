@@ -1,0 +1,132 @@
+ M build.gradle
+ M src/main/java/com/carselling/oldcar/b2/B2Client.java
+ M src/main/java/com/carselling/oldcar/b2/B2FileService.java
+ M src/main/java/com/carselling/oldcar/config/AsyncConfig.java
+ M src/main/java/com/carselling/oldcar/config/WebConfig.java
+ M src/main/java/com/carselling/oldcar/config/WebSocketConfig.java
+ D src/main/java/com/carselling/oldcar/controller/AdminController.java
+ D src/main/java/com/carselling/oldcar/controller/AuthController.java
+ D src/main/java/com/carselling/oldcar/controller/CarController.java
+ D src/main/java/com/carselling/oldcar/controller/CarMasterController.java
+ D src/main/java/com/carselling/oldcar/controller/CarSearchController.java
+ D src/main/java/com/carselling/oldcar/controller/CarSearchFallbackController.java
+ M src/main/java/com/carselling/oldcar/controller/CarSearchGraphQlController.java
+ D src/main/java/com/carselling/oldcar/controller/ChatController.java
+ D src/main/java/com/carselling/oldcar/controller/DealerVerificationController.java
+ M src/main/java/com/carselling/oldcar/controller/FileController.java
+ D src/main/java/com/carselling/oldcar/controller/MediaController.java
+ D src/main/java/com/carselling/oldcar/controller/MobileApiController.java
+ D src/main/java/com/carselling/oldcar/controller/UserAnalyticsController.java
+ D src/main/java/com/carselling/oldcar/controller/UserController.java
+ M src/main/java/com/carselling/oldcar/dto/car/CarRequest.java
+ M src/main/java/com/carselling/oldcar/dto/car/CarResponse.java
+ M src/main/java/com/carselling/oldcar/dto/car/CarSearchCriteria.java
+ M src/main/java/com/carselling/oldcar/dto/car/CarSearchDtos.java
+ M src/main/java/com/carselling/oldcar/dto/car/PrivateCarDTO.java
+ M src/main/java/com/carselling/oldcar/exception/GlobalExceptionHandler.java
+ M src/main/java/com/carselling/oldcar/model/Car.java
+ M src/main/java/com/carselling/oldcar/model/MediaStatus.java
+ M src/main/java/com/carselling/oldcar/model/UploadedFile.java
+ M src/main/java/com/carselling/oldcar/repository/CarRepository.java
+ M src/main/java/com/carselling/oldcar/repository/UploadedFileRepository.java
+ M src/main/java/com/carselling/oldcar/repository/UserAnalyticsEventRepository.java
+ M src/main/java/com/carselling/oldcar/security/SecurityConfig.java
+ M src/main/java/com/carselling/oldcar/security/jwt/JwtAuthenticationFilter.java
+ M src/main/java/com/carselling/oldcar/security/jwt/JwtTokenProvider.java
+ D src/main/java/com/carselling/oldcar/service/AdminService.java
+ M src/main/java/com/carselling/oldcar/service/AsyncMediaService.java
+ D src/main/java/com/carselling/oldcar/service/AuthService.java
+ D src/main/java/com/carselling/oldcar/service/AuthServiceImpl.java
+ M src/main/java/com/carselling/oldcar/service/CarInteractionEventService.java
+ D src/main/java/com/carselling/oldcar/service/CarMasterService.java
+ D src/main/java/com/carselling/oldcar/service/CarService.java
+ D src/main/java/com/carselling/oldcar/service/CarServiceImpl.java
+ M src/main/java/com/carselling/oldcar/service/ChatService.java
+ D src/main/java/com/carselling/oldcar/service/DealerVerificationService.java
+ M src/main/java/com/carselling/oldcar/service/FileValidationService.java
+ M src/main/java/com/carselling/oldcar/service/NotificationService.java
+ D src/main/java/com/carselling/oldcar/service/OtpService.java
+ D src/main/java/com/carselling/oldcar/service/UserAnalyticsService.java
+ D src/main/java/com/carselling/oldcar/service/UserService.java
+ D src/main/java/com/carselling/oldcar/service/VehicleServiceEnhanced.java
+ M src/main/java/com/carselling/oldcar/specification/CarSpecification.java
+ M src/main/java/com/carselling/oldcar/websocket/ChatWebSocketController.java
+ M src/main/resources/application-dev.yml
+ M src/main/resources/application.properties
+ D src/main/resources/schema.graphqls
+ M src/test/java/com/CarSelling/oldcar/service/CarMasterServiceTest.java
+?? build_output.txt
+?? build_output_clean.txt
+?? build_output_debug.txt
+?? build_output_final.txt
+?? build_output_phase3_1.txt
+?? build_output_phase3_2.txt
+?? build_output_phase3_3.txt
+?? build_output_phase3_auth.txt
+?? build_output_phase3_chat.txt
+?? build_output_phase4_analytics.txt
+?? build_output_phase4_analytics_retry.txt
+?? build_output_phase4_async.txt
+?? build_output_phase4_mobile.txt
+?? build_output_phase5_observability.txt
+?? build_output_phase5_pricing.txt
+?? build_output_phase5_pricing_v2.txt
+?? build_output_phase5_pricing_v3.txt
+?? build_output_phase5_rec.txt
+?? build_output_security_verify.txt
+?? build_output_v2.txt
+?? build_output_v3.txt
+?? build_output_v4.txt
+?? build_output_v5.txt
+?? build_output_v6.txt
+?? git_status.txt
+?? src/main/java/com/carselling/oldcar/config/GraphQlConfig.java
+?? src/main/java/com/carselling/oldcar/config/WebSocketAuthInterceptor.java
+?? src/main/java/com/carselling/oldcar/controller/CarGeneralGraphQlController.java
+?? src/main/java/com/carselling/oldcar/controller/ChatMessageController.java
+?? src/main/java/com/carselling/oldcar/controller/ChatRoomController.java
+?? src/main/java/com/carselling/oldcar/controller/MobileAppController.java
+?? src/main/java/com/carselling/oldcar/controller/NotificationController.java
+?? src/main/java/com/carselling/oldcar/controller/admin/
+?? src/main/java/com/carselling/oldcar/controller/analytics/
+?? src/main/java/com/carselling/oldcar/controller/auth/
+?? src/main/java/com/carselling/oldcar/controller/car/
+?? src/main/java/com/carselling/oldcar/controller/user/
+?? src/main/java/com/carselling/oldcar/dto/admin/AdminDashboardResponse.java
+?? src/main/java/com/carselling/oldcar/dto/car/MediaUploadRequest.java
+?? src/main/java/com/carselling/oldcar/dto/graphql/CarGraphQLDto.java
+?? src/main/java/com/carselling/oldcar/event/NotificationEvent.java
+?? src/main/java/com/carselling/oldcar/event/listener/
+?? src/main/java/com/carselling/oldcar/exception/CarNotFoundException.java
+?? src/main/java/com/carselling/oldcar/exception/DealerNotVerifiedException.java
+?? src/main/java/com/carselling/oldcar/exception/MediaUploadNotAllowedException.java
+?? src/main/java/com/carselling/oldcar/filter/
+?? src/main/java/com/carselling/oldcar/graphql/
+?? src/main/java/com/carselling/oldcar/mapper/CarMapper.java
+?? src/main/java/com/carselling/oldcar/model/CarStatus.java
+?? src/main/java/com/carselling/oldcar/model/RefreshToken.java
+?? src/main/java/com/carselling/oldcar/model/TemporaryFile.java
+?? src/main/java/com/carselling/oldcar/repository/RefreshTokenRepository.java
+?? src/main/java/com/carselling/oldcar/repository/TemporaryFileRepository.java
+?? src/main/java/com/carselling/oldcar/search/CarSearchProvider.java
+?? src/main/java/com/carselling/oldcar/search/provider/
+?? src/main/java/com/carselling/oldcar/security/AuthenticationHelper.java
+?? src/main/java/com/carselling/oldcar/service/ChecksumService.java
+?? src/main/java/com/carselling/oldcar/service/FileAuthorizationService.java
+?? src/main/java/com/carselling/oldcar/service/IdempotencyService.java
+?? src/main/java/com/carselling/oldcar/service/MediaFinalizationService.java
+?? src/main/java/com/carselling/oldcar/service/MediaService.java
+?? src/main/java/com/carselling/oldcar/service/MediaServiceImpl.java
+?? src/main/java/com/carselling/oldcar/service/RateLimitingService.java
+?? src/main/java/com/carselling/oldcar/service/ReferralService.java
+?? src/main/java/com/carselling/oldcar/service/TempFileCleanupService.java
+?? src/main/java/com/carselling/oldcar/service/VirusScanService.java
+?? src/main/java/com/carselling/oldcar/service/admin/
+?? src/main/java/com/carselling/oldcar/service/analytics/
+?? src/main/java/com/carselling/oldcar/service/auth/
+?? src/main/java/com/carselling/oldcar/service/car/
+?? src/main/java/com/carselling/oldcar/service/graphql/
+?? src/main/java/com/carselling/oldcar/service/impl/
+?? src/main/java/com/carselling/oldcar/service/search/
+?? src/main/java/com/carselling/oldcar/service/user/
+?? src/main/resources/graphql/

@@ -75,24 +75,43 @@ public class FileAuthorizationService {
 
     public long extractIdFromPath(String path, String prefix) {
         try {
-            int startIndex = path.indexOf(prefix) + prefix.length();
+            // Safe extraction preventing index out of bounds
+            // Assuming format: "prefix{id}/..."
+            int startIndex = path.indexOf(prefix);
+            if (startIndex == -1)
+                return -1;
+
+            startIndex += prefix.length();
             int endIndex = path.indexOf("/", startIndex);
             if (endIndex == -1)
                 endIndex = path.length();
-            return Long.parseLong(path.substring(startIndex, endIndex));
+
+            String idStr = path.substring(startIndex, endIndex);
+            return Long.parseLong(idStr);
         } catch (Exception e) {
+            log.warn("Failed to extract ID from path: {}", path);
             return -1;
         }
     }
 
     public long extractIdFromUrl(String url, String pattern) {
         try {
-            int startIndex = url.indexOf(pattern) + pattern.length();
-            int endIndex = url.indexOf("/", startIndex);
-            if (endIndex == -1)
+            // Handle both full URLs and paths
+            int startIndex = url.indexOf(pattern);
+            if (startIndex == -1)
                 return -1;
-            return Long.parseLong(url.substring(startIndex, endIndex));
+
+            startIndex += pattern.length();
+            int endIndex = url.indexOf("/", startIndex);
+            if (endIndex == -1) {
+                // Check if it might end with the ID (e.g. .../users/123)
+                endIndex = url.length();
+            }
+
+            String idStr = url.substring(startIndex, endIndex);
+            return Long.parseLong(idStr);
         } catch (Exception e) {
+            log.warn("Failed to extract ID from URL: {}", url);
             return -1;
         }
     }

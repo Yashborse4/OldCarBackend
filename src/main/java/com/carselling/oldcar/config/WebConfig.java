@@ -14,31 +14,24 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
 
-    private final RateLimitingInterceptor rateLimitingInterceptor;
-    private final PerformanceInterceptor performanceInterceptor;
+        private final RateLimitingInterceptor rateLimitingInterceptor;
+        private final PerformanceInterceptor performanceInterceptor;
 
-    @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        // Register rate limiting interceptor
-        registry.addInterceptor(rateLimitingInterceptor)
-                .addPathPatterns("/api/**")
-                .excludePathPatterns(
-                        "/actuator/health",
-                        "/swagger-ui/**",
-                        "/v3/api-docs/**");
+        @Override
+        public void addInterceptors(InterceptorRegistry registry) {
+                // Register rate limiting interceptor
+                registry.addInterceptor(rateLimitingInterceptor)
+                                .addPathPatterns("/api/**")
+                                .excludePathPatterns(
+                                                "/actuator/health",
+                                                "/swagger-ui/**",
+                                                "/v3/api-docs/**");
 
-        // Register performance monitoring interceptor
-        registry.addInterceptor(performanceInterceptor)
-                .addPathPatterns("/api/**");
-    }
+                // Register performance monitoring interceptor
+                registry.addInterceptor(performanceInterceptor)
+                                .addPathPatterns("/api/**");
+        }
 
-    @Override
-    public void addCorsMappings(org.springframework.web.servlet.config.annotation.CorsRegistry registry) {
-        registry.addMapping("/**")
-                .allowedOriginPatterns("http://localhost:*", "https://*.carselling.com") // Strict patterns
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-                .allowedHeaders("*")
-                .allowCredentials(true)
-                .maxAge(3600);
-    }
+        // CORS is now configured in SecurityConfig to avoid conflicts
+
 }

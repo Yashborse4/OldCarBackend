@@ -110,6 +110,11 @@ public class Car {
     @Builder.Default
     private Boolean isApproved = false; // For moderation
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20)
+    @Builder.Default
+    private CarStatus status = CarStatus.DRAFT;
+
     /**
      * Idempotency key for preventing duplicate car creation on retries.
      * Unique combination of owner_id + idempotency_key prevents duplicates.
@@ -158,7 +163,6 @@ public class Car {
     @Size(max = 50, message = "Color must not exceed 50 characters")
     @Column(length = 50)
     private String color;
-
 
     @Column(name = "number_of_owners")
     @Min(value = 1, message = "Number of owners must be at least 1")
