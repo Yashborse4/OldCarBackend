@@ -25,6 +25,7 @@ public class OtpService {
 
     private final OtpRepository otpRepository;
     private final EmailService emailService;
+    private final com.carselling.oldcar.service.MobileOtpService mobileOtpService;
     private final com.carselling.oldcar.repository.UserRepository userRepository;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
@@ -97,7 +98,13 @@ public class OtpService {
         // 6. Send Email (send plain OTP via email, but never store it)
         if (otpEnabled) {
             emailService.sendOtpEmail(email, otpCode, purpose.name());
-            log.info("OTP sent to {}", email);
+
+            // 7. Send Mobile OTP (if enabled in MobileOtpService and user has phone)
+            if (user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank()) {
+                mobileOtpService.sendOk(user.getPhoneNumber(), otpCode, purpose.name());
+            }
+
+            log.info("OTP sent to {} (and phone if available)", email);
         } else {
             log.info("OTP delivery disabled. OTP for {}: {}", email, otpCode);
         }

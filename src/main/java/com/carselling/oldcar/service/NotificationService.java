@@ -2,16 +2,27 @@ package com.carselling.oldcar.service;
 
 import com.carselling.oldcar.event.NotificationEvent;
 import com.carselling.oldcar.model.User;
+import com.carselling.oldcar.model.UserDeviceToken;
+import com.carselling.oldcar.repository.UserDeviceTokenRepository;
+import com.carselling.oldcar.repository.UserRepository;
+import com.google.firebase.messaging.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Service to handle sending notifications (Email, Push, etc.)
  * Uses ApplicationEventPublisher to publish events for async processing.
+ * Also handles Direct FCM Push Notifications.
  */
 @Service
 @RequiredArgsConstructor
@@ -19,24 +30,187 @@ import java.util.Map;
 public class NotificationService {
 
     private final ApplicationEventPublisher eventPublisher;
-    private final com.carselling.oldcar.repository.UserRepository userRepository;
+    private final UserRepository userRepository;
+    private final UserDeviceTokenRepository tokenRepository;
 
-    public void registerDevice(Long userId, String deviceToken) {
-        log.info("Registering device token for user: {}", userId);
-        userRepository.findById(userId).ifPresent(user -> {
-            user.setFcmToken(deviceToken);
-            userRepository.save(user);
-        });
+    /**
+     * Register a device token for Push Notifications (Multi-device support)
+     */
+    @Transactional
+    public void registerToken(Long userId, String token, String platformStr) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Normalize platform
+        UserDeviceToken.Platform platform;
+        try {
+            platform = UserDeviceToken.Platform.valueOf(platformStr.toUpperCase());
+        } catch (Exception e) {
+            platform = UserDeviceToken.Platform.ANDROID; // Default
+        }
+
+        // Check if token exists
+        Optional<UserDeviceToken> existingToken = tokenRepository.findByToken(token);
+
+        if (existingToken.isPresent()) {
+            UserDeviceToken t = existingToken.get();
+            // If user changed, update owner
+            if (!t.getUser().getId().equals(userId)) {
+                t.setUser(user);
+            }
+            t.setPlatform(platform);
+            t.setUpdatedAt(LocalDateTime.now());
+            tokenRepository.save(t);
+        } else {
+            UserDeviceToken newToken = UserDeviceToken.builder()
+                    .user(user)
+                    .token(token)
+                    .platform(platform)
+                    .build();
+            tokenRepository.save(newToken);
+        }
+
+        // Backwards compatibility: Update User entity's single token field just in case
+        user.setFcmToken(token);
+        userRepository.save(user); // Optimization: Could be removed if single token isn't used
+
+        log.info("Registered FCM token for user {}", userId);
     }
 
+    /**
+     * Legacy method: Register single device (Delegates to new method)
+     */
+    public void registerDevice(Long userId, String deviceToken) {
+        registerToken(userId, deviceToken, "ANDROID");
+    }
+
+    /**
+     * Unregister device token
+     */
+    @Transactional
+    public void unregisterToken(String token) {
+        tokenRepository.findByToken(token).ifPresent(tokenRepository::delete);
+        log.info("Unregistered FCM token");
+    }
+
+    /**
+     * Legacy method: Unregister single device
+     */
     public void unregisterDevice(Long userId, String deviceToken) {
-        log.info("Unregistering device token for user: {}", userId);
+        unregisterToken(deviceToken);
+        // Clean up legacy field
         userRepository.findById(userId).ifPresent(user -> {
             if (deviceToken != null && deviceToken.equals(user.getFcmToken())) {
                 user.setFcmToken(null);
                 userRepository.save(user);
             }
         });
+    }
+
+    /**
+     * Send Push Notification to a User (All their devices)
+     */
+    @Async
+    public void sendToUser(Long userId, String title, String body, Map<String, String> data) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null)
+            return;
+
+        List<UserDeviceToken> tokens = tokenRepository.findByUser(user);
+        if (tokens.isEmpty()) {
+            // Fallback to legacy field
+            if (user.getFcmToken() != null && !user.getFcmToken().isEmpty()) {
+                sendToToken(user.getFcmToken(), title, body, data);
+            }
+            log.debug("No devices found for user {}", userId);
+            return;
+        }
+
+        List<String> validTokens = tokens.stream()
+                .map(UserDeviceToken::getToken)
+                .collect(Collectors.toList());
+
+        if (validTokens.isEmpty())
+            return;
+
+        MulticastMessage message = MulticastMessage.builder()
+                .setNotification(Notification.builder()
+                        .setTitle(title)
+                        .setBody(body)
+                        .build())
+                .putAllData(data != null ? data : Map.of())
+                .addAllTokens(validTokens)
+                .build();
+
+        try {
+            BatchResponse response = FirebaseMessaging.getInstance().sendMulticast(message);
+            log.info("Sent notification to user {}: {} successes, {} failures",
+                    userId, response.getSuccessCount(), response.getFailureCount());
+
+            // Clean up invalid tokens
+            if (response.getFailureCount() > 0) {
+                cleanupInvalidTokens(tokens, response.getResponses());
+            }
+        } catch (Exception e) {
+            log.error("Failed to send notification to user {}", userId, e);
+        }
+    }
+
+    /**
+     * Helper: Send to single token (fallback)
+     */
+    private void sendToToken(String token, String title, String body, Map<String, String> data) {
+        Message message = Message.builder()
+                .setNotification(Notification.builder()
+                        .setTitle(title)
+                        .setBody(body)
+                        .build())
+                .putAllData(data != null ? data : Map.of())
+                .setToken(token)
+                .build();
+        try {
+            FirebaseMessaging.getInstance().send(message);
+        } catch (Exception e) {
+            log.error("Failed to send to legacy token", e);
+        }
+    }
+
+    /**
+     * Send Broadcast Notification to All Users
+     */
+    @Async
+    public void sendToAll(String title, String body) {
+        // Warning: Sending to topic is better for "All Users"
+        Message message = Message.builder()
+                .setNotification(Notification.builder()
+                        .setTitle(title)
+                        .setBody(body)
+                        .build())
+                .setTopic("all_users")
+                .build();
+
+        try {
+            String response = FirebaseMessaging.getInstance().send(message);
+            log.info("Sent broadcast notification: {}", response);
+        } catch (Exception e) {
+            log.error("Failed to send broadcast", e);
+        }
+    }
+
+    private void cleanupInvalidTokens(List<UserDeviceToken> tokens, List<SendResponse> responses) {
+        for (int i = 0; i < responses.size(); i++) {
+            if (!responses.get(i).isSuccessful()) {
+                // Check error code
+                MessagingErrorCode errorCode = responses.get(i).getException().getMessagingErrorCode();
+                if (errorCode == MessagingErrorCode.UNREGISTERED ||
+                        errorCode == MessagingErrorCode.INVALID_ARGUMENT) {
+                    // Token invalid
+                    if (i < tokens.size()) {
+                        tokenRepository.delete(tokens.get(i));
+                    }
+                }
+            }
+        }
     }
 
     public void sendDealerUpgradeNotification(User user) {
@@ -52,6 +226,9 @@ public class NotificationService {
 
         publishNotification(user, NotificationEvent.NotificationType.DEALER_UPGRADE, subject, content,
                 "Go to Dashboard", null);
+
+        // Also send Push
+        sendToUser(user.getId(), "Account Upgraded", "You are now a Dealer!", null);
     }
 
     public void sendBatchJobCompletionNotification(User user, String jobType, String status, String details) {
@@ -66,6 +243,9 @@ public class NotificationService {
         publishNotification(user, NotificationEvent.NotificationType.BATCH_JOB_COMPLETION, subject, content,
                 "View Dashboard",
                 Map.of("jobType", jobType, "status", status));
+
+        // Push
+        sendToUser(user.getId(), "Batch Job " + status, jobType + " completed", null);
     }
 
     public void sendDealerVerificationNotification(User user, boolean verified) {
@@ -80,6 +260,8 @@ public class NotificationService {
 
             publishNotification(user, NotificationEvent.NotificationType.DEALER_VERIFICATION_APPROVED, subject, content,
                     "View Your Listings", null);
+
+            sendToUser(user.getId(), "Dealer Verified", "Your profile is now verified!", null);
         } else {
             log.info("Publishing Dealer Verification Revoked event for user: {}", user.getEmail());
             String subject = "Important: Dealer Verification Status Update";
@@ -92,6 +274,8 @@ public class NotificationService {
 
             publishNotification(user, NotificationEvent.NotificationType.DEALER_VERIFICATION_REVOKED, subject, content,
                     "Contact Support", null);
+
+            sendToUser(user.getId(), "Verification Revoked", "Your dealer status has been revoked.", null);
         }
     }
 

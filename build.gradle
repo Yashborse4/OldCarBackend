@@ -45,7 +45,7 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
 	// Firebase Admin SDK for file uploads and other Firebase features
-	// Firebase Admin SDK removed
+	implementation 'com.google.firebase:firebase-admin:9.2.0'
 	// Apache Tika for file content type detection
 	implementation 'org.apache.tika:tika-core:2.9.1'
 	// Rate limiting with Bucket4j
