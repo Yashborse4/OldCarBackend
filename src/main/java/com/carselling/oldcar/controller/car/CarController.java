@@ -4,7 +4,7 @@ import com.carselling.oldcar.dto.CarStatistics;
 import com.carselling.oldcar.dto.car.CarRequest;
 import com.carselling.oldcar.dto.car.CarResponse;
 import com.carselling.oldcar.dto.car.PublicCarDTO;
-import com.carselling.oldcar.dto.car.UpdateCarStatusRequest;
+
 import com.carselling.oldcar.dto.car.CarAnalyticsResponse;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.service.car.CarService;

@@ -143,7 +143,7 @@ public class NotificationService {
                 .build();
 
         try {
-            BatchResponse response = FirebaseMessaging.getInstance().sendMulticast(message);
+            BatchResponse response = FirebaseMessaging.getInstance().sendEachForMulticast(message);
             log.info("Sent notification to user {}: {} successes, {} failures",
                     userId, response.getSuccessCount(), response.getFailureCount());
 

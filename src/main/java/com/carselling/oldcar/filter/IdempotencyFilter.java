@@ -1,12 +1,11 @@
 package com.carselling.oldcar.filter;
 
-import com.carselling.oldcar.dto.common.ApiResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -25,7 +24,6 @@ import java.util.concurrent.TimeUnit;
  * using an Idempotency-Key header.
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class IdempotencyFilter extends OncePerRequestFilter {
 
@@ -39,8 +37,8 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     // Cleanup scheduler
     private final ScheduledExecutorService cleanupScheduler = Executors.newSingleThreadScheduledExecutor();
 
-    public IdempotencyFilter() {
-        this.objectMapper = new ObjectMapper();
+    public IdempotencyFilter(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
         // Schedule cleanup every minute to remove expired keys
         cleanupScheduler.scheduleAtFixedRate(this::cleanupExpiredKeys, 1, 1, TimeUnit.MINUTES);
     }

@@ -36,6 +36,15 @@ spring:
       enabled: true
     livereload:
       enabled: true
+      
+  # GraphQL Configuration
+  graphql:
+    schema:
+      introspection:
+        enabled: true
+    graphiql:
+      enabled: true
+      path: /graphiql
 
 # Server Configuration for Development
 server:

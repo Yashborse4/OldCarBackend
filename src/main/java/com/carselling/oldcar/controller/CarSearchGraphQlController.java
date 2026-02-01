@@ -1,7 +1,6 @@
 package com.carselling.oldcar.controller;
 
 import com.carselling.oldcar.dto.car.CarSearchDtos.CarSearchHitDto;
-import com.carselling.oldcar.mapper.VehicleSearchResultMapper;
 
 import com.carselling.oldcar.service.car.CarSearchService;
 import lombok.AllArgsConstructor;
@@ -9,8 +8,7 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,7 +17,6 @@ import org.springframework.stereotype.Controller;
 import java.math.BigDecimal;
 import java.security.Principal;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @ConditionalOnProperty(name = "elasticsearch.enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
@@ -78,6 +75,20 @@ public class CarSearchGraphQlController {
                 .page(input.getPage())
                 .size(input.getSize())
                 .build();
+        
+        // Input Validation (Security)
+        if (input.getBrands() != null && input.getBrands().size() > 20) {
+            throw new IllegalArgumentException("Too many brands specified (max 20)");
+        }
+        if (input.getModels() != null && input.getModels().size() > 20) {
+            throw new IllegalArgumentException("Too many models specified (max 20)");
+        }
+        if (input.getCities() != null && input.getCities().size() > 20) {
+             throw new IllegalArgumentException("Too many cities specified (max 20)");
+        }
+        if (input.getKeyword() != null && input.getKeyword().length() > 100) {
+             throw new IllegalArgumentException("Keyword too long (max 100 chars)");
+        }
 
         Page<CarSearchHitDto> dtoPage = carSearchService.search(request);
 

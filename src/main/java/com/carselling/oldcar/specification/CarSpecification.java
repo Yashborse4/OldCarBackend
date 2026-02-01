@@ -15,6 +15,11 @@ public class CarSpecification {
 
     public static Specification<Car> getCarsByCriteria(CarSearchCriteria criteria) {
         return (root, query, criteriaBuilder) -> {
+            // Optimization: Fetch owner eagerly to avoid N+1 problems
+            if (Long.class != query.getResultType() && long.class != query.getResultType()) {
+                root.fetch("owner", jakarta.persistence.criteria.JoinType.LEFT);
+            }
+
             List<Predicate> predicates = new ArrayList<>();
 
             // Always filter by active

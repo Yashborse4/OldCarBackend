@@ -312,7 +312,6 @@ public class UserAnalyticsService {
         log.debug("Getting dealer dashboard statistics for user: {}", dealerId);
 
         // Optimized count query instead of countByOwnerId which might be generic
-        long totalCarsAdded = carRepository.countByOwnerId(dealerId);
         // Note: activeCars variable was unused in original code, but calculation is
         // useful context
         // long activeCars = carRepository.countActiveCarsByOwnerId(dealerId);

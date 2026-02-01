@@ -52,6 +52,7 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        @Query("SELECT c FROM Car c WHERE c.isActive = true")
        List<Car> findAllActiveCars();
 
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "owner")
        @Query("SELECT c FROM Car c WHERE c.isActive = true")
        Page<Car> findAllActiveCars(Pageable pageable);
 

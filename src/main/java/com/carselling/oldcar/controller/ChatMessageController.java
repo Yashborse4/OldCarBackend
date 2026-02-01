@@ -2,7 +2,7 @@ package com.carselling.oldcar.controller;
 
 import com.carselling.oldcar.dto.chat.*;
 import com.carselling.oldcar.dto.common.ApiResponse;
-import com.carselling.oldcar.model.User;
+
 import com.carselling.oldcar.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -10,7 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;

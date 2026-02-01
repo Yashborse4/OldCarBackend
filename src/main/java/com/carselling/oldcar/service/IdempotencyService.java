@@ -1,6 +1,5 @@
 package com.carselling.oldcar.service;
 
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,7 +65,7 @@ public class IdempotencyService {
      * We could update the value to "COMPLETED" or store the response.
      */
     public void complete(String key) {
-        String fullKey = "idempotency:" + key;
+
         // logic to update status if needed.
         // For simple duplication prevention, just existing is enough.
     }

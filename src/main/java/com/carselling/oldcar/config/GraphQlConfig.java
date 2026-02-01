@@ -1,9 +1,7 @@
 package com.carselling.oldcar.config;
 
-import org.springframework.boot.autoconfigure.graphql.GraphQlSourceBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.graphql.execution.BatchLoaderRegistry;
 
 // Note: In newer Spring GraphQL versions (2.7+ / 3.0+), simply creating the DataLoader bean (as we did in UserDataLoader) 
 // using generic BatchLoaderRegistry injection in constructor is enough.

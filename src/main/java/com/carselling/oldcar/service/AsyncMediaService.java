@@ -3,7 +3,7 @@ package com.carselling.oldcar.service;
 import com.carselling.oldcar.model.Car;
 import com.carselling.oldcar.model.MediaStatus;
 import com.carselling.oldcar.repository.CarRepository;
-import com.carselling.oldcar.b2.B2FileService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -20,8 +20,6 @@ public class AsyncMediaService {
 
     private final CarRepository carRepository;
     private final TransactionTemplate transactionTemplate;
-    // Assuming B2FileService can provide public URLs
-    private final B2FileService b2FileService;
 
     @Async
     public void processMedia(Long carId, List<String> fileUrls) {

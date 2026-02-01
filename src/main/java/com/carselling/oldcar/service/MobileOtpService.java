@@ -41,7 +41,12 @@ public class MobileOtpService {
             if ("mock".equalsIgnoreCase(smsProvider)) {
                 log.info("Mock SMS sent to {}: Your Car World code is {}", phoneNumber, otpCode);
             } else {
-                // TODO: Implement actual SMS provider integration
+                // Mock SMS implementation
+                log.info("Sending OTP {} to mobile number {}", otpCode, phoneNumber);
+
+                // In production, integrate with Twilio/SNS/etc here
+                // smsProvider.send(mobileNumber, "Your Verification Code is: " + otp);
+
                 log.warn("SMS provider '{}' not implemented yet", smsProvider);
             }
 

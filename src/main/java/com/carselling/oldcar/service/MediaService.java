@@ -3,7 +3,6 @@ package com.carselling.oldcar.service;
 import com.carselling.oldcar.dto.file.DirectUploadDTOs;
 import com.carselling.oldcar.dto.file.FileUploadResponse;
 
-import com.carselling.oldcar.model.User;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;

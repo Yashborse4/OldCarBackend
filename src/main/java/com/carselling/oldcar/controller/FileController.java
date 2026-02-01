@@ -4,8 +4,7 @@ import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.dto.file.DirectUploadDTOs;
 import com.carselling.oldcar.dto.file.FileUploadResponse;
 import com.carselling.oldcar.exception.ResourceNotFoundException;
-import com.carselling.oldcar.model.User;
-import com.carselling.oldcar.repository.UserRepository;
+
 import com.carselling.oldcar.security.UserPrincipal;
 import com.carselling.oldcar.service.MediaService;
 import com.carselling.oldcar.annotation.RateLimit;

@@ -1,38 +1,39 @@
 scalar DateTime
 
 type Query {
-    # Authentication
-    loginUser(input: LoginInput!): AuthPayload!
+    # Authentication - NOT IMPLEMENTED
+    # loginUser(input: LoginInput!): AuthPayload!
     
-    # Profile Management
-    getUserProfile(id: ID!): User!
+    # Profile Management - NOT IMPLEMENTED
+    # getUserProfile(id: ID!): User!
     listMyCars: [Car!]!  # For SELLER/DEALER
     
-    # Admin Endpoints
-    listAllUsers(page: Int, size: Int, sortBy: String, sortDir: String): UserPage!
+    # Admin Endpoints - NOT IMPLEMENTED
+    # listAllUsers(page: Int, size: Int, sortBy: String, sortDir: String): UserPage!
     
     # Search
     searchCars(input: CarSearchInput!): CarSearchPagePayload!
     searchCarSuggestions(prefix: String!, limit: Int): [String!]!
 }
 
-type Mutation {
-    # Authentication
-    registerUser(input: RegisterInput!): User!
-    
-    # Profile Management
-    updateUserProfile(id: ID!, input: UpdateUserInput!): User!
-    deleteAccount(id: ID!): Boolean
-    
-    # Car Management
-    uploadCar(input: CarInput!): Car!
-    updateCar(id: ID!, input: UpdateCarInput!): Car!
-    deleteCar(id: ID!): Boolean
-    
-    # Admin Management
-    updateUserRole(id: ID!, newRole: String!): User!
-    banUser(id: ID!): Boolean
-}
+# Mutation - NOT IMPLEMENTED
+# type Mutation {
+#    # Authentication
+#    registerUser(input: RegisterInput!): User!
+#    
+#    # Profile Management
+#    updateUserProfile(id: ID!, input: UpdateUserInput!): User!
+#    deleteAccount(id: ID!): Boolean
+#    
+#    # Car Management
+#    uploadCar(input: CarInput!): Car!
+#    updateCar(id: ID!, input: UpdateCarInput!): Car!
+#    deleteCar(id: ID!): Boolean
+#    
+#    # Admin Management
+#    updateUserRole(id: ID!, newRole: String!): User!
+#    banUser(id: ID!): Boolean
+# }
 
 # Input Types
 input LoginInput {
