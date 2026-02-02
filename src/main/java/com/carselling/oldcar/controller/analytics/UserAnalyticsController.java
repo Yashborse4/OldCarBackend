@@ -35,6 +35,11 @@ public class UserAnalyticsController {
      */
     @PostMapping("/session/start")
     @io.swagger.v3.oas.annotations.Operation(summary = "Start session", description = "Initialize a new analytics session")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Session started"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
     public ResponseEntity<ApiResponse<Object>> startSession(
             @Valid @RequestBody SessionStartDto dto,
             Authentication authentication) {
@@ -55,6 +60,10 @@ public class UserAnalyticsController {
      */
     @PostMapping("/session/end")
     @io.swagger.v3.oas.annotations.Operation(summary = "End session", description = "Terminate an analytics session")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Session ended"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
+    })
     public ResponseEntity<ApiResponse<Object>> endSession(
             @RequestParam("sessionId") String sessionId,
             @RequestParam(value = "exitScreen", required = false) String exitScreen,
@@ -78,7 +87,12 @@ public class UserAnalyticsController {
      * - Rate limited to 100 events/minute per session
      */
     @PostMapping("/events")
-    @io.swagger.v3.oas.annotations.Operation(summary = "Nngest events", description = "Batch ingest analytics events")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Ingest events", description = "Batch ingest analytics events")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "202", description = "Events accepted for processing"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid event data"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded")
+    })
     public ResponseEntity<ApiResponse<Object>> ingestEvents(
             @Valid @RequestBody AnalyticsBatchDto batch,
             Authentication authentication) {

@@ -39,11 +39,17 @@ public class ChatRoomController {
      */
     @PostMapping("/private")
     @io.swagger.v3.oas.annotations.Operation(summary = "Create private chat", description = "Create or get a private chat with another user")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Private chat created"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Recipient not found")
+    })
     public ResponseEntity<ApiResponse<ChatRoomDto>> createPrivateChatRoom(
             @RequestParam("recipientId") Long recipientId,
             Authentication authentication) {
         UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
-        ChatRoomDto chatRoom = chatService.createPrivateChat(recipientId, currentUser.getId());
+        CreatePrivateChatRequest request = CreatePrivateChatRequest.builder().otherUserId(recipientId).build();
+        ChatRoomDto chatRoom = chatService.createPrivateChat(request, currentUser.getId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Private chat created successfully", chatRoom));
     }
@@ -53,6 +59,11 @@ public class ChatRoomController {
      */
     @PostMapping("/group")
     @io.swagger.v3.oas.annotations.Operation(summary = "Create group chat", description = "Create a new group chat")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Group chat created"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request data"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
     public ResponseEntity<ApiResponse<ChatRoomDto>> createGroupChatRoom(
             @Valid @RequestBody CreateGroupChatRequest request,
             Authentication authentication) {
@@ -67,6 +78,12 @@ public class ChatRoomController {
      */
     @PostMapping("/inquiry")
     @io.swagger.v3.oas.annotations.Operation(summary = "Create car inquiry", description = "Start a chat inquiry for a specific car")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Car inquiry created"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Car not found")
+    })
     public ResponseEntity<ApiResponse<ChatRoomDto>> createCarInquiryChatRoom(
             @Valid @RequestBody CreateCarInquiryChatRequest request,
             Authentication authentication) {
@@ -110,6 +127,10 @@ public class ChatRoomController {
      */
     @GetMapping
     @io.swagger.v3.oas.annotations.Operation(summary = "Get user chats", description = "Get all chat rooms for the current user")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Chat rooms retrieved"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
     public ResponseEntity<ApiResponse<Page<ChatRoomDto>>> getUserChatRooms(
             @PageableDefault(size = 20) Pageable pageable,
             Authentication authentication) {

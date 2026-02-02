@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+
 /**
  * Controller for Chat Message Operations.
  * Handles sending, editing, deleting, and searching messages.
@@ -38,6 +39,13 @@ public class ChatMessageController {
          */
         @PostMapping("/rooms/{chatRoomId}/messages")
         @io.swagger.v3.oas.annotations.Operation(summary = "Send message", description = "Send a message to a chat room")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Message sent successfully"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid message data"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a participant of the chat"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded")
+        })
         public ResponseEntity<ApiResponse<ChatMessageDto>> sendMessage(
                         @PathVariable Long chatRoomId,
                         @Valid @RequestBody SendMessageRequest request,
@@ -61,6 +69,13 @@ public class ChatMessageController {
          */
         @PostMapping("/rooms/{chatRoomId}/messages/upload")
         @io.swagger.v3.oas.annotations.Operation(summary = "Upload and send file message", description = "Uploads a file and sends it as a message to a chat room")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "File message sent"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid file"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "413", description = "File too large"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded")
+        })
         public ResponseEntity<ApiResponse<ChatMessageDto>> sendFileMessage(
                         @PathVariable Long chatRoomId,
                         @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
@@ -86,6 +101,11 @@ public class ChatMessageController {
          */
         @GetMapping("/rooms/{chatRoomId}/messages")
         @io.swagger.v3.oas.annotations.Operation(summary = "Get messages", description = "Get messages history for a chat room")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Messages retrieved"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a participant")
+        })
         public ResponseEntity<ApiResponse<Page<ChatMessageDto>>> getChatMessages(
                         @PathVariable Long chatRoomId,
                         @PageableDefault(size = 50) Pageable pageable,
@@ -99,6 +119,12 @@ public class ChatMessageController {
          */
         @PutMapping("/messages/{messageId}")
         @io.swagger.v3.oas.annotations.Operation(summary = "Edit message", description = "Edit the content of an existing message")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Message updated"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid content"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the message author"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Message not found")
+        })
         public ResponseEntity<ApiResponse<ChatMessageDto>> editMessage(
                         @PathVariable Long messageId,
                         @Valid @RequestBody EditMessageRequest request,
@@ -113,6 +139,11 @@ public class ChatMessageController {
          */
         @DeleteMapping("/messages/{messageId}")
         @io.swagger.v3.oas.annotations.Operation(summary = "Delete message", description = "Delete a message from a chat room")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Message deleted"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the message author"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Message not found")
+        })
         public ResponseEntity<ApiResponse<Map<String, String>>> deleteMessage(
                         @PathVariable Long messageId,
                         @org.springframework.security.core.annotation.AuthenticationPrincipal com.carselling.oldcar.security.UserPrincipal currentUser) {

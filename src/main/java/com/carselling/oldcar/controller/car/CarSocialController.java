@@ -40,6 +40,12 @@ public class CarSocialController {
     @RateLimit(capacity = 30, refill = 10, refillPeriod = 1)
     @PreAuthorize("isAuthenticated()")
     @io.swagger.v3.oas.annotations.Operation(summary = "Generate share link", description = "Create a unique share link with tracking")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Share link generated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Car not found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded")
+    })
     public ResponseEntity<ApiResponse<Map<String, String>>> generateShareLink(
             @PathVariable String id,
             Authentication authentication) {
@@ -67,6 +73,11 @@ public class CarSocialController {
     @PostMapping("/{id}/view")
     @RateLimit(capacity = 120, refill = 60, refillPeriod = 1)
     @io.swagger.v3.oas.annotations.Operation(summary = "Track view", description = "Record a view event for a vehicle")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "View tracked"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Car not found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded")
+    })
     public ResponseEntity<ApiResponse<Object>> trackVehicleView(
             @PathVariable String id,
             @RequestParam(required = false) String refToken,

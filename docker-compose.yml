@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     container_name: car-postgres
     restart: always
     ports:
@@ -22,7 +22,7 @@ services:
       retries: 5
 
   opensearch:
-    image: opensearchproject/opensearch:2.13.0
+    image: opensearchproject/opensearch:2.19.0
     container_name: car-opensearch
     restart: always
     environment:
