@@ -1,0 +1,99 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Build and Test Backend
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: carselling
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      opensearch:
+        image: opensearchproject/opensearch:2.19.0
+        env:
+          discovery.type: single-node
+          plugins.security.disabled: "true"
+          OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl -f http://localhost:9200/_cat/health || exit 1"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 5
+
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 20
+      uses: actions/setup-java@v4
+      with:
+        java-version: '20'
+        distribution: 'temurin'
+        cache: 'gradle'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: wrapper
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build with Gradle
+      env:
+        SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/carselling
+        SPRING_DATASOURCE_USERNAME: postgres
+        SPRING_DATASOURCE_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        OPENSEARCH_HOST: localhost
+        OPENSEARCH_SCHEME: http
+        SPRING_DATA_REDIS_HOST: localhost
+        
+        # Security Secrets
+        APP_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        
+        # External Services (B2, Mail)
+        # Spring Boot Relaxed Binding: b2.applicationKey -> B2_APPLICATIONKEY
+        B2_APPLICATIONKEY: ${{ secrets.B2_APPLICATION_KEY }}
+        B2_APPLICATIONKEYID: ${{ secrets.B2_APPLICATION_KEY_ID }}
+        B2_BUCKETID: ${{ secrets.B2_BUCKET_ID }}
+        
+        SPRING_MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+        SPRING_MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }} 
+      run: ./gradlew build --info
+
+    - name: Publish Test Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: build/test-results/
