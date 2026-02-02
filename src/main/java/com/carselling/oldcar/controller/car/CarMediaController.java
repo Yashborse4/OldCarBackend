@@ -22,6 +22,7 @@ import java.util.List;
 @RequestMapping("/api/cars")
 @RequiredArgsConstructor
 @Slf4j
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Car Media", description = "Vehicle media management")
 public class CarMediaController {
 
         private final CarService carService;
@@ -32,6 +33,7 @@ public class CarMediaController {
          */
         @PostMapping("/{id}/media-status")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Update media status", description = "Update processing status of vehicle media")
         public ResponseEntity<ApiResponse<CarResponse>> updateVehicleMediaStatus(
                         @PathVariable String id,
                         @Valid @RequestBody UpdateMediaStatusRequest statusRequest) {
@@ -53,6 +55,7 @@ public class CarMediaController {
          */
         @PostMapping("/{id}/media")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Upload media URLs", description = "Link direct upload URLs to vehicle")
         public ResponseEntity<ApiResponse<CarResponse>> uploadVehicleMedia(
                         @PathVariable String id,
                         @RequestBody MediaUploadRequest uploadRequest) {
@@ -81,6 +84,7 @@ public class CarMediaController {
          */
         @PostMapping("/{id}/media/finalize")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Finalize uploaded media", description = "Finalize temporary uploads for vehicle")
         public ResponseEntity<ApiResponse<CarResponse>> finalizeVehicleMedia(
                         @PathVariable String id,
                         @RequestBody List<Long> tempFileIds) {

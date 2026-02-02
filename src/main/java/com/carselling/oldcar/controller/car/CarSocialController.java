@@ -6,7 +6,7 @@ import com.carselling.oldcar.annotation.RateLimit;
 import com.carselling.oldcar.service.car.CarService;
 import com.carselling.oldcar.service.CarInteractionEventService;
 import com.carselling.oldcar.model.CarInteractionEvent;
-import com.carselling.oldcar.model.User;
+import com.carselling.oldcar.security.UserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +25,7 @@ import java.util.Map;
 @RequestMapping("/api/cars")
 @RequiredArgsConstructor
 @Slf4j
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Social Interactions", description = "Vehicle social features (Share, View, Events)")
 public class CarSocialController {
 
     private final CarService carService;
@@ -38,6 +39,7 @@ public class CarSocialController {
     @PostMapping("/{id}/share-link")
     @RateLimit(capacity = 30, refill = 10, refillPeriod = 1)
     @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Generate share link", description = "Create a unique share link with tracking")
     public ResponseEntity<ApiResponse<Map<String, String>>> generateShareLink(
             @PathVariable String id,
             Authentication authentication) {
@@ -64,6 +66,7 @@ public class CarSocialController {
      */
     @PostMapping("/{id}/view")
     @RateLimit(capacity = 120, refill = 60, refillPeriod = 1)
+    @io.swagger.v3.oas.annotations.Operation(summary = "Track view", description = "Record a view event for a vehicle")
     public ResponseEntity<ApiResponse<Object>> trackVehicleView(
             @PathVariable String id,
             @RequestParam(required = false) String refToken,
@@ -72,8 +75,8 @@ public class CarSocialController {
 
         Long carId = Long.parseLong(id);
         Long currentUserId = null;
-        if (authentication != null && authentication.getPrincipal() instanceof User) {
-            currentUserId = ((User) authentication.getPrincipal()).getId();
+        if (authentication != null && authentication.getPrincipal() instanceof UserPrincipal) {
+            currentUserId = ((UserPrincipal) authentication.getPrincipal()).getId();
         }
 
         Long validReferrerId = null;
@@ -119,6 +122,7 @@ public class CarSocialController {
      */
     @PostMapping("/{id}/share")
     @RateLimit(capacity = 60, refill = 30, refillPeriod = 1)
+    @io.swagger.v3.oas.annotations.Operation(summary = "Track share", description = "Record a share event")
     public ResponseEntity<ApiResponse<Object>> trackVehicleShare(
             @PathVariable String id,
             @Valid @RequestBody TrackCarShareRequest shareRequest) {
@@ -139,6 +143,7 @@ public class CarSocialController {
      */
     @PostMapping("/events")
     @RateLimit(capacity = 60, refill = 30, refillPeriod = 1)
+    @io.swagger.v3.oas.annotations.Operation(summary = "Track event", description = "Track generic car interaction event")
     public ResponseEntity<ApiResponse<Object>> trackCarEvent(
             @Valid @RequestBody com.carselling.oldcar.dto.car.CarInteractionEventDto eventDto,
             Authentication authentication,
@@ -154,8 +159,8 @@ public class CarSocialController {
         }
 
         Long userId = null;
-        if (authentication != null && authentication.getPrincipal() instanceof User) {
-            userId = ((User) authentication.getPrincipal()).getId();
+        if (authentication != null && authentication.getPrincipal() instanceof UserPrincipal) {
+            userId = ((UserPrincipal) authentication.getPrincipal()).getId();
         }
 
         String ipAddress = request.getRemoteAddr();
@@ -182,6 +187,7 @@ public class CarSocialController {
      */
     @GetMapping("/{id}/events/stats")
     @PreAuthorize("hasRole('DEALER') or hasRole('ADMIN')")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get event stats", description = "Get interaction statistics for a vehicle")
     public ResponseEntity<ApiResponse<Map<String, Long>>> getCarEventStats(@PathVariable String id) {
         log.info("Getting event stats for car {}", id);
 
