@@ -37,6 +37,11 @@ public class AuthController {
          */
         @PostMapping("/register")
         @io.swagger.v3.oas.annotations.Operation(summary = "Register user", description = "Register a new user account")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "User registered successfully"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request data or validation error"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Username or email already exists")
+        })
         public ResponseEntity<ApiResponse<JwtAuthResponse>> register(
                         @Valid @RequestBody RegisterRequest request) {
 
@@ -57,6 +62,11 @@ public class AuthController {
          */
         @PostMapping("/login")
         @io.swagger.v3.oas.annotations.Operation(summary = "Login user", description = "Authenticate user and return JWT tokens")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login successful"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request data"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid credentials or email not verified")
+        })
         public ResponseEntity<ApiResponse<JwtAuthResponse>> login(
                         @Valid @RequestBody LoginRequest request) {
 
@@ -76,6 +86,11 @@ public class AuthController {
          */
         @PostMapping("/refresh-token")
         @io.swagger.v3.oas.annotations.Operation(summary = "Refresh token", description = "Get a new access token using a refresh token")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Token refreshed successfully"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid or missing refresh token"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Refresh token expired or revoked")
+        })
         public ResponseEntity<ApiResponse<JwtAuthResponse>> refreshToken(
                         @Valid @RequestBody RefreshTokenRequest request) {
 
@@ -95,6 +110,10 @@ public class AuthController {
          */
         @PostMapping("/validate-token")
         @io.swagger.v3.oas.annotations.Operation(summary = "Validate token", description = "Check if the provided access token is valid")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Token is valid"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Token is invalid or expired")
+        })
         public ResponseEntity<ApiResponse<TokenValidationResponse>> validateToken(
                         HttpServletRequest request) {
 
@@ -148,6 +167,11 @@ public class AuthController {
          */
         @PostMapping("/password/reset")
         @io.swagger.v3.oas.annotations.Operation(summary = "Reset password", description = "Reset user password using OTP")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Password reset successful"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid OTP or request data"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
+        })
         public ResponseEntity<ApiResponse<Object>> resetPassword(
                         @Valid @RequestBody ResetPasswordRequest request) {
 
@@ -202,6 +226,9 @@ public class AuthController {
          */
         @PostMapping("/logout")
         @io.swagger.v3.oas.annotations.Operation(summary = "Logout user", description = "Invalidate the current session/token")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Logout successful")
+        })
         public ResponseEntity<ApiResponse<Object>> logout(HttpServletRequest request) {
 
                 String token = extractTokenFromRequest(request);

@@ -55,6 +55,12 @@ public class AdminController {
          */
         @GetMapping("/users")
         @io.swagger.v3.oas.annotations.Operation(summary = "Get all users", description = "Retrieve a paginated list of all users")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Users retrieved successfully"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid filter parameters"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not authorized (admin only)")
+        })
         public ResponseEntity<ApiResponse<Page<UserResponse>>> getAllUsers(
                         @RequestParam(value = "username", required = false) String username,
                         @RequestParam(value = "email", required = false) String email,
@@ -107,6 +113,12 @@ public class AdminController {
          */
         @PutMapping("/users/{id}/role")
         @io.swagger.v3.oas.annotations.Operation(summary = "Update user role", description = "Change the role of a user")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Role updated successfully"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid role value"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not authorized"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
+        })
         public ResponseEntity<ApiResponse<UserResponse>> changeUserRole(
                         @PathVariable Long id,
                         @Valid @RequestBody ChangeRoleRequest request) {

@@ -2,7 +2,7 @@ package com.carselling.oldcar.controller.analytics;
 
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.dto.vehicle.VehicleRecommendationDto;
-import com.carselling.oldcar.model.User;
+import com.carselling.oldcar.security.UserPrincipal;
 import com.carselling.oldcar.service.analytics.RecommendationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -54,7 +54,7 @@ public class RecommendationController {
             return ResponseEntity.status(401).body(ApiResponse.error("Authentication required for personalized feed"));
         }
 
-        User user = (User) authentication.getPrincipal(); // Assuming principal is User
+        UserPrincipal user = (UserPrincipal) authentication.getPrincipal(); // Assuming principal is UserPrincipal
         List<VehicleRecommendationDto> recommendations = recommendationService
                 .getPersonalizedRecommendations(user.getId());
 

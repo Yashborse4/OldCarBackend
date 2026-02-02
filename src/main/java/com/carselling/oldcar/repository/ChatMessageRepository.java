@@ -27,6 +27,16 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
                      @Param("query") String query,
                      Pageable pageable);
 
+       @Query("SELECT m FROM ChatMessage m " +
+                     "JOIN m.chatRoom.participants p " +
+                     "WHERE p.user.id = :userId " +
+                     "AND m.isDeleted = false " +
+                     "AND LOWER(m.content) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "ORDER BY m.createdAt DESC")
+       Page<ChatMessage> searchUserChats(@Param("userId") Long userId,
+                     @Param("query") String query,
+                     Pageable pageable);
+
        @Query("SELECT m.chatRoom.id, COUNT(m) FROM ChatMessage m " +
                      "WHERE m.chatRoom.id IN (" +
                      "   SELECT p.chatRoom.id FROM com.carselling.oldcar.model.ChatParticipant p " +

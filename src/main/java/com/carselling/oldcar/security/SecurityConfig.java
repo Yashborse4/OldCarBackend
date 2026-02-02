@@ -102,6 +102,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/search/**").permitAll()
                         .requestMatchers("/graphql").permitAll()
 
+                        // Mobile App Public Lifecycle Endpoints
+                        .requestMatchers("/api/v1/mobile/version-check", "/api/v1/mobile/config",
+                                "/api/v1/mobile/health")
+                        .permitAll()
+
                         // =====================================================
                         // PROTECTED ENDPOINTS (Require Auth)
                         // Note: Order matters! More specific rules must come BEFORE general rules

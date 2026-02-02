@@ -5,6 +5,8 @@ import com.carselling.oldcar.dto.car.*;
 import com.carselling.oldcar.model.MediaStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
+import java.util.List;
 
 /**
  * Interface for Car Service Operations
@@ -31,6 +33,9 @@ public interface CarService {
     CarResponse createVehicle(CarRequest request, Long currentUserId, String idempotencyKey);
 
     CarResponse updateVehicle(String id, CarRequest request, Long currentUserId);
+
+    CarResponse updateVehicleWithMedia(String id, CarRequest request,
+            List<MultipartFile> images, Long currentUserId);
 
     void deleteVehicle(String id, Long currentUserId, boolean hard);
 

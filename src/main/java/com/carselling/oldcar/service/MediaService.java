@@ -53,4 +53,10 @@ public interface MediaService {
      * Get metadata for a file.
      */
     Map<String, Object> getFileMetadata(String fileUrl, Long userId);
+
+    /**
+     * Get a media file with access checks.
+     * Returns either the direct URL (public) or a presigned URL (private).
+     */
+    String getMediaFileUrl(Long id, Long userId);
 }

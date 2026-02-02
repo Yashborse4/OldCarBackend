@@ -11,10 +11,10 @@ import java.util.List;
 @Repository
 public interface CarMasterRepository extends JpaRepository<CarMaster, Long> {
 
-    @Query("SELECT DISTINCT c.model FROM CarMaster c WHERE c.make = :make AND LOWER(c.model) LIKE LOWER(CONCAT(:query, '%')) ORDER BY c.model")
+    @Query("SELECT DISTINCT c.model FROM CarMaster c WHERE LOWER(c.make) = LOWER(:make) AND LOWER(c.model) LIKE LOWER(CONCAT(:query, '%')) ORDER BY c.model")
     List<String> findDistinctModelsByMakeAndQuery(@Param("make") String make, @Param("query") String query);
 
-    @Query("SELECT DISTINCT c.model FROM CarMaster c WHERE c.make = :make ORDER BY c.model")
+    @Query("SELECT DISTINCT c.model FROM CarMaster c WHERE LOWER(c.make) = LOWER(:make) ORDER BY c.model")
     List<String> findDistinctModelsByMake(@Param("make") String make);
 
     List<CarMaster> findByMakeAndModel(String make, String model);

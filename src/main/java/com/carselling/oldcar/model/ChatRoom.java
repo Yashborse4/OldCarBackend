@@ -40,6 +40,9 @@ public class ChatRoom {
     @JoinColumn(name = "car_id")
     private Car car;
 
+    @OneToMany(mappedBy = "chatRoom", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private java.util.List<ChatParticipant> participants;
+
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private boolean isActive = true;

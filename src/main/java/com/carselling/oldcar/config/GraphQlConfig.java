@@ -1,7 +1,9 @@
 package com.carselling.oldcar.config;
 
+import graphql.scalars.ExtendedScalars;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.graphql.execution.RuntimeWiringConfigurer;
 
 // Note: In newer Spring GraphQL versions (2.7+ / 3.0+), simply creating the DataLoader bean (as we did in UserDataLoader) 
 // using generic BatchLoaderRegistry injection in constructor is enough.
@@ -11,6 +13,12 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class GraphQlConfig {
+
+    // Register custom scalars (DateTime, etc.) for GraphQL schema
+    @Bean
+    public RuntimeWiringConfigurer runtimeWiringConfigurer() {
+        return wiringBuilder -> wiringBuilder.scalar(ExtendedScalars.DateTime);
+    }
 
     // Prevent recursive or deeply nested queries (DoS protection)
     @Bean
@@ -25,6 +33,4 @@ public class GraphQlConfig {
         // A complexity of 150 allows reasonably rich queries but stops abusive ones.
         return new graphql.analysis.MaxQueryComplexityInstrumentation(150);
     }
-
-    // We can add global interceptors or scalar registrations here
 }

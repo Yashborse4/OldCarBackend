@@ -2,6 +2,7 @@ package com.carselling.oldcar.b2;
 
 import com.carselling.oldcar.dto.file.FileUploadResponse;
 import com.carselling.oldcar.model.ResourceType;
+import com.carselling.oldcar.model.AccessType;
 import com.carselling.oldcar.model.UploadedFile;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.model.TemporaryFile;
@@ -100,6 +101,14 @@ public class B2FileService {
 
         String publicUrl = domain + "/" + fullPath;
 
+        // Determine Access Type
+        AccessType accessType = AccessType.PUBLIC;
+        if (ownerType == ResourceType.CHAT_ATTACHMENT) {
+            accessType = AccessType.PRIVATE;
+        } else if (ownerType == ResourceType.OTHER) {
+            accessType = AccessType.PRIVATE; // Default safe
+        }
+
         // Save metadata
         UploadedFile uploadedFile = UploadedFile.builder()
                 .fileUrl(publicUrl)
@@ -110,6 +119,7 @@ public class B2FileService {
                 .uploadedBy(uploader)
                 .ownerType(ownerType)
                 .ownerId(ownerId)
+                .accessType(accessType)
                 .fileHash(fileHash) // Save hash for future idempotency
                 .fileId(b2Response.getFileId())
                 .build();
@@ -222,9 +232,19 @@ public class B2FileService {
     private final TemporaryFileRepository temporaryFileRepository;
 
     public DirectUploadInitResponse initDirectUpload(String originalFileName, String folder, User uploader) {
-        // Enforce temp folder for direct uploads
-        // Format: temp/{userId}/
-        String tempFolder = "temp/" + uploader.getId();
+        String tempFolder;
+        if (folder != null && folder.startsWith("cars/")) {
+            String carId = extractCarIdFromFolder(folder);
+            if (carId != null && !carId.isBlank()) {
+                tempFolder = "temp/cars/" + carId + "/images";
+            } else {
+                tempFolder = "temp/cars";
+            }
+        } else if (folder != null && folder.startsWith("chat/")) {
+            tempFolder = "temp/chat";
+        } else {
+            tempFolder = "temp/" + uploader.getId();
+        }
 
         String uniqueFileName = generateUniqueFileName(originalFileName, uploader.getId());
         String fullPath = tempFolder + "/" + uniqueFileName;
@@ -328,5 +348,17 @@ public class B2FileService {
             extension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1);
         }
         return String.format("%d_%s_%s.%s", userId, timestamp, uuid, extension);
+    }
+
+    private String extractCarIdFromFolder(String folder) {
+        String path = folder;
+        if (path.startsWith("cars/")) {
+            path = path.substring("cars/".length());
+        }
+        int slashIndex = path.indexOf('/');
+        if (slashIndex != -1) {
+            return path.substring(0, slashIndex);
+        }
+        return path.isEmpty() ? null : path;
     }
 }

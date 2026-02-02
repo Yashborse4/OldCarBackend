@@ -34,6 +34,10 @@ public class UserController {
         @GetMapping("/profile")
         @PreAuthorize("hasRole('USER') or hasRole('DEALER') or hasRole('ADMIN')")
         @io.swagger.v3.oas.annotations.Operation(summary = "Get current profile", description = "Retrieve the profile of the currently logged-in user")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Profile retrieved successfully"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+        })
         public ResponseEntity<ApiResponse<UserResponse>> getCurrentUserProfile() {
                 log.info("Getting current user profile");
 
@@ -52,6 +56,11 @@ public class UserController {
         @GetMapping("/{id}")
         @PreAuthorize("hasRole('USER') or hasRole('DEALER') or hasRole('ADMIN')")
         @io.swagger.v3.oas.annotations.Operation(summary = "Get user profile by ID", description = "Retrieve a specific user profile (User/Dealer/Admin)")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "User profile retrieved"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
+        })
         public ResponseEntity<ApiResponse<UserResponse>> getUserProfile(@PathVariable Long id) {
                 log.info("Getting user profile for ID: {}", id);
 
@@ -70,6 +79,11 @@ public class UserController {
         @PutMapping("/profile")
         @PreAuthorize("hasRole('USER') or hasRole('DEALER') or hasRole('ADMIN')")
         @io.swagger.v3.oas.annotations.Operation(summary = "Update profile", description = "Update the profile information of the current user")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Profile updated successfully"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request data"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+        })
         public ResponseEntity<ApiResponse<UserResponse>> updateCurrentUserProfile(
                         @Valid @RequestBody UpdateUserRequest request) {
                 log.info("Updating current user profile");
@@ -90,6 +104,11 @@ public class UserController {
         @PostMapping("/request-dealer")
         @PreAuthorize("hasRole('USER')")
         @io.swagger.v3.oas.annotations.Operation(summary = "Request dealer role", description = "Submit a request to become a dealer")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Dealer role requested"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "User already a dealer")
+        })
         public ResponseEntity<ApiResponse<UserResponse>> requestDealerRole() {
                 log.info("User requesting dealer role");
 
@@ -128,6 +147,10 @@ public class UserController {
         @DeleteMapping("/profile")
         @PreAuthorize("hasRole('USER') or hasRole('DEALER') or hasRole('ADMIN')")
         @io.swagger.v3.oas.annotations.Operation(summary = "Delete account", description = "Delete current user account")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Account deleted"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+        })
         public ResponseEntity<ApiResponse<Object>> deleteCurrentUserAccount() {
                 log.info("Deleting current user account");
 

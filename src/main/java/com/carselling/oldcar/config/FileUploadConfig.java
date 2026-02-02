@@ -22,7 +22,7 @@ public class FileUploadConfig {
 
     @Max(200)
     @Min(1)
-    private int maxVideoSizeMB = 100;
+    private int maxVideoSizeMB = 150;
 
     @Max(100)
     @Min(1)
@@ -35,10 +35,15 @@ public class FileUploadConfig {
     private List<String> allowedContentTypes = List.of(
             "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
             "application/pdf", "text/plain",
-            "video/mp4", "video/quicktime", "video/x-msvideo");
+            // Video types - comprehensive list
+            "video/mp4", "video/quicktime", "video/x-msvideo", "video/x-matroska",
+            "video/webm", "video/3gpp", "video/3gpp2", "video/x-flv",
+            "video/x-ms-wmv", "video/x-m4v", "video/mpeg", "video/hevc");
 
     private List<String> allowedExtensions = List.of(
-            "jpg", "jpeg", "png", "gif", "webp", "pdf", "txt", "mp4", "mov", "avi");
+            "jpg", "jpeg", "png", "gif", "webp",
+            // Video extensions - comprehensive list
+            "mp4", "mov", "avi", "mkv", "webm", "3gp", "flv", "wmv", "m4v", "mpeg", "mpg");
 
     private boolean scanForViruses = true;
     private boolean validateContentType = true;

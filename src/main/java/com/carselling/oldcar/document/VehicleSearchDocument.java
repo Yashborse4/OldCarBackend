@@ -8,25 +8,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.elasticsearch.annotations.Document;
-import org.springframework.data.elasticsearch.annotations.Field;
-import org.springframework.data.elasticsearch.annotations.FieldType;
-import org.springframework.data.elasticsearch.annotations.GeoPointField;
-
-/**
- * Elasticsearch Search Document
- *
- * This document is optimized ONLY for search.
- * It must NOT be used as:
- * - JPA Entity
- * - API Request/Response DTO
- */
 @Data
 @Builder
 @AllArgsConstructor
-@NoArgsConstructor // Replaces explicit empty constructor
-@Document(indexName = "vehicle_search_v1")
+@NoArgsConstructor
 public class VehicleSearchDocument {
 
     /*
@@ -35,7 +20,6 @@ public class VehicleSearchDocument {
      * ============================================================
      */
 
-    @Id
     private String id; // ES document ID
     private Long carId; // Reference to DB car table
     private Long dealerId; // Reference to dealer/user table
@@ -46,22 +30,11 @@ public class VehicleSearchDocument {
      * ============================================================
      */
 
-    @Field(type = FieldType.Text, analyzer = "standard")
     private String brand;
-
-    @Field(type = FieldType.Text, analyzer = "standard")
     private String model;
-
-    @Field(type = FieldType.Text, analyzer = "standard")
     private String variant;
-
-    @Field(type = FieldType.Text, analyzer = "standard")
     private String city;
-
-    @Field(type = FieldType.Keyword)
     private String fuelType;
-
-    @Field(type = FieldType.Keyword)
     private String transmission;
 
     /*
@@ -70,16 +43,9 @@ public class VehicleSearchDocument {
      * ============================================================
      */
 
-    @Field(type = FieldType.Keyword)
     private String normalizedBrand; // e.g. "hyundai"
-
-    @Field(type = FieldType.Keyword)
     private String normalizedModel; // e.g. "i20"
-
-    @Field(type = FieldType.Keyword)
     private String normalizedVariant;
-
-    @Field(type = FieldType.Keyword)
     private String normalizedCity;
 
     /*
@@ -88,13 +54,8 @@ public class VehicleSearchDocument {
      * ============================================================
      */
 
-    @Field(type = FieldType.Integer)
     private Integer year;
-
-    @Field(type = FieldType.Double)
     private Double price;
-
-    @Field(type = FieldType.Integer)
     private Integer mileage;
 
     /*
@@ -103,13 +64,8 @@ public class VehicleSearchDocument {
      * ============================================================
      */
 
-    @Field(type = FieldType.Boolean)
     private boolean dealerVerified; // Dealer approved by admin
-
-    @Field(type = FieldType.Boolean)
     private boolean carApproved; // Car approved by admin
-
-    @Field(type = FieldType.Boolean)
     private boolean active; // Soft delete support
 
     /*
@@ -118,13 +74,8 @@ public class VehicleSearchDocument {
      * ============================================================
      */
 
-    @Field(type = FieldType.Date)
     private Instant createdAt; // Boost recent cars
-
-    @Field(type = FieldType.Integer)
     private Integer viewCount; // Popularity boost
-
-    @Field(type = FieldType.Integer)
     private Integer leadCount; // Engagement score
 
     /*
@@ -133,7 +84,6 @@ public class VehicleSearchDocument {
      * ============================================================
      */
 
-    @GeoPointField
     private String location; // "lat,lon"
 
     /*
@@ -142,7 +92,6 @@ public class VehicleSearchDocument {
      * ============================================================
      */
 
-    @Field(type = FieldType.Keyword)
     private String thumbnailImageUrl;
 
     /*
@@ -151,6 +100,5 @@ public class VehicleSearchDocument {
      * ============================================================
      */
 
-    @Field(type = FieldType.Keyword)
     private List<String> highlights; // e.g. ["single-owner", "verified"]
 }

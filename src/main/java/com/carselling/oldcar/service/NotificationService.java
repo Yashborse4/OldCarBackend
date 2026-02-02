@@ -1,5 +1,9 @@
 package com.carselling.oldcar.service;
 
+import com.carselling.oldcar.model.NotificationQueue;
+import com.carselling.oldcar.repository.NotificationQueueRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.carselling.oldcar.event.NotificationEvent;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.model.UserDeviceToken;
@@ -32,6 +36,9 @@ public class NotificationService {
     private final ApplicationEventPublisher eventPublisher;
     private final UserRepository userRepository;
     private final UserDeviceTokenRepository tokenRepository;
+    private final IdempotencyService idempotencyService;
+    private final NotificationQueueRepository queueRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * Register a device token for Push Notifications (Multi-device support)
@@ -111,10 +118,22 @@ public class NotificationService {
      * Send Push Notification to a User (All their devices)
      */
     @Async
+    /**
+     * Queue a notification for a user (Persistent)
+     */
     public void sendToUser(Long userId, String title, String body, Map<String, String> data) {
+        queuePush(userId, title, body, data, null);
+    }
+
+    /**
+     * Send Push Notification Immediately (Used by Processor)
+     * Returns true if at least one message sent successfully (or no devices but
+     * processed OK).
+     */
+    public boolean sendPushImmediately(Long userId, String title, String body, Map<String, String> data) {
         User user = userRepository.findById(userId).orElse(null);
         if (user == null)
-            return;
+            return false;
 
         List<UserDeviceToken> tokens = tokenRepository.findByUser(user);
         if (tokens.isEmpty()) {
@@ -123,7 +142,7 @@ public class NotificationService {
                 sendToToken(user.getFcmToken(), title, body, data);
             }
             log.debug("No devices found for user {}", userId);
-            return;
+            return true; // No devices is not a failure of the system
         }
 
         List<String> validTokens = tokens.stream()
@@ -131,7 +150,7 @@ public class NotificationService {
                 .collect(Collectors.toList());
 
         if (validTokens.isEmpty())
-            return;
+            return true;
 
         MulticastMessage message = MulticastMessage.builder()
                 .setNotification(Notification.builder()
@@ -151,8 +170,10 @@ public class NotificationService {
             if (response.getFailureCount() > 0) {
                 cleanupInvalidTokens(tokens, response.getResponses());
             }
+            return response.getSuccessCount() > 0 || response.getFailureCount() < validTokens.size();
         } catch (Exception e) {
             log.error("Failed to send notification to user {}", userId, e);
+            return false;
         }
     }
 
@@ -287,5 +308,56 @@ public class NotificationService {
         NotificationEvent event = new NotificationEvent(this, user, type, subject, content, actionUrl, metadata);
         eventPublisher.publishEvent(event);
         log.debug("Notification event published: Type={}, User={}", type, user.getEmail());
+    }
+
+    /**
+     * Queues a push notification with deduplication.
+     * Use this for manual/controller triggers to ensure safety.
+     *
+     * @param userId         The user ID
+     * @param title          Title
+     * @param body           Body
+     * @param data           Extra data
+     * @param idempotencyKey Optional idempotency key (if null, one is generated
+     *                       from content)
+     */
+    public void queuePush(Long userId, String title, String body, Map<String, String> data, String idempotencyKey) {
+        String key = idempotencyKey;
+        if (key == null || key.isBlank()) {
+            // Generate content-based hash for deduplication (prevent spamming same msg)
+            // Key: push:uid:{userId}:hash(title+body):time(minute)
+            // This prevents same message to same user within same minute (approx)
+            long timeWindow = System.currentTimeMillis() / (1000 * 60); // 1 minute buckets
+            // Simple hash sufficient for basic spam prevention
+            int contentHash = (title + body).hashCode();
+            key = "push:" + userId + ":" + contentHash + ":" + timeWindow;
+        }
+
+        // Try to acquire lock
+        boolean newRequest = idempotencyService.lock(key);
+        if (!newRequest) {
+            log.warn("Duplicate push notification suppressed. Key: {}", key);
+            return;
+        }
+
+        // Create persistence entry
+        try {
+            String metadataJson = data != null ? objectMapper.writeValueAsString(data) : null;
+
+            NotificationQueue queueItem = NotificationQueue.builder()
+                    .userId(userId)
+                    .title(title)
+                    .body(body)
+                    .metadata(metadataJson)
+                    .status(NotificationQueue.NotificationStatus.PENDING)
+                    .attempts(0)
+                    .nextRetryAt(LocalDateTime.now()) // Ready immediately
+                    .build();
+
+            queueRepository.save(queueItem);
+            log.info("Queued notification for user {}", userId);
+        } catch (Exception e) {
+            log.error("Failed to queue notification", e);
+        }
     }
 }

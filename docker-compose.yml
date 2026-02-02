@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: car-postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: carselling
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-12345}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - car-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    container_name: car-opensearch
+    restart: always
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true # Disable security for simpler dev setup as requested
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - os_data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    networks:
+      - car-network
+
+  backend:
+    build: .
+    container_name: car-backend
+    restart: always
+    depends_on:
+      - postgres
+      - opensearch
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/carselling
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-12345}
+      ELASTICSEARCH_ENABLED: "true"
+      OPENSEARCH_HOST: opensearch
+      OPENSEARCH_SCHEME: http
+    ports:
+      - "9000:9000"
+    networks:
+      - car-network
+
+networks:
+  car-network:
+    driver: bridge
+
+volumes:
+  pg_data:
+  os_data:

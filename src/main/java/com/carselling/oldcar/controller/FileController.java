@@ -46,6 +46,12 @@ public class FileController {
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("isAuthenticated()")
     @io.swagger.v3.oas.annotations.Operation(summary = "Upload file", description = "Upload a single file")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "File uploaded successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid file or parameters"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "413", description = "File too large")
+    })
     public ResponseEntity<ApiResponse<FileUploadResponse>> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "folder", defaultValue = "general") String folder,
@@ -64,6 +70,13 @@ public class FileController {
     @PostMapping("/upload/multiple")
     @RateLimit(capacity = 10, refill = 5, refillPeriod = 1)
     @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Upload multiple files", description = "Upload multiple files at once")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Files uploaded successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid files or parameters"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded")
+    })
     public ResponseEntity<ApiResponse<Map<String, Object>>> uploadMultipleFiles(
             @RequestParam("files") List<MultipartFile> files,
             @RequestParam(value = "folder", defaultValue = "general") String folder,
@@ -81,6 +94,14 @@ public class FileController {
     @PostMapping("/upload/car-images")
     @RateLimit(capacity = 20, refill = 10, refillPeriod = 1)
     @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Upload car images", description = "Upload images for a car listing")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Car images uploaded"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid images or car ID"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Car not found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded")
+    })
     public ResponseEntity<ApiResponse<Map<String, Object>>> uploadCarImages(
             @RequestParam("images") List<MultipartFile> images,
             @RequestParam("carId") Long carId,
@@ -113,6 +134,11 @@ public class FileController {
     @PostMapping("/direct-upload-url")
     @PreAuthorize("isAuthenticated()")
     @io.swagger.v3.oas.annotations.Operation(summary = "Get direct upload URL", description = "Get a presigned URL for direct file upload")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Direct upload URL generated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
     public ResponseEntity<ApiResponse<DirectUploadDTOs.CompleteResponse>> getDirectUploadUrl(
             @Valid @RequestBody DirectUploadDTOs.CompleteRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -129,6 +155,12 @@ public class FileController {
     @DeleteMapping("/{fileId}")
     @PreAuthorize("isAuthenticated()")
     @io.swagger.v3.oas.annotations.Operation(summary = "Delete file", description = "Delete a file by ID")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "File deleted successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not authorized to delete this file"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "File not found")
+    })
     public ResponseEntity<ApiResponse<Map<String, String>>> deleteFile(
             @PathVariable String fileId,
             @AuthenticationPrincipal UserPrincipal principal) {

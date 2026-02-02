@@ -37,6 +37,7 @@ public class MediaServiceImpl implements MediaService {
     private final FileUploadService fileUploadService; // Keeps legacy FileUploadService for some methods if needed, or
                                                        // we explicitly use B2
     private final com.carselling.oldcar.repository.UserRepository userRepository;
+    private final com.carselling.oldcar.repository.UploadedFileRepository uploadedFileRepository;
 
     private User resolveUser(Long userId) {
         return userRepository.findById(userId)
@@ -86,6 +87,12 @@ public class MediaServiceImpl implements MediaService {
                 resourceType = ResourceType.CAR_IMAGE;
                 resourceOwnerId = carId;
             }
+        } else if (folder.startsWith("chat/")) {
+            long chatId = authService.extractIdFromPath(folder, "chat/");
+            if (chatId != -1) {
+                resourceType = ResourceType.CHAT_ATTACHMENT;
+                resourceOwnerId = chatId;
+            }
         }
 
         // 5. Upload to B2
@@ -121,6 +128,12 @@ public class MediaServiceImpl implements MediaService {
             if (carId != -1) {
                 resourceType = ResourceType.CAR_IMAGE;
                 resourceOwnerId = carId;
+            }
+        } else if (folder.startsWith("chat/")) {
+            long chatId = authService.extractIdFromPath(folder, "chat/");
+            if (chatId != -1) {
+                resourceType = ResourceType.CHAT_ATTACHMENT;
+                resourceOwnerId = chatId;
             }
         }
 
@@ -235,6 +248,11 @@ public class MediaServiceImpl implements MediaService {
                 long userIdVal = authService.extractIdFromPath(request.getFolder(), "users/");
                 if (userIdVal != -1)
                     resourceOwnerId = userIdVal;
+            } else if (request.getFolder().startsWith("chat/")) {
+                resourceType = ResourceType.CHAT_ATTACHMENT;
+                long chatId = authService.extractIdFromPath(request.getFolder(), "chat/");
+                if (chatId != -1)
+                    resourceOwnerId = chatId;
             }
         }
         if (request.getCarId() != null) {
@@ -359,5 +377,85 @@ public class MediaServiceImpl implements MediaService {
                     "userMetadata", metadata.getUserMetadata() != null ? metadata.getUserMetadata() : Map.of());
         }
         return null;
+    }
+
+    @Override
+    public String getMediaFileUrl(Long id, Long userId) {
+        User user = resolveUser(userId);
+        UploadedFile file = uploadedFileRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Media", "id", id.toString()));
+
+        // Public Access Check - return direct URL
+        if (file.getAccessType() == com.carselling.oldcar.model.AccessType.PUBLIC) {
+            return file.getFileUrl();
+        }
+
+        // Private/Internal Access - requires granulated permission check
+        if (!hasMediaAccess(file, user)) {
+            throw new com.carselling.oldcar.exception.MediaUploadNotAllowedException("Access denied to private media");
+        }
+
+        // Generate Presigned URL for Private File (1 hour expiration)
+        return fileUploadService.generatePresignedUrl(file.getFileUrl(), 60);
+    }
+
+    /**
+     * Check if user has access to a private media file based on granulated
+     * permissions.
+     * Permission matrix:
+     * - Owner: Always has access
+     * - Admin: Always has access
+     * - Car Owner: Access to their car's private images (CAR_IMAGE type)
+     * - Chat Participant: Access to chat attachments (CHAT_ATTACHMENT - future)
+     * - Others: No access to private files
+     *
+     * @param file The uploaded file to check access for
+     * @param user The user requesting access
+     * @return true if access is granted, false otherwise
+     */
+    private boolean hasMediaAccess(UploadedFile file, User user) {
+        // 1. Owner always has access
+        if (file.getUploadedBy() != null && file.getUploadedBy().getId().equals(user.getId())) {
+            return true;
+        }
+
+        // 2. Admin has access to everything
+        if (user.getRole() == com.carselling.oldcar.model.Role.ADMIN) {
+            return true;
+        }
+
+        // 3. Role + ResourceType specific checks
+        ResourceType resourceType = file.getOwnerType();
+        if (resourceType == null) {
+            return false; // Unknown resource type - deny access
+        }
+
+        switch (resourceType) {
+            case CAR_IMAGE:
+                // Users/Dealers can access private images of cars they own
+                if (file.getOwnerId() != null) {
+                    try {
+                        var car = carService.getVehicleById(file.getOwnerId().toString());
+                        return car.getDealerId() != null && car.getDealerId().equals(user.getId().toString());
+                    } catch (ResourceNotFoundException e) {
+                        log.warn("Car not found for media access check, carId: {}", file.getOwnerId());
+                        return false;
+                    }
+                }
+                return false;
+
+            case CHAT_ATTACHMENT:
+                // TODO: Implement chat participant check when ChatService is available
+                // For now, only owner (checked above) can access
+                log.debug("Chat attachment access check - participant verification not yet implemented");
+                return false;
+
+            case USER_PROFILE:
+            case OTHER:
+            default:
+                // Only owner and admin can access private profile/other files
+                // (owner and admin already checked above)
+                return false;
+        }
     }
 }

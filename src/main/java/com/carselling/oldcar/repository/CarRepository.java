@@ -222,7 +222,7 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        @Query("SELECT c.id FROM Car c WHERE c.owner.id = :ownerId")
        List<Long> findCarIdsByOwnerId(@Param("ownerId") Long ownerId);
 
-       @Query("SELECT AVG(CAST(DATEDIFF(CURRENT_DATE, c.createdAt) AS double)) FROM Car c WHERE c.owner.id = :ownerId")
+       @Query(value = "SELECT AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) / 86400.0) FROM cars WHERE owner_id = :ownerId", nativeQuery = true)
        Double getAverageCarAgeInDaysByOwnerId(@Param("ownerId") Long ownerId);
 
        @Query("SELECT COUNT(c) FROM Car c WHERE c.owner.id = :ownerId AND c.isActive = true")

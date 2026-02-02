@@ -28,6 +28,10 @@ public interface SearchService {
         return List.of();
     }
 
+    default List<String> getTrendingSearchTerms(int limit) {
+        return List.of();
+    }
+
     /**
      * Check health of the search service.
      */

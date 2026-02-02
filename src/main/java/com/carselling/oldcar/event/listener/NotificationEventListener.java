@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 public class NotificationEventListener {
 
     private final EmailService emailService;
+    private final com.carselling.oldcar.service.NotificationService notificationService;
 
     @Async
     @EventListener
@@ -33,9 +34,25 @@ public class NotificationEventListener {
                 case GENERAL_EMAIL:
                     // For now, all specific types flow through the generic email sender helper
                     // The content is already formatted in the event payload by the service
-                    // In a more complex system, we might re-format here based on type
                     sendFormattedEmail(event);
                     break;
+
+                case PUSH_NOTIFICATION:
+                    log.debug("Handling PUSH_NOTIFICATION event for user {}", event.getUser().getId());
+                    // Extract data from metadata map safely
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, String> data = (java.util.Map<String, String>) (event.getMetadata() != null
+                            ? event.getMetadata().get("data")
+                            : null);
+                    notificationService.sendToUser(event.getUser().getId(), event.getSubject(), event.getContent(),
+                            data);
+                    break;
+
+                case BROADCAST_PUSH:
+                    log.debug("Handling BROADCAST_PUSH event");
+                    notificationService.sendToAll(event.getSubject(), event.getContent());
+                    break;
+
                 default:
                     log.warn("Unknown notification type: {}", event.getType());
             }

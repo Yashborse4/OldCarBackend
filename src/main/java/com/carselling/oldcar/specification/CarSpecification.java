@@ -29,13 +29,43 @@ public class CarSpecification {
                 return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
             }
 
-            // 1. Text Search (Query) - Applies to Make, Model, or Description
+            // 1. Text Search (Query) - "Smart Search" Logic
             if (StringUtils.hasText(criteria.getQuery())) {
-                String searchTerm = "%" + criteria.getQuery().trim().toLowerCase() + "%";
-                Predicate makeLike = criteriaBuilder.like(criteriaBuilder.lower(root.get("make")), searchTerm);
-                Predicate modelLike = criteriaBuilder.like(criteriaBuilder.lower(root.get("model")), searchTerm);
-                Predicate descLike = criteriaBuilder.like(criteriaBuilder.lower(root.get("description")), searchTerm);
-                predicates.add(criteriaBuilder.or(makeLike, modelLike, descLike));
+                String fullQuery = criteria.getQuery().trim();
+                String[] tokens = fullQuery.split("\\s+"); // Split by whitespace
+
+                List<Predicate> tokenPredicates = new ArrayList<>();
+
+                for (String token : tokens) {
+                    if (token.length() < 1)
+                        continue;
+                    String searchTerm = "%" + token.toLowerCase() + "%";
+
+                    List<Predicate> orPredicates = new ArrayList<>();
+
+                    // Match against Make, Model, Variant, Description
+                    orPredicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("make")), searchTerm));
+                    orPredicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("model")), searchTerm));
+                    orPredicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("variant")), searchTerm));
+                    orPredicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("description")), searchTerm));
+
+                    // Optional: Match Year if token is numeric
+                    if (token.matches("\\d{4}")) {
+                        try {
+                            int year = Integer.parseInt(token);
+                            orPredicates.add(criteriaBuilder.equal(root.get("year"), year));
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+
+                    // Helper: Combine ORs for this token (Any field can match this token)
+                    tokenPredicates.add(criteriaBuilder.or(orPredicates.toArray(new Predicate[0])));
+                }
+
+                // Combine all Token Predicates with AND (All tokens must find a match)
+                if (!tokenPredicates.isEmpty()) {
+                    predicates.add(criteriaBuilder.and(tokenPredicates.toArray(new Predicate[0])));
+                }
             }
 
             // 2. Exact/Partial Filters

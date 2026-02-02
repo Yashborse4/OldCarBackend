@@ -1,5 +1,6 @@
 package com.carselling.oldcar.controller;
 
+import com.carselling.oldcar.annotation.RateLimit;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.dto.mobile.RegisterDeviceRequest;
 import com.carselling.oldcar.security.UserPrincipal;
@@ -34,6 +35,7 @@ public class NotificationController {
      */
     @PostMapping("/devices/register")
     @PreAuthorize("isAuthenticated()") // Changed from hasRole('USER') to allow all authenticated
+    @RateLimit(capacity = 5, refill = 1, refillPeriod = 60) // 5 per minute
     @Operation(summary = "Register device for push notifications")
     public ResponseEntity<ApiResponse<String>> registerDevice(
             @Valid @RequestBody RegisterDeviceRequest request,
@@ -96,21 +98,24 @@ public class NotificationController {
 
     @PostMapping("/test-send")
     @PreAuthorize("hasRole('ADMIN')")
+    @RateLimit(capacity = 10, refill = 1, refillPeriod = 1) // 10 per second
     @Operation(summary = "Send test notification", description = "Send a test push notification to a specific user")
     public ResponseEntity<ApiResponse<Void>> sendTestNotification(
             @RequestParam Long userId,
-            @RequestBody Map<String, String> payload) {
+            @RequestBody Map<String, String> payload,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
 
         String title = payload.getOrDefault("title", "Test Notification");
         String body = payload.getOrDefault("body", "This is a test notification from Admin.");
 
-        notificationService.sendToUser(userId, title, body, payload);
+        notificationService.queuePush(userId, title, body, payload, idempotencyKey);
 
         return ResponseEntity.ok(ApiResponse.success("Test notification sent", null));
     }
 
     @PostMapping("/broadcast")
     @PreAuthorize("hasRole('ADMIN')")
+    @RateLimit(capacity = 1, refill = 1, refillPeriod = 60) // 1 broadcast per minute
     @Operation(summary = "Broadcast notification", description = "Send notification to ALL users")
     public ResponseEntity<ApiResponse<Void>> broadcastNotification(
             @RequestBody Map<String, String> payload) {

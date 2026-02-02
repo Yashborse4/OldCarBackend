@@ -6,13 +6,11 @@ import com.carselling.oldcar.exception.ResourceNotFoundException;
 import com.carselling.oldcar.exception.BusinessException;
 import com.carselling.oldcar.model.*;
 import com.carselling.oldcar.repository.*;
-import com.carselling.oldcar.event.ChatMessageEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +40,7 @@ public class ChatService {
     private final CarRepository carRepository;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
     private final FileUploadService fileUploadService;
+    private final MediaFinalizationService mediaFinalizationService;
     private final ChatAuthorizationService chatAuthorizationService;
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
 
@@ -91,20 +90,16 @@ public class ChatService {
      * Internal conversion with pre-fetched last message
      */
     private ChatRoomDto convertToRoomDto(ChatRoom chatRoom, ChatMessage lastMessage) {
-        List<ChatParticipant> participants = chatParticipantRepository
-                .findByChatRoomIdAndIsActiveTrue(chatRoom.getId());
-        // Note: participants are already eagerly loaded by
-        // findChatRoomsWithParticipants
-        // BUT findByChatRoomIdAndIsActiveTrue might hit DB again if not careful or if
-        // filtering needed.
-        // Since EntityGraph fetched ALL participants, we can filter in memory if
-        // "active" flag checks are needed
-        // efficiently, OR relies on the fact that we might just show all.
-        // For now, let's trust the repo call or optimize further if needed.
-        // Actually, findChatRoomsWithParticipants JOINs participants but doesn't filter
-        // by active=true for the collection.
-        // So chatRoom.getParticipants() returns all.
-        // Ideally we filter in memory from chatRoom.getParticipants()
+        // Optimization: Filter participants in memory to avoid N+1 DB calls
+        // findChatRoomsWithParticipants already eagerly fetches participants via
+        // EntityGraph
+        // For getChatDetails, accessing getParticipants() triggers one Lazy load which
+        // is acceptable
+        List<ChatParticipant> participants = chatRoom.getParticipants() != null
+                ? chatRoom.getParticipants().stream()
+                        .filter(ChatParticipant::isActive)
+                        .collect(Collectors.toList())
+                : List.of();
 
         return ChatRoomDto.builder()
                 .id(chatRoom.getId())
@@ -294,7 +289,13 @@ public class ChatService {
         if (existingChat != null) {
             // Send the initial message if provided
             if (request.getMessage() != null && !request.getMessage().trim().isEmpty()) {
-                sendMessage(existingChat.getId(), request.getMessage(), buyerId);
+                SendMessageRequest msgRequest = SendMessageRequest.builder()
+                        .chatId(existingChat.getId())
+                        .content(request.getMessage())
+                        .messageType(request.getMessageType() != null ? request.getMessageType() : "TEXT")
+                        .metadata(request.getMetadata())
+                        .build();
+                sendMessage(msgRequest, buyerId);
             }
             return convertToRoomDto(existingChat);
         }
@@ -425,7 +426,7 @@ public class ChatService {
     public Page<ChatMessageDto> getChatMessages(Long chatId, Long userId, Pageable pageable) {
         log.info("Getting messages for chat ID: {} by user ID: {}", chatId, userId);
 
-        ChatRoom chatRoom = chatAuthorizationService.assertCanViewChat(userId, chatId);
+        chatAuthorizationService.assertCanViewChat(userId, chatId);
 
         Page<ChatMessage> messages = chatMessageRepository
                 .findByChatRoomIdAndIsDeletedFalseOrderByCreatedAtDesc(chatId, pageable);
@@ -450,6 +451,45 @@ public class ChatService {
     public ChatMessageDto sendMessage(SendMessageRequest request, Long senderId) {
         log.info("Sending message to chat ID: {} from user ID: {}", request.getChatId(), senderId);
 
+        User sender = getUserById(senderId);
+        ChatRoom chatRoom = chatAuthorizationService.assertCanSendMessage(senderId, request.getChatId());
+
+        // Handle File Finalization (Direct Upload Flow)
+        if (request.getTempFileId() != null) {
+            log.info("Finalizing file upload for temp ID: {}", request.getTempFileId());
+            try {
+                List<UploadedFile> finalizedFiles = mediaFinalizationService.finalizeUploads(
+                        List.of(request.getTempFileId()),
+                        "chat/" + request.getChatId(),
+                        ResourceType.CHAT_ATTACHMENT,
+                        request.getChatId(),
+                        sender);
+
+                if (!finalizedFiles.isEmpty()) {
+                    UploadedFile file = finalizedFiles.get(0);
+                    request.setFileUrl(file.getFileUrl());
+                    request.setFileName(file.getOriginalFileName());
+                    request.setFileSize(file.getSize());
+                    request.setMimeType(file.getContentType());
+                    
+                    // Auto-detect message type if not set or generic
+                    if (request.getMessageType() == null || request.getMessageType().equals("TEXT")) {
+                        String mime = file.getContentType().toLowerCase();
+                        if (mime.startsWith("image/")) {
+                            request.setMessageType("IMAGE");
+                        } else if (mime.startsWith("video/")) {
+                            request.setMessageType("FILE"); // Or VIDEO if supported
+                        } else {
+                            request.setMessageType("FILE");
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to finalize chat file: {}", e.getMessage());
+                throw new BusinessException("Failed to process attached file");
+            }
+        }
+
         if (request.getClientMessageId() != null && !request.getClientMessageId().isBlank()) {
             ChatMessage existing = chatMessageRepository
                     .findBySenderIdAndClientMessageId(senderId, request.getClientMessageId())
@@ -460,15 +500,14 @@ public class ChatService {
             }
         }
 
-        ChatRoom chatRoom = chatAuthorizationService.assertCanSendMessage(senderId, request.getChatId());
-
-        User sender = getUserById(senderId);
-
-        ChatMessage.MessageType messageType;
-        try {
-            messageType = ChatMessage.MessageType.valueOf(request.getMessageType().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            messageType = ChatMessage.MessageType.TEXT;
+        ChatMessage.MessageType messageType = ChatMessage.MessageType.TEXT;
+        if (request.getMessageType() != null) {
+            try {
+                // Allow explicit type setting (e.g. for CAR_REFERENCE, LOCATION)
+                messageType = ChatMessage.MessageType.valueOf(request.getMessageType().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Default to TEXT
+            }
         }
 
         ChatMessage message = ChatMessage.builder()
@@ -607,7 +646,7 @@ public class ChatService {
     public Page<ChatMessageDto> searchMessagesInChat(Long chatId, String query, Long userId, Pageable pageable) {
         log.info("Searching messages in chat ID: {} for query: '{}' by user ID: {}", chatId, query, userId);
 
-        ChatRoom chatRoom = chatAuthorizationService.assertCanViewChat(userId, chatId);
+        chatAuthorizationService.assertCanViewChat(userId, chatId);
 
         Page<ChatMessage> messages = chatMessageRepository
                 .searchInChat(chatId, query, pageable);
@@ -622,7 +661,7 @@ public class ChatService {
     public List<ChatParticipantDto> getChatParticipants(Long chatId, Long userId) {
         log.info("Getting participants for chat ID: {} by user ID: {}", chatId, userId);
 
-        ChatRoom chatRoom = chatAuthorizationService.assertCanViewChat(userId, chatId);
+        chatAuthorizationService.assertCanViewChat(userId, chatId);
 
         List<ChatParticipant> participants = chatParticipantRepository
                 .findByChatRoomIdAndIsActiveTrue(chatId);
@@ -739,10 +778,13 @@ public class ChatService {
         log.info("Uploading file to chat ID: {} by user ID: {}", chatId, userId);
 
         ChatRoom chatRoom = chatAuthorizationService.assertCanSendMessage(userId, chatId);
+        User uploader = getUserById(userId);
 
         try {
             // Upload file using the file upload service
-            FileUploadResponse response = fileUploadService.uploadFile(file, "chat/" + chatRoom.getId(), userId);
+            // Use strict upload method with ResourceType.CHAT_ATTACHMENT
+            FileUploadResponse response = fileUploadService.uploadFile(file, "chat/" + chatRoom.getId(), uploader,
+                    ResourceType.CHAT_ATTACHMENT, userId);
 
             log.info("File uploaded successfully: {}", response.getFileName());
             return response;
@@ -976,17 +1018,13 @@ public class ChatService {
     public Page<ChatMessageDto> searchMessages(String query, Long userId, Pageable pageable) {
         log.info("Searching messages for query: '{}' by user ID: {}", query, userId);
 
-        // Get all user's chat rooms
-        List<ChatRoom> userChatRooms = chatRoomRepository.findByParticipantUserId(userId, Pageable.unpaged())
-                .getContent();
+        /*
+         * Search across all chats the user is a participant of.
+         * Using the optimized repository method that joins participants.
+         */
+        Page<ChatMessage> messages = chatMessageRepository.searchUserChats(userId, query, pageable);
 
-        if (userChatRooms.isEmpty()) {
-            return Page.empty(pageable);
-        }
-
-        // Search across all chats (this would need a custom repository method)
-        // For now, return empty - this method would need proper implementation
-        return Page.empty(pageable);
+        return messages.map(this::convertToMessageDto);
     }
 
     /**

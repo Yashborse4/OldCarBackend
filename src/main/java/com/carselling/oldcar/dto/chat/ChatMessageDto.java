@@ -28,6 +28,7 @@ public class ChatMessageDto {
     private ReplyTo replyTo;
     private FileAttachment fileAttachment;
     private String deliveryStatus;
+    private String metadata;
 
     @Data
     @Builder

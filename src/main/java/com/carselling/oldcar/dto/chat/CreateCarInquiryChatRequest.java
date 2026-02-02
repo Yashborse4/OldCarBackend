@@ -23,4 +23,8 @@ public class CreateCarInquiryChatRequest {
     @NotBlank(message = "Initial message is required")
     @Size(max = 1000, message = "Message cannot exceed 1000 characters")
     private String message;
+
+    private String messageType;
+    
+    private String metadata;
 }

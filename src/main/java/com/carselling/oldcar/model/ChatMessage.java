@@ -82,10 +82,18 @@ public class ChatMessage {
     @Column(name = "client_message_id", length = 100)
     private String clientMessageId;
 
+    @Column(columnDefinition = "TEXT")
+    private String metadata;
+
     public enum MessageType {
         TEXT,
         FILE,
-        SYSTEM
+        SYSTEM,
+        IMAGE,
+        VOICE,
+        LOCATION,
+        CAR_REFERENCE,
+        USER_REFERENCE
     }
 
     public enum DeliveryStatus {

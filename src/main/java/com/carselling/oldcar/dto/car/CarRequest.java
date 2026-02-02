@@ -71,6 +71,7 @@ public class CarRequest {
     private String variant;
     private String status;
     private String usage;
+    private String condition;
 
     private java.util.List<String> images;
 

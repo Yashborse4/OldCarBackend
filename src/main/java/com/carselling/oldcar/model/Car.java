@@ -19,26 +19,16 @@ import java.util.List;
  * Car entity representing car listings in the system
  */
 @Entity
-@Table(name = "cars"/*
-                     * , indexes = {
-                     * 
-                     * @Index(name = "idx_car_make", columnList = "make"),
-                     * 
-                     * @Index(name = "idx_car_model", columnList = "model"),
-                     * 
-                     * @Index(name = "idx_car_year", columnList = "year"),
-                     * 
-                     * @Index(name = "idx_car_price", columnList = "price"),
-                     * 
-                     * @Index(name = "idx_car_owner", columnList = "owner_id"),
-                     * 
-                     * @Index(name = "idx_car_created_at", columnList = "created_at"),
-                     * 
-                     * @Index(name = "idx_car_is_active", columnList = "is_active"),
-                     * 
-                     * @Index(name = "idx_car_featured", columnList = "is_featured")
-                     * }
-                     */)
+@Table(name = "cars", indexes = {
+        @Index(name = "idx_car_make", columnList = "make"),
+        @Index(name = "idx_car_model", columnList = "model"),
+        @Index(name = "idx_car_year", columnList = "year"),
+        @Index(name = "idx_car_price", columnList = "price"),
+        @Index(name = "idx_car_owner", columnList = "owner_id"),
+        @Index(name = "idx_car_created_at", columnList = "created_at"),
+        @Index(name = "idx_car_is_active", columnList = "is_active"),
+        @Index(name = "idx_car_featured", columnList = "is_featured")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -77,7 +67,7 @@ public class Car {
     private String description;
 
     @Size(max = 500, message = "Image URL must not exceed 500 characters")
-    @Pattern(regexp = "^(https?://.*\\.(jpg|jpeg|png|gif|webp))$|^$", message = "Please provide a valid image URL")
+    @Pattern(regexp = "^$|^(https?://.*\\.(jpg|jpeg|png|gif|webp|JPG|JPEG|PNG|GIF|WEBP)(\\?.*)?)?$", message = "Please provide a valid image URL")
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
@@ -234,7 +224,7 @@ public class Car {
     @Enumerated(EnumType.STRING)
     @Column(name = "media_status", length = 20)
     @Builder.Default
-    private MediaStatus mediaStatus = MediaStatus.PENDING;
+    private MediaStatus mediaStatus = MediaStatus.INIT;
 
     // Helper methods for backward compatibility
     public User getUser() {
@@ -345,7 +335,7 @@ public class Car {
             this.videoUrl = null;
         }
         if (this.mediaStatus == null) {
-            this.mediaStatus = MediaStatus.PENDING;
+            this.mediaStatus = MediaStatus.INIT;
         }
     }
 }

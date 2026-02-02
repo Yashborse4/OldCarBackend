@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 public class FileAuthorizationService {
 
     private final CarService carService;
+    private final ChatAuthorizationService chatAuthorizationService;
 
     /**
      * Check if user is authorized to upload to a specific folder
@@ -38,6 +39,15 @@ public class FileAuthorizationService {
                 } catch (ResourceNotFoundException e) {
                     // Start orphan check logic or strict failing
                     throw new SecurityException("Car not found or access denied");
+                }
+            }
+        } else if (folder.startsWith("chat/")) {
+            long chatId = extractIdFromPath(folder, "chat/");
+            if (chatId != -1) {
+                try {
+                    chatAuthorizationService.assertCanSendMessage(currentUser.getId(), chatId);
+                } catch (Exception e) {
+                    throw new SecurityException("You are not authorized to upload to this chat");
                 }
             }
         }
@@ -65,6 +75,18 @@ public class FileAuthorizationService {
                         throw new SecurityException("Associated vehicle not found or access denied");
                     }
                 }
+            } else if (fileUrl.contains("/chat/")) {
+                 long chatId = extractIdFromUrl(fileUrl, "/chat/");
+                 if (chatId != -1) {
+                     // For deletion, verify user is in chat. 
+                     // Ideally we should check if they sent the message, but fileUrl doesn't imply message ownership directly.
+                     // However, this checkDeletionAuthorization is for the file itself.
+                     try {
+                        chatAuthorizationService.assertCanViewChat(currentUser.getId(), chatId);
+                     } catch (Exception e) {
+                        throw new SecurityException("You are not authorized to delete files from this chat");
+                     }
+                 }
             }
         }
     }

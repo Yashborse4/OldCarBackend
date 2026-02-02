@@ -13,11 +13,7 @@ import java.util.stream.Collectors;
 @Component
 public class UserDataLoader {
 
-    private final UserRepository userRepository;
-
     public UserDataLoader(UserRepository userRepository, BatchLoaderRegistry registry) {
-        this.userRepository = userRepository;
-
         registry.forTypePair(Long.class, User.class).registerMappedBatchLoader((keys, env) -> {
             Set<Long> userIds = keys;
             return Mono.fromSupplier(() -> {

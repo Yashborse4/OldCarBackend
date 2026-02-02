@@ -9,9 +9,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-
+import com.carselling.oldcar.model.User;
+import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -62,7 +62,10 @@ public class CarSearchService {
 
         Pageable pageable = PageRequest.of(page, size);
 
-        return searchProvider.search(criteria, pageable);
+        // Perform the search
+        Page<CarSearchHitDto> result = searchProvider.search(criteria, pageable);
+        log.debug("Search completed with {} results on page {}", result.getTotalElements(), result.getNumber());
+        return result;
     }
 
     /**
@@ -71,6 +74,14 @@ public class CarSearchService {
     public List<String> suggest(String prefix, int limit) {
         int safeLimit = Math.max(1, Math.min(limit, 20));
         return searchProvider.suggest(prefix, safeLimit);
+    }
+
+    public List<String> getTrendingSearchTerms(int limit) {
+        return searchProvider.getTrendingSearchTerms(limit);
+    }
+
+    public List<String> getRecentSearches(User user, int limit) {
+        return searchProvider.getRecentSearches(user, limit);
     }
 
     // --- Helper Methods ---
@@ -88,4 +99,5 @@ public class CarSearchService {
                 .filter(s -> s != null && !s.isEmpty())
                 .collect(Collectors.toList());
     }
+
 }

@@ -203,10 +203,14 @@ public class FileValidationService {
      */
     private boolean isVideoFile(String filename) {
         String extension = getFileExtension(filename);
-        return extension != null &&
-                (extension.equalsIgnoreCase("mp4") || extension.equalsIgnoreCase("mov") ||
-                        extension.equalsIgnoreCase("avi") || extension.equalsIgnoreCase("mkv") ||
-                        extension.equalsIgnoreCase("webm"));
+        if (extension == null) {
+            return false;
+        }
+        String ext = extension.toLowerCase();
+        return ext.equals("mp4") || ext.equals("mov") || ext.equals("avi") ||
+                ext.equals("mkv") || ext.equals("webm") || ext.equals("3gp") ||
+                ext.equals("flv") || ext.equals("wmv") || ext.equals("m4v") ||
+                ext.equals("mpeg") || ext.equals("mpg");
     }
 
     /**

@@ -5,7 +5,7 @@ import com.carselling.oldcar.dto.car.DealerAnalyticsResponse;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.mapper.CarMapper;
 import com.carselling.oldcar.model.Car;
-import com.carselling.oldcar.model.User;
+import com.carselling.oldcar.security.UserPrincipal;
 import com.carselling.oldcar.service.car.InventoryService;
 import com.carselling.oldcar.service.analytics.UserAnalyticsService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,7 +47,7 @@ public class DealerController {
             @PageableDefault(size = 20) Pageable pageable,
             Authentication authentication) {
 
-        User user = (User) authentication.getPrincipal();
+        UserPrincipal user = (UserPrincipal) authentication.getPrincipal();
         Page<Car> inventory = inventoryService.getInventory(user.getId(), status, pageable);
 
         Page<CarResponse> response = inventory.map(carMapper::toResponse);
@@ -66,7 +66,7 @@ public class DealerController {
             @RequestBody Map<String, String> statusMap,
             Authentication authentication) {
 
-        User user = (User) authentication.getPrincipal();
+        UserPrincipal user = (UserPrincipal) authentication.getPrincipal();
         String newStatus = statusMap.get("status");
 
         if (newStatus == null) {
@@ -87,7 +87,7 @@ public class DealerController {
     public ResponseEntity<ApiResponse<DealerAnalyticsResponse>> getDashboard(
             Authentication authentication) {
 
-        User user = (User) authentication.getPrincipal();
+        UserPrincipal user = (UserPrincipal) authentication.getPrincipal();
         DealerAnalyticsResponse stats = userAnalyticsService.getDealerAnalytics(user.getId());
 
         return ResponseEntity.ok(ApiResponse.success("Dashboard stats retrieved", stats));

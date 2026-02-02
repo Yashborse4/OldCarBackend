@@ -57,7 +57,7 @@ VALUES
 
 
 
-INSERT INTO car_master
+INSERT INTO car_master (make, model, variant, engine_cc, fuel_type, transmission, body_type, seating_capacity, mileage_arai, year_start, year_end, created_at, updated_at)
 VALUES
 ('Hyundai', 'Venue', 'S', 1197, 'Petrol', 'Manual', 'SUV', 5, 17.52, 2019, NULL, NOW(), NOW()),
 ('Hyundai', 'Venue', 'SX', 998, 'Petrol', 'Automatic', 'SUV', 5, 18.15, 2019, NULL, NOW(), NOW()),
@@ -66,14 +66,14 @@ VALUES
 
 
 
-INSERT INTO car_master
+INSERT INTO car_master (make, model, variant, engine_cc, fuel_type, transmission, body_type, seating_capacity, mileage_arai, year_start, year_end, created_at, updated_at)
 VALUES
 ('Kia', 'Carens', 'Prestige', 1497, 'Petrol', 'Manual', 'MPV', 7, 16.20, 2022, NULL, NOW(), NOW()),
 ('Kia', 'Carens', 'Luxury', 1493, 'Diesel', 'Automatic', 'MPV', 7, 21.30, 2022, NULL, NOW(), NOW());
 
 
 
-INSERT INTO car_master
+INSERT INTO car_master (make, model, variant, engine_cc, fuel_type, transmission, body_type, seating_capacity, mileage_arai, year_start, year_end, created_at, updated_at)
 VALUES
 ('Mahindra', 'Scorpio-N', 'Z4', 1997, 'Petrol', 'Manual', 'SUV', 7, 14.00, 2022, NULL, NOW(), NOW()),
 ('Mahindra', 'Scorpio-N', 'Z8', 2184, 'Diesel', 'Automatic', 'SUV', 7, 15.42, 2022, NULL, NOW(), NOW()),
@@ -81,7 +81,7 @@ VALUES
 ('Mahindra', 'XUV300', 'W6', 1197, 'Petrol', 'Manual', 'SUV', 5, 20.00, 2019, NULL, NOW(), NOW());
 
 
-INSERT INTO car_master
+INSERT INTO car_master (make, model, variant, engine_cc, fuel_type, transmission, body_type, seating_capacity, mileage_arai, year_start, year_end, created_at, updated_at)
 VALUES
 ('Tata', 'Punch', 'Pure', 1199, 'Petrol', 'Manual', 'SUV', 5, 20.09, 2021, NULL, NOW(), NOW()),
 ('Tata', 'Punch', 'Creative', 1199, 'Petrol', 'Automatic', 'SUV', 5, 20.09, 2021, NULL, NOW(), NOW()),
@@ -90,25 +90,25 @@ VALUES
 
 
 
-INSERT INTO car_master
+INSERT INTO car_master (make, model, variant, engine_cc, fuel_type, transmission, body_type, seating_capacity, mileage_arai, year_start, year_end, created_at, updated_at)
 VALUES
 ('Volkswagen', 'Virtus', 'Highline', 999, 'Petrol', 'Manual', 'Sedan', 5, 20.08, 2022, NULL, NOW(), NOW()),
 ('Volkswagen', 'Taigun', 'GT', 1498, 'Petrol', 'Automatic', 'SUV', 5, 17.23, 2021, NULL, NOW(), NOW());
 
 
-INSERT INTO car_master
+INSERT INTO car_master (make, model, variant, engine_cc, fuel_type, transmission, body_type, seating_capacity, mileage_arai, year_start, year_end, created_at, updated_at)
 VALUES
 ('Skoda', 'Slavia', 'Active', 999, 'Petrol', 'Manual', 'Sedan', 5, 20.32, 2022, NULL, NOW(), NOW()),
 ('Skoda', 'Kushaq', 'Style', 1498, 'Petrol', 'Automatic', 'SUV', 5, 18.86, 2021, NULL, NOW(), NOW());
 
 
-INSERT INTO car_master
+INSERT INTO car_master (make, model, variant, engine_cc, fuel_type, transmission, body_type, seating_capacity, mileage_arai, year_start, year_end, created_at, updated_at)
 VALUES
 ('Toyota', 'Glanza', 'G', 1197, 'Petrol', 'Automatic', 'Hatchback', 5, 22.94, 2022, NULL, NOW(), NOW()),
 ('Toyota', 'Urban Cruiser Hyryder', 'V', 1462, 'Petrol', 'Automatic', 'SUV', 5, 20.58, 2022, NULL, NOW(), NOW());
 
 
-INSERT INTO car_master
+INSERT INTO car_master (make, model, variant, engine_cc, fuel_type, transmission, body_type, seating_capacity, mileage_arai, year_start, year_end, created_at, updated_at)
 VALUES
 ('Honda', 'City', 'V', 1498, 'Petrol', 'Manual', 'Sedan', 5, 17.80, 2020, NULL, NOW(), NOW()),
 ('Honda', 'City', 'ZX', 1498, 'Petrol', 'CVT', 'Sedan', 5, 18.40, 2020, NULL, NOW(), NOW());

@@ -36,12 +36,19 @@ public class DealerVerificationController {
         @PostMapping("/apply")
         @RateLimit(capacity = 3, refill = 1, refillPeriod = 5)
         @io.swagger.v3.oas.annotations.Operation(summary = "Apply for verification", description = "Submit a new dealer verification request")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Verification request submitted successfully"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request data or validation error", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ApiResponse.class))),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "User is not a dealer or unauthorized", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ApiResponse.class))),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Verification request already exists", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ApiResponse.class))),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ApiResponse.class)))
+        })
         public ResponseEntity<ApiResponse<DealerVerificationResponseDto>> applyForVerification(
                         @Valid @RequestBody DealerVerificationRequestDto request,
                         Authentication authentication) {
 
                 UserPrincipal dealer = (UserPrincipal) authentication.getPrincipal();
-                log.info("Dealer {} applying for verification", dealer.getId());
+                log.info("Dealer {} submitting verification request via /api/user/dealer-verification", dealer.getId());
                 DealerVerificationResponseDto response = verificationService.submitVerificationRequest(dealer.getId(),
                                 request);
 
@@ -58,6 +65,12 @@ public class DealerVerificationController {
         @GetMapping("/status")
         @RateLimit(capacity = 20, refill = 5, refillPeriod = 1)
         @io.swagger.v3.oas.annotations.Operation(summary = "Get verification status", description = "Retrieve the current status of your dealer verification")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Verification status retrieved successfully"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "User is not a dealer"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded")
+        })
         public ResponseEntity<ApiResponse<DealerVerificationResponseDto>> getVerificationStatus(
                         Authentication authentication) {
 
@@ -84,6 +97,14 @@ public class DealerVerificationController {
          */
         @PutMapping("/update")
         @RateLimit(capacity = 3, refill = 1, refillPeriod = 5)
+        @io.swagger.v3.oas.annotations.Operation(summary = "Update verification request", description = "Resubmit a rejected verification request with updated information")
+        @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Verification request updated successfully"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request data"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "User is not a dealer or request is not in rejected state"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "No verification request found"),
+                        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded")
+        })
         public ResponseEntity<ApiResponse<DealerVerificationResponseDto>> updateVerificationRequest(
                         @Valid @RequestBody DealerVerificationRequestDto request,
                         Authentication authentication) {

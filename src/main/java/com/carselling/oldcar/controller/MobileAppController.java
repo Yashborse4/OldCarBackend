@@ -18,7 +18,7 @@ import java.util.Map;
  * Handles version checks, configuration, health, and offline sync.
  */
 @RestController
-@RequestMapping("/api/mobile")
+@RequestMapping("/api/v1/mobile")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Mobile App Lifecycle", description = "Mobile app configuration and lifecycle management")

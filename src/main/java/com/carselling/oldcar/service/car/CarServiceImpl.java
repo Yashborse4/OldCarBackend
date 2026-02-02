@@ -22,6 +22,7 @@ import com.carselling.oldcar.repository.CarRepository;
 import com.carselling.oldcar.repository.UserRepository;
 import com.carselling.oldcar.repository.CarMasterRepository;
 import com.carselling.oldcar.b2.B2FileService;
+import com.carselling.oldcar.dto.file.FileUploadResponse;
 import com.carselling.oldcar.model.UploadedFile;
 import com.carselling.oldcar.model.ResourceType;
 import com.carselling.oldcar.specification.CarSpecification;
@@ -44,6 +45,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Enhanced Car Service V2 with analytics and advanced features
@@ -308,7 +310,7 @@ public class CarServiceImpl implements CarService {
                         .collect(Collectors.toList());
 
                 car.setImages(finalizedUrls);
-                car.setMediaStatus(MediaStatus.COMPLETED); // Or READY?
+                car.setMediaStatus(MediaStatus.READY); // Single public visibility state
 
                 // If we have images, set the first as banner
                 if (!finalizedUrls.isEmpty()) {
@@ -344,6 +346,48 @@ public class CarServiceImpl implements CarService {
                 "Vehicle created by user " + currentUserId);
 
         return convertToResponseV2(savedCar);
+    }
+
+    /**
+     * Update vehicle with media (Facade method)
+     */
+    @Override
+    public CarResponse updateVehicleWithMedia(String id, CarRequest request,
+            List<MultipartFile> images, Long currentUserId) {
+
+        // 1. Update vehicle details
+        CarResponse response = updateVehicle(id, request, currentUserId);
+
+        // 2. Upload and update media if provided
+        if (images != null && !images.isEmpty()) {
+            User uploader = userRepository.findById(currentUserId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUserId.toString()));
+
+            // Upload files using B2 service with correct resource type
+            List<FileUploadResponse> uploads = b2FileService.uploadMultipleFiles(
+                    images,
+                    "cars/" + id + "/images",
+                    uploader,
+                    ResourceType.CAR_IMAGE,
+                    Long.parseLong(id));
+
+            List<String> imageUrls = uploads.stream()
+                    .map(FileUploadResponse::getFileUrl)
+                    .filter(url -> url != null && !url.isBlank())
+                    .collect(Collectors.toList());
+
+            if (imageUrls.isEmpty() && !uploads.isEmpty()) {
+                // All uploads failed?
+                FileUploadResponse firstError = uploads.get(0);
+                throw new BusinessException("Failed to upload images: " + firstError.getFileName());
+            }
+
+            // Update car media
+            response = uploadMedia(id, imageUrls, null, currentUserId);
+
+        }
+
+        return response;
     }
 
     /**
@@ -677,9 +721,11 @@ public class CarServiceImpl implements CarService {
             car.setVideoUrl(videoUrl);
         }
 
-        // Update status flow: INIT -> COMPLETED (bypassing PROCESSING for synchronous
-        // update of URLs)
-        car.setMediaStatus(MediaStatus.COMPLETED);
+        // Update status flow: INIT -> READY (bypassing PROCESSING for synchronous
+        // updates)
+        // READY is the single state indicating media is complete and car is publicly
+        // visible
+        car.setMediaStatus(MediaStatus.READY);
 
         // Auto-activate if verified dealer
         if (car.getOwner().canListCarsPublicly()) {
@@ -999,6 +1045,8 @@ public class CarServiceImpl implements CarService {
             return true;
         }
 
+        // READY is the single state indicating media is complete and car is publicly
+        // visible
         if (role == Role.USER) {
             return Boolean.TRUE.equals(car.getIsActive())
                     && !Boolean.TRUE.equals(car.getIsSold())
@@ -1104,12 +1152,14 @@ public class CarServiceImpl implements CarService {
                         .map(UploadedFile::getFileUrl)
                         .collect(Collectors.toList());
 
-                // Append to existing images
-                List<String> currentImages = new ArrayList<>(car.getImages());
+                // Append to existing images (handle null safely)
+                List<String> currentImages = car.getImages() != null
+                        ? new ArrayList<>(car.getImages())
+                        : new ArrayList<>();
                 currentImages.addAll(finalizedUrls);
                 car.setImages(currentImages);
 
-                car.setMediaStatus(MediaStatus.COMPLETED); // As per uploadMedia
+                car.setMediaStatus(MediaStatus.READY); // Single public visibility state
 
                 // If we have images, ensure banner set
                 if (!currentImages.isEmpty() && (car.getImageUrl() == null || car.getImageUrl().isBlank())) {

@@ -51,6 +51,11 @@ public class UploadedFile {
     @Column(name = "owner_id")
     private Long ownerId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "access_type", length = 20)
+    @Builder.Default
+    private AccessType accessType = AccessType.PUBLIC;
+
     @Column(name = "file_hash", length = 64)
     private String fileHash; // SHA-1 or SHA-256
 

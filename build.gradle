@@ -35,6 +35,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-graphql'
+	// GraphQL Extended Scalars (DateTime, Date, etc.)
+	implementation 'com.graphql-java:graphql-java-extended-scalars:21.0'
 	// WebSocket dependencies for real-time chat
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 	implementation 'org.springframework:spring-messaging'
@@ -75,7 +77,11 @@ dependencies {
 	implementation 'io.micrometer:micrometer-core'
 	
 	// Elasticsearch dependencies
-    implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+	// OpenSearch dependencies
+    implementation 'org.opensearch.client:opensearch-java:2.10.0'
+    implementation 'org.opensearch.client:opensearch-rest-client:2.11.0'
+    implementation 'jakarta.json:jakarta.json-api:2.1.2'
+    implementation 'org.eclipse.parsson:parsson:1.1.5'
 
 
 	// JSON processing

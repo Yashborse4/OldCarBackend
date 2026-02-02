@@ -23,13 +23,18 @@ public interface CarSearchProvider {
     Page<CarSearchHitDto> search(CarSearchCriteria criteria, Pageable pageable);
 
     /**
-     * Suggest search terms or vehicles.
-     * 
-     * @param prefix Query prefix.
-     * @param limit  Max suggestions.
-     * @return List of suggestion strings.
+     * Get autocomplete suggestions.
+     * Default implementation returns empty list if not supported.
      */
     default List<String> suggest(String prefix, int limit) {
-        return List.of();
+        return java.util.Collections.emptyList();
+    }
+
+    default List<String> getTrendingSearchTerms(int limit) {
+        return java.util.Collections.emptyList();
+    }
+
+    default List<String> getRecentSearches(com.carselling.oldcar.model.User user, int limit) {
+        return java.util.Collections.emptyList();
     }
 }

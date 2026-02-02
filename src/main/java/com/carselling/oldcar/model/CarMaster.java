@@ -52,6 +52,9 @@ public class CarMaster {
     @Column(name = "body_type", length = 50)
     private String bodyType;
 
+    @Column(name = "seating_capacity")
+    private Integer seatingCapacity;
+
     @Column(name = "mileage_arai")
     private Double mileageArai;
 

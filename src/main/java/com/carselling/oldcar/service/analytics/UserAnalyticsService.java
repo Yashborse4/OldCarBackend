@@ -441,7 +441,7 @@ public class UserAnalyticsService {
     @Scheduled(fixedRate = 60000)
     public void resetRateLimitCounters() {
         sessionEventCounts.clear();
-        log.debug("Reset rate limit counters");
+        // log.debug("Reset rate limit counters");
     }
 
     /**

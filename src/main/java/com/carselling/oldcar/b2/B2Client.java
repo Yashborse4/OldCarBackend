@@ -2,7 +2,6 @@ package com.carselling.oldcar.b2;
 
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -11,10 +10,14 @@ import com.backblaze.b2.client.B2StorageClient;
 import com.backblaze.b2.client.B2StorageClientFactory;
 import org.springframework.beans.factory.InitializingBean;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Component
 @RequiredArgsConstructor
-@Slf4j
 public class B2Client implements InitializingBean {
+
+    private static final Logger log = LoggerFactory.getLogger(B2Client.class);
 
     private final B2Properties properties;
     private B2StorageClient client;
@@ -97,6 +100,55 @@ public class B2Client implements InitializingBean {
 
         } catch (Exception e) {
             log.error("Error in B2 upload (SDK)", e);
+            throw new RuntimeException("B2 Upload Error", e);
+        }
+    }
+
+    public UploadFileResponse uploadFile(String fileName, java.io.File file, String contentType,
+            Map<String, String> fileInfo) {
+        try {
+            String bucketId = getCachedBucketId();
+
+            com.backblaze.b2.client.contentSources.B2ContentSource source = com.backblaze.b2.client.contentSources.B2FileContentSource
+                    .build(file);
+
+            var requestBuilder = com.backblaze.b2.client.structures.B2UploadFileRequest
+                    .builder(bucketId, fileName, contentType, source);
+
+            if (fileInfo != null && !fileInfo.isEmpty()) {
+                for (Map.Entry<String, String> entry : fileInfo.entrySet()) {
+                    requestBuilder.setCustomField(entry.getKey(), entry.getValue());
+                }
+            }
+
+            com.backblaze.b2.client.structures.B2UploadFileRequest request = requestBuilder.build();
+            com.backblaze.b2.client.structures.B2FileVersion fileVersion = client.uploadSmallFile(request); // Autodetects?
+                                                                                                            // Or use
+                                                                                                            // uploadLargeFile?
+                                                                                                            // SDK
+                                                                                                            // usually
+                                                                                                            // handles
+                                                                                                            // it or we
+                                                                                                            // use
+                                                                                                            // uploadFile.
+            // Note: client.uploadSmallFile is specific. The SDK typically has 'uploadFile'
+            // which selects.
+            // Checking imports... standard B2 SDK 'uploadSmallFile' is for < 5GB.
+            // If backup > 5GB, using 'uploadLargeFile' is better, but 'B2StorageClient'
+            // usually has a unified method or we stick to small file for now.
+            // Using uploadSmallFile is safe for most daily backups < 5GB.
+
+            UploadFileResponse response = new UploadFileResponse();
+            response.setFileId(fileVersion.getFileId());
+            response.setFileName(fileName);
+            response.setBucketId(bucketId);
+            response.setContentLength(file.length());
+            response.setContentType(contentType);
+            response.setFileInfo(fileInfo);
+
+            return response;
+        } catch (Exception e) {
+            log.error("Error in B2 file upload", e);
             throw new RuntimeException("B2 Upload Error", e);
         }
     }

@@ -37,6 +37,8 @@ public class NotificationEvent extends ApplicationEvent {
         BATCH_JOB_COMPLETION,
         DEALER_VERIFICATION_APPROVED,
         DEALER_VERIFICATION_REVOKED,
-        GENERAL_EMAIL
+        GENERAL_EMAIL,
+        PUSH_NOTIFICATION,
+        BROADCAST_PUSH
     }
 }

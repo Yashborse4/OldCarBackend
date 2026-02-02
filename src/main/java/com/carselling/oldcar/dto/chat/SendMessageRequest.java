@@ -35,4 +35,8 @@ public class SendMessageRequest {
     private String fileName;
     private Long fileSize;
     private String mimeType;
+    
+    private Long tempFileId;
+
+    private String metadata;
 }

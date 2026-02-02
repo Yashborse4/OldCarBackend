@@ -152,7 +152,7 @@ public class MobileAppService {
                 "chat", "/api/chat",
                 "notifications", "/api/notifications",
                 "files", "/api/files",
-                "mobile", "/api/mobile");
+                "mobile", "/api/v1/mobile");
     }
 
     private Map<String, Object> getCacheSettings() {

@@ -1,6 +1,5 @@
 package com.carselling.oldcar.filter;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,7 +27,6 @@ import java.util.concurrent.TimeUnit;
 public class IdempotencyFilter extends OncePerRequestFilter {
 
     private static final String IDEMPOTENCY_HEADER = "Idempotency-Key";
-    private final ObjectMapper objectMapper;
 
     // In-memory cache for idempotency keys (Key -> CachedResponse)
     // In production, this should be backed by Redis
@@ -37,8 +35,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     // Cleanup scheduler
     private final ScheduledExecutorService cleanupScheduler = Executors.newSingleThreadScheduledExecutor();
 
-    public IdempotencyFilter(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+    public IdempotencyFilter() {
         // Schedule cleanup every minute to remove expired keys
         cleanupScheduler.scheduleAtFixedRate(this::cleanupExpiredKeys, 1, 1, TimeUnit.MINUTES);
     }

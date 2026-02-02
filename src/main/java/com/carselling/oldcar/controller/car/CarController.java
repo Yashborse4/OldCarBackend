@@ -26,6 +26,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -36,6 +39,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/cars")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Car Management", description = "Endpoints for managing vehicles")
 public class CarController {
 
         private final CarService carService;
@@ -47,6 +51,7 @@ public class CarController {
          * GET /api/cars
          */
         @GetMapping
+        @Operation(summary = "Get all vehicles", description = "Retrieve a paginated list of all vehicles accessible to the current user")
         public ResponseEntity<ApiResponse<Page<CarResponse>>> getAllVehicles(
                         @RequestParam(value = "page", defaultValue = "0") int page,
                         @RequestParam(value = "size", defaultValue = "20") int size,
@@ -70,6 +75,7 @@ public class CarController {
          * GET /api/cars/public
          */
         @GetMapping("/public")
+        @Operation(summary = "Get public vehicles", description = "Retrieve a paginated list of public vehicles (limited data)")
         public ResponseEntity<ApiResponse<Page<PublicCarDTO>>> getPublicVehicles(
                         @RequestParam(value = "page", defaultValue = "0") int page,
                         @RequestParam(value = "size", defaultValue = "20") int size,
@@ -90,6 +96,7 @@ public class CarController {
          * GET /api/cars/public/{id}
          */
         @GetMapping("/public/{id}")
+        @Operation(summary = "Get public vehicle details", description = "Retrieve public details of a specific vehicle")
         public ResponseEntity<ApiResponse<PublicCarDTO>> getPublicVehicleById(@PathVariable String id) {
                 log.debug("Getting public vehicle by ID: {}", id);
                 PublicCarDTO car = carService.getPublicVehicleById(id);
@@ -101,6 +108,7 @@ public class CarController {
          * GET /api/cars/{id}
          */
         @GetMapping("/{id}")
+        @Operation(summary = "Get vehicle details", description = "Retrieve full details of a specific vehicle")
         public ResponseEntity<ApiResponse<CarResponse>> getVehicleById(@PathVariable String id) {
                 log.debug("Getting vehicle by ID: {}", id);
 
@@ -114,6 +122,7 @@ public class CarController {
 
         @GetMapping("/{id}/analytics")
         @PreAuthorize("hasAnyRole('DEALER', 'ADMIN')")
+        @Operation(summary = "Get vehicle analytics", description = "Retrieve analytics data for a specific vehicle (Dealer/Admin only)")
         public ResponseEntity<ApiResponse<CarAnalyticsResponse>> getVehicleAnalytics(@PathVariable String id) {
                 Long currentUserId = SecurityUtils.getCurrentUserId();
                 CarAnalyticsResponse analytics = carService.getVehicleAnalytics(id, currentUserId);
@@ -138,9 +147,10 @@ public class CarController {
          */
         @PostMapping
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @Operation(summary = "Create a new vehicle", description = "Create a new vehicle listing")
         public ResponseEntity<ApiResponse<CarResponse>> createVehicle(
                         @Valid @RequestBody CarRequest request,
-                        @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey) {
+                        @Parameter(description = "Idempotency key to prevent duplicate requests") @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey) {
 
                 log.info("Creating new vehicle: {} {} (idempotency key: {})",
                                 request.getMake(), request.getModel(), idempotencyKey);
@@ -195,6 +205,7 @@ public class CarController {
          */
         @PatchMapping("/{id}")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @Operation(summary = "Update vehicle", description = "Update details of an existing vehicle")
         public ResponseEntity<ApiResponse<CarResponse>> updateVehicle(
                         @PathVariable String id,
                         @Valid @RequestBody CarRequest request) {
@@ -220,6 +231,7 @@ public class CarController {
          */
         @DeleteMapping("/{id}")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @Operation(summary = "Delete vehicle", description = "Delete a vehicle listing")
         public ResponseEntity<ApiResponse<Object>> deleteVehicle(
                         @PathVariable String id,
                         @RequestParam(value = "hard", defaultValue = "false") boolean hard) {
@@ -227,11 +239,7 @@ public class CarController {
                 log.info("Deleting vehicle: {} (hard: {})", id, hard);
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
-
-                // Redundant ownership check as requested by security audit
-                if (!carService.isVehicleOwner(id, currentUserId) && !SecurityUtils.isAdmin()) {
-                        throw new UnauthorizedActionException("You are not authorized to delete this vehicle");
-                }
+                // Ownership check is enforced by Service
 
                 carService.deleteVehicle(id, currentUserId, hard);
 
@@ -242,6 +250,8 @@ public class CarController {
 
         @PutMapping("/{id}")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        // @Operation(summary = "Update vehicle with images", description = "Update
+        // vehicle details and upload new images")
         public ResponseEntity<ApiResponse<CarResponse>> updateCar(
                         @PathVariable String id,
                         @Valid @RequestPart("car") CarRequest carRequest,
@@ -273,17 +283,14 @@ public class CarController {
         }
 
         @PatchMapping("/{id}/status")
-        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')") // Changed from Dealer/Admin to include Owner
+        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @Operation(summary = "Update vehicle status", description = "Change the status of a vehicle")
         public ResponseEntity<ApiResponse<CarResponse>> updateCarStatus(
                         @PathVariable String id,
                         @RequestParam String status) {
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
-
-                // Redundant ownership check as requested by security audit
-                if (!carService.isVehicleOwner(id, currentUserId) && !SecurityUtils.isAdmin()) {
-                        throw new UnauthorizedActionException("You are not authorized to update this vehicle's status");
-                }
+                // Ownership check is enforced by Service
 
                 return ResponseEntity.ok(ApiResponse.success("Vehicle status updated successfully",
                                 carService.updateVehicleStatus(id, status, currentUserId)));
@@ -291,17 +298,13 @@ public class CarController {
 
         @PatchMapping("/{id}/visibility")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @Operation(summary = "Toggle vehicle visibility", description = "Show or hide a vehicle")
         public ResponseEntity<ApiResponse<CarResponse>> toggleVisibility(
                         @PathVariable String id,
                         @RequestParam boolean visible) {
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
-
-                // Redundant ownership check as requested by security audit
-                if (!carService.isVehicleOwner(id, currentUserId) && !SecurityUtils.isAdmin()) {
-                        throw new UnauthorizedActionException(
-                                        "You are not authorized to change this vehicle's visibility");
-                }
+                // Ownership check is enforced by Service
 
                 return ResponseEntity.ok(ApiResponse.success("Vehicle visibility updated successfully",
                                 carService.toggleVisibility(id, visible, currentUserId)));
@@ -309,38 +312,20 @@ public class CarController {
 
         @PatchMapping("/{id}/media/status")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @Operation(summary = "Update media status", description = "Update the processing status of vehicle media")
         public ResponseEntity<ApiResponse<CarResponse>> updateMediaStatus(
                         @PathVariable String id,
                         @RequestParam MediaStatus status) {
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
-
-                // Redundant ownership check as requested by security audit
-                if (!carService.isVehicleOwner(id, currentUserId) && !SecurityUtils.isAdmin()) {
-                        throw new UnauthorizedActionException("You are not authorized to update media status");
-                }
+                // Ownership check is enforced by Service
 
                 return ResponseEntity.ok(ApiResponse.success("Media status updated successfully",
                                 carService.updateMediaStatus(id, status, currentUserId)));
         }
 
-        @PostMapping("/{id}/media")
-        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
-        public ResponseEntity<ApiResponse<CarResponse>> uploadMedia(
-                        @PathVariable String id,
-                        @RequestParam(required = false) List<String> imageUrls,
-                        @RequestParam(required = false) String videoUrl) {
-
-                Long currentUserId = SecurityUtils.getCurrentUserId();
-
-                // Redundant ownership check as requested by security audit
-                if (!carService.isVehicleOwner(id, currentUserId) && !SecurityUtils.isAdmin()) {
-                        throw new UnauthorizedActionException("You are not authorized to upload media to this vehicle");
-                }
-
-                return ResponseEntity.ok(ApiResponse.success("Media uploaded successfully",
-                                carService.uploadMedia(id, imageUrls, videoUrl, currentUserId)));
-        }
+        // NOTE: uploadMedia endpoint moved to CarMediaController.uploadVehicleMedia
+        // to avoid duplicate endpoint conflict - POST /api/cars/{id}/media
 
         /**
          * Feature/Unfeature Vehicle
@@ -348,6 +333,7 @@ public class CarController {
          */
         @PostMapping("/{id}/feature")
         @PreAuthorize("hasAnyRole('DEALER', 'ADMIN')")
+        @Operation(summary = "Toggle feature status", description = "Feature or unfeature a vehicle (Dealer/Admin only)")
         public ResponseEntity<ApiResponse<CarResponse>> toggleFeatureVehicle(
                         @PathVariable String id,
                         @RequestParam("featured") boolean featured) {
@@ -368,6 +354,7 @@ public class CarController {
          * GET /api/cars/seller/{dealerId}/cars
          */
         @GetMapping("/seller/{dealerId}")
+        @Operation(summary = "Get dealer's vehicles", description = "Retrieve vehicles listed by a specific dealer")
         public ResponseEntity<ApiResponse<Page<CarResponse>>> getVehiclesByDealer(
                         @PathVariable String dealerId,
                         @RequestParam(value = "page", defaultValue = "0") int page,
@@ -387,6 +374,7 @@ public class CarController {
 
         @GetMapping("/dealer/dashboard")
         @PreAuthorize("hasAnyRole('DEALER', 'ADMIN')")
+        @Operation(summary = "Get dealer dashboard", description = "Retrieve dashboard statistics for the current dealer")
         public ResponseEntity<ApiResponse<com.carselling.oldcar.dto.car.DealerDashboardResponse>> getDealerDashboard() {
                 Long currentUserId = SecurityUtils.getCurrentUserId();
                 com.carselling.oldcar.dto.car.DealerDashboardResponse stats = userAnalyticsService
@@ -400,6 +388,7 @@ public class CarController {
 
         @GetMapping("/dealer/analytics")
         @PreAuthorize("hasAnyRole('DEALER', 'ADMIN')")
+        @Operation(summary = "Get dealer analytics", description = "Retrieve detailed analytics for the current dealer")
         public ResponseEntity<ApiResponse<com.carselling.oldcar.dto.car.DealerAnalyticsResponse>> getDealerAnalytics() {
                 Long currentUserId = SecurityUtils.getCurrentUserId();
                 com.carselling.oldcar.dto.car.DealerAnalyticsResponse analytics = userAnalyticsService
@@ -413,6 +402,7 @@ public class CarController {
 
         @GetMapping("/dealer/my-cars")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @Operation(summary = "Get my cars", description = "Retrieve vehicles listed by the current user")
         public ResponseEntity<ApiResponse<Page<CarResponse>>> getDealerCars(
                         @RequestParam(value = "page", defaultValue = "0") int page,
                         @RequestParam(value = "size", defaultValue = "20") int size,
@@ -431,6 +421,7 @@ public class CarController {
 
         @GetMapping("/admin/analytics")
         @PreAuthorize("hasRole('ADMIN')")
+        @Operation(summary = "Get admin analytics", description = "Retrieve system-wide car statistics (Admin only)")
         public ResponseEntity<ApiResponse<CarStatistics>> getAdminCarAnalytics() {
                 CarStatistics statistics = carService.getCarStatistics();
 
@@ -445,6 +436,7 @@ public class CarController {
          * POST /api/cars/{id}/stats?type={type}
          */
         @PostMapping("/{id}/stats")
+        @Operation(summary = "Increment car statistic", description = "Increment a specific statistic for a car (e.g., view, share)")
         public ResponseEntity<ApiResponse<Void>> incrementCarStat(
                         @PathVariable String id,
                         @RequestParam String type) {

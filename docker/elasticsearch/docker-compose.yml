@@ -1,89 +1,46 @@
-version: '3.8'
-
+version: '3'
 services:
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
-    container_name: car-search-elasticsearch
+  opensearch-node1:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: opensearch-node1
     environment:
-      - node.name=car-search-node
-      - cluster.name=car-search-cluster
-      - discovery.type=single-node
-      - bootstrap.memory_lock=true
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-      - xpack.security.enabled=false
-      - xpack.monitoring.collection.enabled=false
-      - network.host=0.0.0.0
-      - http.port=9200
-      - http.cors.enabled=true
-      - http.cors.allow-origin="*"
-      - http.cors.allow-methods=OPTIONS,HEAD,GET,POST,PUT,DELETE
-      - http.cors.allow-headers="X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization"
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node1
+      - discovery.seed_hosts=opensearch-node1
+      - cluster.initial_master_nodes=opensearch-node1
+      - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" # minimum and maximum Java heap size, recommend setting both to 50% of system RAM
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=StrongPassword123! # initial admin password
     ulimits:
       memlock:
         soft: -1
         hard: -1
       nofile:
-        soft: 65536
+        soft: 65536 # maximum number of open files for the OpenSearch user, set to at least 65536 on modern systems
         hard: 65536
-    cap_add:
-      - IPC_LOCK
     volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-      - ./index-template.json:/docker-entrypoint-initdb.d/index-template.json:ro
-      - ./init-elasticsearch.sh:/docker-entrypoint-initdb.d/init-elasticsearch.sh:ro
+      - opensearch-data1:/usr/share/opensearch/data
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - 9200:9200
+      - 9600:9600 # required for Performance Analyzer
     networks:
-      - car-search-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
-  # Init container to apply index template
-  elasticsearch-init:
-    image: curlimages/curl:latest
-    container_name: car-search-elasticsearch-init
-    command: sh /scripts/init-elasticsearch.sh
-    volumes:
-      - ./init-elasticsearch.sh:/scripts/init-elasticsearch.sh:ro
-      - ./index-template.json:/scripts/index-template.json:ro
-    networks:
-      - car-search-network
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    restart: "no"
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:7.17.9
-    container_name: car-search-kibana
+      - opensearch-net
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.11.0
+    container_name: opensearch-dashboards
+    ports:
+      - 5601:5601
+    expose:
+      - "5601"
     environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - SERVER_NAME=car-search-kibana
-      - SERVER_HOST=0.0.0.0
-      - SERVER_PORT=5601
-    ports:
-      - "5601:5601"
+      OPENSEARCH_HOSTS: '["https://opensearch-node1:9200"]'
     networks:
-      - car-search-network
+      - opensearch-net
     depends_on:
-      elasticsearch:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      - opensearch-node1
 
 volumes:
-  elasticsearch_data:
-    driver: local
+  opensearch-data1:
 
 networks:
-  car-search-network:
-    driver: bridge
+  opensearch-net:
