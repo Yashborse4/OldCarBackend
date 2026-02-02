@@ -16,13 +16,19 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@io.swagger.v3.oas.annotations.media.Schema(description = "Car Response Data")
 public class CarResponse {
 
     private String id;
+    @io.swagger.v3.oas.annotations.media.Schema(example = "Toyota", description = "Car Make")
     private String make;
+    @io.swagger.v3.oas.annotations.media.Schema(example = "Camry", description = "Car Model")
     private String model;
+    @io.swagger.v3.oas.annotations.media.Schema(example = "2020", description = "Car Year")
     private Integer year;
+    @io.swagger.v3.oas.annotations.media.Schema(example = "25000", description = "Price")
     private Long price;
+    @io.swagger.v3.oas.annotations.media.Schema(example = "15000", description = "Mileage")
     private Long mileage;
     private String location;
     private String condition;

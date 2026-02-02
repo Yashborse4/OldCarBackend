@@ -13,20 +13,22 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@io.swagger.v3.oas.annotations.media.Schema(description = "Registration Request")
 public class RegisterRequest {
-
-
 
     @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
     @Pattern(regexp = "^[a-zA-Z0-9_.@-]+$", message = "Username can only contain letters, numbers, underscores, dots, hyphens, and @")
+    @io.swagger.v3.oas.annotations.media.Schema(example = "johndoe", description = "Unique username")
     private String username; // Optional - will be derived from email if not provided
 
     @NotBlank(message = "Email is required")
     @Email(message = "Please provide a valid email address")
     @Size(max = 100, message = "Email must not exceed 100 characters")
+    @io.swagger.v3.oas.annotations.media.Schema(example = "john@example.com", description = "User email address")
     private String email;
 
     @Size(min = 8, max = 100, message = "Password must be at least 8 characters")
+    @io.swagger.v3.oas.annotations.media.Schema(example = "Secret@123", description = "User password")
     private String password;
 
     @Size(max = 50, message = "First name must not exceed 50 characters")
@@ -40,6 +42,7 @@ public class RegisterRequest {
      * Only USER and DEALER are allowed values for self-registration.
      */
     @Pattern(regexp = "^(USER|DEALER)$", message = "Role must be USER or DEALER")
+    @io.swagger.v3.oas.annotations.media.Schema(example = "USER", description = "Role (USER or DEALER)")
     private String role;
 
     @Size(max = 100, message = "Location must not exceed 100 characters")

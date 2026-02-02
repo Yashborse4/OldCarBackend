@@ -14,15 +14,18 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@io.swagger.v3.oas.annotations.media.Schema(description = "Login Request")
 public class LoginRequest {
 
     @NotBlank(message = "Username or email is required")
     @Size(min = 1, max = 100, message = "Username or email must be between 1 and 100 characters")
+    @io.swagger.v3.oas.annotations.media.Schema(example = "john@example.com", description = "Username or Email")
     private String usernameOrEmail;
 
     @NotBlank(message = "Password is required")
     @Size(min = 1, max = 255, message = "Password must be between 1 and 255 characters")
+    @io.swagger.v3.oas.annotations.media.Schema(example = "Secret@123", description = "Password")
     private String password;
-    
+
     private DeviceInfo deviceInfo;
 }

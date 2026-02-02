@@ -14,13 +14,18 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@io.swagger.v3.oas.annotations.media.Schema(description = "User Response Data")
 public class UserResponse {
 
+    @io.swagger.v3.oas.annotations.media.Schema(example = "1", description = "User ID")
     private Long id;
+    @io.swagger.v3.oas.annotations.media.Schema(example = "johndoe", description = "Username")
     private String username;
+    @io.swagger.v3.oas.annotations.media.Schema(example = "john@example.com", description = "Email")
     private String email;
     private String firstName;
     private String lastName;
+    @io.swagger.v3.oas.annotations.media.Schema(example = "USER", description = "User Role")
     private String role;
     private String location;
     private String phoneNumber;
