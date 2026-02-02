@@ -43,6 +43,7 @@ import com.carselling.oldcar.util.PaginationUtil;
 @Slf4j
 @PreAuthorize("hasRole('ADMIN')")
 @Validated
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Admin Dashboard", description = "Administrative management endpoints")
 public class AdminController {
 
         private final AdminService adminService;
@@ -53,6 +54,7 @@ public class AdminController {
          * GET /api/admin/users
          */
         @GetMapping("/users")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Get all users", description = "Retrieve a paginated list of all users")
         public ResponseEntity<ApiResponse<Page<UserResponse>>> getAllUsers(
                         @RequestParam(value = "username", required = false) String username,
                         @RequestParam(value = "email", required = false) String email,
@@ -104,6 +106,7 @@ public class AdminController {
          * PUT /api/admin/users/{id}/role
          */
         @PutMapping("/users/{id}/role")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Update user role", description = "Change the role of a user")
         public ResponseEntity<ApiResponse<UserResponse>> changeUserRole(
                         @PathVariable Long id,
                         @Valid @RequestBody ChangeRoleRequest request) {
@@ -172,6 +175,7 @@ public class AdminController {
          * GET /api/admin/dealers?status=UNVERIFIED
          */
         @GetMapping("/dealers")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Get verification requests", description = "Get pending dealer verification requests")
         public ResponseEntity<ApiResponse<Page<UserResponse>>> getDealersByStatus(
                         @RequestParam(value = "status", required = false) String statusString,
                         @RequestParam(value = "page", defaultValue = "0") int page,
@@ -233,6 +237,7 @@ public class AdminController {
          * POST /api/admin/users/{id}/unban
          */
         @PostMapping("/users/{id}/unban")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Get user details", description = "Get detailed information about a specific user")
         public ResponseEntity<ApiResponse<UserResponse>> unbanUser(@PathVariable Long id) {
                 log.info("Admin unbanning user ID: {}", id);
 

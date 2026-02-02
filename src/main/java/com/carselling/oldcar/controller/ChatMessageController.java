@@ -24,6 +24,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/chat")
 @RequiredArgsConstructor
+@Slf4j
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Chat Messages", description = "Message operations in chat rooms")
 public class ChatMessageController {
 
         private final ChatService chatService;
@@ -35,6 +37,7 @@ public class ChatMessageController {
          * Send a text message with Rate Limiting
          */
         @PostMapping("/rooms/{chatRoomId}/messages")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Send message", description = "Send a message to a chat room")
         public ResponseEntity<ApiResponse<ChatMessageDto>> sendMessage(
                         @PathVariable Long chatRoomId,
                         @Valid @RequestBody SendMessageRequest request,
@@ -57,6 +60,7 @@ public class ChatMessageController {
          * Upload and send file/image message
          */
         @PostMapping("/rooms/{chatRoomId}/messages/upload")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Upload and send file message", description = "Uploads a file and sends it as a message to a chat room")
         public ResponseEntity<ApiResponse<ChatMessageDto>> sendFileMessage(
                         @PathVariable Long chatRoomId,
                         @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
@@ -81,6 +85,7 @@ public class ChatMessageController {
          * Get messages in a chat room
          */
         @GetMapping("/rooms/{chatRoomId}/messages")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Get messages", description = "Get messages history for a chat room")
         public ResponseEntity<ApiResponse<Page<ChatMessageDto>>> getChatMessages(
                         @PathVariable Long chatRoomId,
                         @PageableDefault(size = 50) Pageable pageable,
@@ -93,6 +98,7 @@ public class ChatMessageController {
          * Edit a message
          */
         @PutMapping("/messages/{messageId}")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Edit message", description = "Edit the content of an existing message")
         public ResponseEntity<ApiResponse<ChatMessageDto>> editMessage(
                         @PathVariable Long messageId,
                         @Valid @RequestBody EditMessageRequest request,
@@ -106,6 +112,7 @@ public class ChatMessageController {
          * Delete a message
          */
         @DeleteMapping("/messages/{messageId}")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Delete message", description = "Delete a message from a chat room")
         public ResponseEntity<ApiResponse<Map<String, String>>> deleteMessage(
                         @PathVariable Long messageId,
                         @org.springframework.security.core.annotation.AuthenticationPrincipal com.carselling.oldcar.security.UserPrincipal currentUser) {
@@ -118,6 +125,7 @@ public class ChatMessageController {
          * Mark messages as read
          */
         @PostMapping("/rooms/{chatRoomId}/messages/read")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Mark messages as read", description = "Mark one or more messages in a chat room as read")
         public ResponseEntity<ApiResponse<Map<String, String>>> markMessagesAsRead(
                         @PathVariable Long chatRoomId,
                         @Valid @RequestBody MarkMessagesReadRequest request,
@@ -133,6 +141,7 @@ public class ChatMessageController {
          * Search messages across all user's chat rooms
          */
         @GetMapping("/search/messages")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Search messages globally", description = "Search messages across all chat rooms the user is part of")
         public ResponseEntity<ApiResponse<Page<ChatMessageDto>>> searchMessages(
                         @RequestParam String query,
                         @PageableDefault(size = 20) Pageable pageable,

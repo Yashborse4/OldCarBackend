@@ -2,7 +2,7 @@ package com.carselling.oldcar.controller;
 
 import com.carselling.oldcar.dto.chat.*;
 import com.carselling.oldcar.dto.common.ApiResponse;
-import com.carselling.oldcar.model.User;
+import com.carselling.oldcar.security.UserPrincipal;
 import com.carselling.oldcar.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Controller for Chat Room Management.
@@ -25,6 +26,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/chat")
 @RequiredArgsConstructor
+@Slf4j
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Chat Rooms", description = "Chat room and participant management")
 public class ChatRoomController {
 
     private final ChatService chatService;
@@ -35,11 +38,12 @@ public class ChatRoomController {
      * Create a private chat between two users
      */
     @PostMapping("/private")
-    public ResponseEntity<ApiResponse<ChatRoomDto>> createPrivateChat(
-            @Valid @RequestBody CreatePrivateChatRequest request,
+    @io.swagger.v3.oas.annotations.Operation(summary = "Create private chat", description = "Create or get a private chat with another user")
+    public ResponseEntity<ApiResponse<ChatRoomDto>> createPrivateChatRoom(
+            @RequestParam("recipientId") Long recipientId,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
-        ChatRoomDto chatRoom = chatService.createPrivateChat(request, currentUser.getId());
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
+        ChatRoomDto chatRoom = chatService.createPrivateChat(recipientId, currentUser.getId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Private chat created successfully", chatRoom));
     }
@@ -48,10 +52,11 @@ public class ChatRoomController {
      * Create a group chat
      */
     @PostMapping("/group")
-    public ResponseEntity<ApiResponse<ChatRoomDto>> createGroupChat(
+    @io.swagger.v3.oas.annotations.Operation(summary = "Create group chat", description = "Create a new group chat")
+    public ResponseEntity<ApiResponse<ChatRoomDto>> createGroupChatRoom(
             @Valid @RequestBody CreateGroupChatRequest request,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
         ChatRoomDto chatRoom = chatService.createGroupChat(request, currentUser.getId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Group chat created successfully", chatRoom));
@@ -60,11 +65,12 @@ public class ChatRoomController {
     /**
      * Create a car inquiry chat
      */
-    @PostMapping("/car-inquiry")
-    public ResponseEntity<ApiResponse<ChatRoomDto>> createCarInquiryChat(
+    @PostMapping("/inquiry")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Create car inquiry", description = "Start a chat inquiry for a specific car")
+    public ResponseEntity<ApiResponse<ChatRoomDto>> createCarInquiryChatRoom(
             @Valid @RequestBody CreateCarInquiryChatRequest request,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
         ChatRoomDto chatRoom = chatService.createCarInquiryChat(request, currentUser.getId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Car inquiry chat created successfully", chatRoom));
@@ -80,7 +86,7 @@ public class ChatRoomController {
             @RequestParam(required = false, defaultValue = "ALL") String status,
             @PageableDefault(size = 20) Pageable pageable,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
         Page<ChatRoomDto> inquiries = chatService.getDealerInquiries(currentUser.getId(), status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Dealer inquiries retrieved successfully", inquiries));
     }
@@ -93,7 +99,7 @@ public class ChatRoomController {
             @PathVariable Long chatRoomId,
             @RequestParam String status,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
 
         ChatRoomDto updatedRoom = chatService.updateInquiryStatus(chatRoomId, status, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success("Inquiry status updated successfully", updatedRoom));
@@ -102,11 +108,12 @@ public class ChatRoomController {
     /**
      * Get all chat rooms for the current user
      */
-    @GetMapping("/rooms")
+    @GetMapping
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get user chats", description = "Get all chat rooms for the current user")
     public ResponseEntity<ApiResponse<Page<ChatRoomDto>>> getUserChatRooms(
             @PageableDefault(size = 20) Pageable pageable,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
         Page<ChatRoomDto> chatRooms = chatService.getUserChatRooms(currentUser.getId(), pageable);
         return ResponseEntity.ok(ApiResponse.success("Chat rooms retrieved successfully", chatRooms));
     }
@@ -114,13 +121,14 @@ public class ChatRoomController {
     /**
      * Get specific chat room details
      */
-    @GetMapping("/rooms/{chatRoomId}")
+    @GetMapping("/{roomId}")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get chat room", description = "Get details of a specific chat room")
     public ResponseEntity<ApiResponse<ChatRoomDto>> getChatRoom(
-            @PathVariable Long chatRoomId,
+            @PathVariable Long roomId,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
 
-        ChatRoomDto chatRoom = chatService.getChatRoom(chatRoomId, currentUser.getId());
+        ChatRoomDto chatRoom = chatService.getChatRoom(roomId, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success("Chat room details retrieved successfully", chatRoom));
     }
 
@@ -132,7 +140,7 @@ public class ChatRoomController {
             @PathVariable Long chatRoomId,
             @Valid @RequestBody UpdateChatRoomRequest request,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
 
         ChatRoomDto updatedRoom = chatService.updateChatRoom(chatRoomId, request, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success("Chat room updated successfully", updatedRoom));
@@ -148,7 +156,7 @@ public class ChatRoomController {
             @PathVariable Long chatRoomId,
             @Valid @RequestBody AddParticipantsRequest request,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
 
         chatService.addParticipants(chatRoomId, request.getUserIds(), currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success("Participants added successfully",
@@ -163,7 +171,7 @@ public class ChatRoomController {
             @PathVariable Long chatRoomId,
             @PathVariable Long userId,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
 
         chatService.removeParticipant(chatRoomId, userId, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success("Participant removed successfully",
@@ -177,7 +185,7 @@ public class ChatRoomController {
     public ResponseEntity<ApiResponse<List<ChatParticipantDto>>> getChatRoomParticipants(
             @PathVariable Long chatRoomId,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
 
         List<ChatParticipantDto> participants = chatService.getChatRoomParticipants(chatRoomId,
                 currentUser.getId());
@@ -191,7 +199,7 @@ public class ChatRoomController {
     public ResponseEntity<ApiResponse<Map<String, String>>> leaveChatRoom(
             @PathVariable Long chatRoomId,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
 
         chatService.leaveChatRoom(chatRoomId, currentUser.getId());
         return ResponseEntity.ok(ApiResponse.success("Left chat room successfully",
@@ -207,7 +215,7 @@ public class ChatRoomController {
     public ResponseEntity<ApiResponse<Page<ChatRoomDto>>> getDealerGroups(
             @PageableDefault(size = 20) Pageable pageable,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
         Page<ChatRoomDto> dealerGroups = chatService.getDealerGroups(currentUser.getId(), pageable);
         return ResponseEntity.ok(ApiResponse.success("Dealer groups retrieved successfully", dealerGroups));
     }
@@ -219,7 +227,7 @@ public class ChatRoomController {
     public ResponseEntity<ApiResponse<ChatRoomDto>> createDealerGroup(
             @Valid @RequestBody CreateDealerGroupRequest request,
             Authentication authentication) {
-        User currentUser = (User) authentication.getPrincipal();
+        UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
         ChatRoomDto dealerGroup = chatService.createDealerGroup(currentUser.getId(), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Dealer group created successfully", dealerGroup));

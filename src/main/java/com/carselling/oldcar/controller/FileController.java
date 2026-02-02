@@ -16,6 +16,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
+import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.Map;
@@ -27,6 +29,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/files")
 @Slf4j
+@io.swagger.v3.oas.annotations.tags.Tag(name = "File Management", description = "File upload and retrieval operations")
 public class FileController {
 
     private final MediaService mediaService;
@@ -40,9 +43,9 @@ public class FileController {
     /**
      * Upload single file
      */
-    @PostMapping("/upload")
-    @RateLimit(capacity = 10, refill = 5, refillPeriod = 1)
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Upload file", description = "Upload a single file")
     public ResponseEntity<ApiResponse<FileUploadResponse>> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "folder", defaultValue = "general") String folder,
@@ -107,10 +110,11 @@ public class FileController {
     /**
      * DIRECT UPLOAD: Complete
      */
-    @PostMapping("/direct/complete")
+    @PostMapping("/direct-upload-url")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<DirectUploadDTOs.CompleteResponse>> completeDirectUpload(
-            @RequestBody DirectUploadDTOs.CompleteRequest request,
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get direct upload URL", description = "Get a presigned URL for direct file upload")
+    public ResponseEntity<ApiResponse<DirectUploadDTOs.CompleteResponse>> getDirectUploadUrl(
+            @Valid @RequestBody DirectUploadDTOs.CompleteRequest request,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         DirectUploadDTOs.CompleteResponse completeResponse = mediaService.completeDirectUpload(request,
@@ -122,13 +126,14 @@ public class FileController {
     /**
      * Delete file
      */
-    @DeleteMapping("/delete")
+    @DeleteMapping("/{fileId}")
     @PreAuthorize("isAuthenticated()")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Delete file", description = "Delete a file by ID")
     public ResponseEntity<ApiResponse<Map<String, String>>> deleteFile(
-            @RequestParam("fileUrl") String fileUrl,
+            @PathVariable String fileId,
             @AuthenticationPrincipal UserPrincipal principal) {
 
-        mediaService.deleteFile(fileUrl, principal.getId());
+        mediaService.deleteFile(fileId, principal.getId());
 
         return ResponseEntity.ok(
                 ApiResponse.success("File deleted successfully", Map.of("message", "File deleted successfully")));
