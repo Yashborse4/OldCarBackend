@@ -58,6 +58,28 @@ Validates that PostgreSQL, Redis, and OpenSearch are running.
 
 The application will start on port `8080` (default).
 
+### Application Startup Lifecycle
+
+The following flow describes how the application initializes in a Docker environment:
+
+```mermaid
+graph TD
+    A[Docker container starts] --> B[ENTRYPOINT executes]
+    B --> C[Spring Boot JVM starts]
+    C --> D[Spring reads environment variables]
+    D --> E[Connects to PostgreSQL]
+    E --> F[Connects to OpenSearch]
+    F --> G[App becomes READY]
+```
+
+1.  **Container Start**: Docker initializes the container.
+2.  **Entrypoint**: The Java application is launched via the configured entrypoint.
+3.  **Bootstrapping**: Spring Boot starts the JVM and loads the application context.
+4.  **Configuration**: the application reads `application.yml` and environment variables (e.g., `DB_URL`, `OPENSEARCH_HOST`).
+5.  **Database Connection**: A connection is established to the PostgreSQL database.
+6.  **Search Engine Connection**: The application connects to the OpenSearch cluster.
+7.  **Ready State**: Once all dependencies are validated, the application accepts traffic.
+
 ## 📚 API Documentation
 
 - **GraphQL Playground**: Accessible at `/graphiql` (if enabled in dev profile).
