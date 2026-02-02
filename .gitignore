@@ -186,3 +186,12 @@ application-local.properties
 src/main/resources/carimages-*.json
 serviceAccountKey.json
 
+
+# Custom Build Logs
+bootrun_stacktrace.txt
+build_output*.txt
+startup_error*.txt
+build_final.txt
+build_log*.txt
+build_security*.txt
+compilation_log.txt
