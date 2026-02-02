@@ -26,6 +26,7 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @Slf4j
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Authentication", description = "Authentication and Account Security")
 public class AuthController {
 
         private final AuthService authService;
@@ -35,6 +36,7 @@ public class AuthController {
          * POST /api/auth/register
          */
         @PostMapping("/register")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Register user", description = "Register a new user account")
         public ResponseEntity<ApiResponse<JwtAuthResponse>> register(
                         @Valid @RequestBody RegisterRequest request) {
 
@@ -54,6 +56,7 @@ public class AuthController {
          * POST /api/auth/login
          */
         @PostMapping("/login")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Login user", description = "Authenticate user and return JWT tokens")
         public ResponseEntity<ApiResponse<JwtAuthResponse>> login(
                         @Valid @RequestBody LoginRequest request) {
 
@@ -72,6 +75,7 @@ public class AuthController {
          * POST /api/auth/refresh-token
          */
         @PostMapping("/refresh-token")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Refresh token", description = "Get a new access token using a refresh token")
         public ResponseEntity<ApiResponse<JwtAuthResponse>> refreshToken(
                         @Valid @RequestBody RefreshTokenRequest request) {
 
@@ -90,6 +94,7 @@ public class AuthController {
          * POST /api/auth/validate-token
          */
         @PostMapping("/validate-token")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Validate token", description = "Check if the provided access token is valid")
         public ResponseEntity<ApiResponse<TokenValidationResponse>> validateToken(
                         HttpServletRequest request) {
 
@@ -142,6 +147,7 @@ public class AuthController {
          * POST /api/auth/password/reset
          */
         @PostMapping("/password/reset")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Reset password", description = "Reset user password using OTP")
         public ResponseEntity<ApiResponse<Object>> resetPassword(
                         @Valid @RequestBody ResetPasswordRequest request) {
 
@@ -195,6 +201,7 @@ public class AuthController {
          * POST /api/auth/logout
          */
         @PostMapping("/logout")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Logout user", description = "Invalidate the current session/token")
         public ResponseEntity<ApiResponse<Object>> logout(HttpServletRequest request) {
 
                 String token = extractTokenFromRequest(request);

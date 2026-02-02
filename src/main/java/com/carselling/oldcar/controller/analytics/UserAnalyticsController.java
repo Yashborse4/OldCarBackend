@@ -4,7 +4,7 @@ import com.carselling.oldcar.dto.analytics.AnalyticsBatchDto;
 import com.carselling.oldcar.dto.analytics.SessionStartDto;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.dto.mobile.MobileAnalyticsRequest;
-import com.carselling.oldcar.model.User;
+import com.carselling.oldcar.security.UserPrincipal;
 import com.carselling.oldcar.service.analytics.UserAnalyticsService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +24,7 @@ import java.util.Map;
 @RequestMapping("/api/analytics")
 @RequiredArgsConstructor
 @Slf4j
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Analytics", description = "User analytics and session tracking")
 public class UserAnalyticsController {
 
     private final UserAnalyticsService analyticsService;
@@ -33,6 +34,7 @@ public class UserAnalyticsController {
      * POST /api/analytics/session/start
      */
     @PostMapping("/session/start")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Start session", description = "Initialize a new analytics session")
     public ResponseEntity<ApiResponse<Object>> startSession(
             @Valid @RequestBody SessionStartDto dto,
             Authentication authentication) {
@@ -52,6 +54,7 @@ public class UserAnalyticsController {
      * POST /api/analytics/session/end
      */
     @PostMapping("/session/end")
+    @io.swagger.v3.oas.annotations.Operation(summary = "End session", description = "Terminate an analytics session")
     public ResponseEntity<ApiResponse<Object>> endSession(
             @RequestParam("sessionId") String sessionId,
             @RequestParam(value = "exitScreen", required = false) String exitScreen,
@@ -75,6 +78,7 @@ public class UserAnalyticsController {
      * - Rate limited to 100 events/minute per session
      */
     @PostMapping("/events")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Nngest events", description = "Batch ingest analytics events")
     public ResponseEntity<ApiResponse<Object>> ingestEvents(
             @Valid @RequestBody AnalyticsBatchDto batch,
             Authentication authentication) {
@@ -186,8 +190,8 @@ public class UserAnalyticsController {
      * Extract user ID from authentication
      */
     private Long getUserId(Authentication authentication) {
-        if (authentication != null && authentication.getPrincipal() instanceof User) {
-            return ((User) authentication.getPrincipal()).getId();
+        if (authentication != null && authentication.getPrincipal() instanceof UserPrincipal) {
+            return ((UserPrincipal) authentication.getPrincipal()).getId();
         }
         return null; // Anonymous user
     }
