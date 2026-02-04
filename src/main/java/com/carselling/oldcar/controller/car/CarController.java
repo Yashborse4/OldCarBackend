@@ -259,10 +259,7 @@ public class CarController {
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
 
-                // Redundant ownership check as requested by security audit
-                if (!carService.isVehicleOwner(id, currentUserId) && !SecurityUtils.isAdmin()) {
-                        throw new UnauthorizedActionException("You are not authorized to update this vehicle");
-                }
+                // Ownership check is enforced by Service
 
                 CarResponse updatedCar = carService.updateVehicle(id, carRequest, currentUserId);
 

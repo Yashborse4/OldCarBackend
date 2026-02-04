@@ -13,6 +13,7 @@ public class CarMasterService {
 
     private final CarMasterRepository carMasterRepository;
 
+    @org.springframework.cache.annotation.Cacheable("models")
     public List<String> getModelSuggestions(String make, String query) {
         if (make == null || make.trim().isEmpty()) {
             return Collections.emptyList();

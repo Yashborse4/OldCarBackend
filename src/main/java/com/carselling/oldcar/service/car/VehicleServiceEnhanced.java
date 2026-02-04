@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.persistence.criteria.Predicate;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -221,15 +220,8 @@ public class VehicleServiceEnhanced {
      */
     public void trackVehicleView(Long vehicleId, Long userId) {
         try {
-            Car car = carRepository.findById(vehicleId).orElse(null);
-            if (car != null) {
-                car.incrementViewCount();
-                car.setLastViewedAt(LocalDateTime.now());
-                carRepository.save(car);
-
-                // Log for analytics
-                log.debug("Vehicle {} viewed by user {}", vehicleId, userId);
-            }
+            carRepository.incrementViewCount(vehicleId);
+            log.debug("Vehicle {} viewed by user {}", vehicleId, userId);
         } catch (Exception e) {
             log.error("Error tracking vehicle view: {}", e.getMessage());
         }
@@ -240,12 +232,8 @@ public class VehicleServiceEnhanced {
      */
     public void trackVehicleInquiry(Long vehicleId, Long userId) {
         try {
-            Car car = carRepository.findById(vehicleId).orElse(null);
-            if (car != null) {
-                car.incrementInquiryCount();
-                carRepository.save(car);
-                log.debug("Vehicle {} inquiry by user {}", vehicleId, userId);
-            }
+            carRepository.incrementInquiryCount(vehicleId);
+            log.debug("Vehicle {} inquiry by user {}", vehicleId, userId);
         } catch (Exception e) {
             log.error("Error tracking vehicle inquiry: {}", e.getMessage());
         }
@@ -256,12 +244,8 @@ public class VehicleServiceEnhanced {
      */
     public void trackVehicleShare(Long vehicleId, Long userId) {
         try {
-            Car car = carRepository.findById(vehicleId).orElse(null);
-            if (car != null) {
-                car.incrementShareCount();
-                carRepository.save(car);
-                log.debug("Vehicle {} shared by user {}", vehicleId, userId);
-            }
+            carRepository.incrementShareCount(vehicleId);
+            log.debug("Vehicle {} shared by user {}", vehicleId, userId);
         } catch (Exception e) {
             log.error("Error tracking vehicle share: {}", e.getMessage());
         }

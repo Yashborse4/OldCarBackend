@@ -36,6 +36,7 @@ public class ChatService {
     private final ChatMessageRepository chatMessageRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatParticipantRepository chatParticipantRepository;
+    private final ChatGroupInviteRepository chatGroupInviteRepository;
     private final UserRepository userRepository;
     private final CarRepository carRepository;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
@@ -262,7 +263,20 @@ public class ChatService {
                 .orElseThrow(() -> new ResourceNotFoundException("Car not found with ID: " + request.getCarId()));
 
         User buyer = getUserById(buyerId);
-        User seller = car.getOwner();
+        User seller;
+
+        if (request.getRecipientId() != null) {
+            seller = getUserById(request.getRecipientId());
+            // Verify recipient is Owner OR Co-Owner
+            boolean isOwner = car.getOwner().getId().equals(seller.getId());
+            boolean isCoOwner = car.getCoOwner() != null && car.getCoOwner().getId().equals(seller.getId());
+
+            if (!isOwner && !isCoOwner) {
+                throw new BusinessException("The recipient is not associated with this car");
+            }
+        } else {
+            seller = car.getOwner();
+        }
 
         // Validation: Buyer cannot be the Seller (Owner)
         if (buyer.getId().equals(seller.getId())) {
@@ -428,9 +442,26 @@ public class ChatService {
 
         chatAuthorizationService.assertCanViewChat(userId, chatId);
 
+        // Optimization: Cache first page of messages
+        // We only cache page 0 as it's the most high-frequency read interaction
+        if (pageable.getPageNumber() == 0) {
+            return getCachedRecentMessages(chatId, pageable);
+        }
+
+        return fetchMessagesFromDb(chatId, pageable);
+    }
+
+    /**
+     * Cacheable method for recent messages (Page 0)
+     */
+    @org.springframework.cache.annotation.Cacheable(value = "recentChatMessages", key = "#chatId")
+    public Page<ChatMessageDto> getCachedRecentMessages(Long chatId, Pageable pageable) {
+        return fetchMessagesFromDb(chatId, pageable);
+    }
+
+    private Page<ChatMessageDto> fetchMessagesFromDb(Long chatId, Pageable pageable) {
         Page<ChatMessage> messages = chatMessageRepository
                 .findByChatRoomIdAndIsDeletedFalseOrderByCreatedAtDesc(chatId, pageable);
-
         return messages.map(this::convertToMessageDto);
     }
 
@@ -471,7 +502,7 @@ public class ChatService {
                     request.setFileName(file.getOriginalFileName());
                     request.setFileSize(file.getSize());
                     request.setMimeType(file.getContentType());
-                    
+
                     // Auto-detect message type if not set or generic
                     if (request.getMessageType() == null || request.getMessageType().equals("TEXT")) {
                         String mime = file.getContentType().toLowerCase();
@@ -541,8 +572,16 @@ public class ChatService {
         // Send real-time message
         sendRealTimeMessage(chatRoom, messageDto);
 
+        // Evict cache for recent messages
+        evictRecentMessagesCache(chatRoom.getId());
+
         log.info("Message sent with ID: {}", message.getId());
         return messageDto;
+    }
+
+    @org.springframework.cache.annotation.CacheEvict(value = "recentChatMessages", key = "#chatId")
+    public void evictRecentMessagesCache(Long chatId) {
+        log.debug("Evicting recent messages cache for chat: {}", chatId);
     }
 
     /**
@@ -792,6 +831,123 @@ public class ChatService {
             log.error("Failed to upload file to chat: {}", e.getMessage());
             throw new RuntimeException("Failed to upload file: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Invite user to group chat
+     */
+    public void inviteUserToGroup(Long chatId, String username, Long inviterId) {
+        log.info("Inviting user {} to chat ID: {} by inviter ID: {}", username, chatId, inviterId);
+
+        ChatRoom chatRoom = chatAuthorizationService.assertCanViewChat(inviterId, chatId);
+        chatAuthorizationService.assertIsAdmin(inviterId, chatId);
+
+        if (chatRoom.getType() != ChatRoom.ChatType.GROUP && chatRoom.getType() != ChatRoom.ChatType.DEALER_NETWORK) {
+            throw new BusinessException("Invites only supported for group chats");
+        }
+
+        User invitee = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
+
+        // Check if already a participant
+        if (chatParticipantRepository.findByChatRoomIdAndUserId(chatId, invitee.getId()).isPresent()) {
+            throw new BusinessException("User is already a participant");
+        }
+
+        // Check if invite already exists
+        if (chatGroupInviteRepository.existsByChatRoomIdAndInviteeId(chatId, invitee.getId())) {
+            throw new BusinessException("Invite already pending for this user");
+        }
+
+        ChatGroupInvite invite = ChatGroupInvite.builder()
+                .chatRoom(chatRoom)
+                .inviter(getUserById(inviterId))
+                .invitee(invitee)
+                .build();
+
+        chatGroupInviteRepository.save(invite);
+        log.info("Invite sent successfully");
+    }
+
+    /**
+     * Accept group invite
+     */
+    public void acceptGroupInvite(Long inviteId, Long userId) {
+        log.info("Accepting invite ID: {} by user ID: {}", inviteId, userId);
+
+        ChatGroupInvite invite = chatGroupInviteRepository.findById(inviteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invite not found"));
+
+        if (!invite.getInvitee().getId().equals(userId)) {
+            throw new AccessDeniedException("This invite is not for you");
+        }
+
+        // Add to group
+        addParticipant(invite.getChatRoom(), invite.getInvitee(), ChatParticipant.ParticipantRole.MEMBER);
+
+        // Delete invite data as requested
+        chatGroupInviteRepository.delete(invite);
+        log.info("Invite accepted and deleted");
+    }
+
+    /**
+     * Reject group invite
+     */
+    public void rejectGroupInvite(Long inviteId, Long userId) {
+        log.info("Rejecting invite ID: {} by user ID: {}", inviteId, userId);
+
+        ChatGroupInvite invite = chatGroupInviteRepository.findById(inviteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invite not found"));
+
+        if (!invite.getInvitee().getId().equals(userId)) {
+            throw new AccessDeniedException("This invite is not for you");
+        }
+
+        // Delete invite data
+        chatGroupInviteRepository.delete(invite);
+        log.info("Invite rejected and deleted");
+    }
+
+    /**
+     * Get pending invites for user
+     */
+    @Transactional(readOnly = true)
+    public List<GroupInviteDto> getPendingInvites(Long userId) {
+        return chatGroupInviteRepository.findByInviteeId(userId).stream()
+                .map(invite -> GroupInviteDto.builder()
+                        .id(invite.getId())
+                        .chatRoomId(invite.getChatRoom().getId())
+                        .chatRoomName(invite.getChatRoom().getName())
+                        .inviterId(invite.getInviter().getId())
+                        .inviterName(invite.getInviter().getDisplayName())
+                        .createdAt(invite.getCreatedAt())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Search dealers by username (for invites)
+     */
+    @Transactional(readOnly = true)
+    public List<ChatParticipantDto> searchDealers(String query) {
+        // This relies on a new repository method or filtering existing one
+        // For simplicity, reusing searchUsers and filtering in stream ifrepo support
+        // missing
+        // But better to add specific query in UserRepository.
+        // Falling back to searchUsers for now and filtering by role
+        return userRepository.searchUsers(query).stream()
+                .filter(u -> u.getRole() == Role.DEALER)
+                .map(user -> ChatParticipantDto.builder()
+                        .user(ChatParticipantDto.UserInfo.builder()
+                                .id(user.getId())
+                                .username(user.getUsername())
+                                .email(user.getEmail())
+                                .displayName(user.getDisplayName())
+                                .build())
+                        .role(ChatParticipant.ParticipantRole.MEMBER.name())
+                        .isActive(true)
+                        .build())
+                .collect(Collectors.toList());
     }
 
     // Private helper methods
