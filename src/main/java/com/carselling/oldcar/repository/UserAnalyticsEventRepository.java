@@ -187,6 +187,16 @@ public interface UserAnalyticsEventRepository extends JpaRepository<UserAnalytic
                         "GROUP BY e.city ORDER BY COUNT(e) DESC")
         List<Object[]> getDealerLocationStats(@Param("carIds") List<String> carIds);
 
+        /**
+         * Get user view counts for dealer's cars (for Lead Generation)
+         */
+        @Query("SELECT e.userId, e.targetId, COUNT(e) FROM UserAnalyticsEvent e " +
+                        "WHERE e.targetType = 'CAR' AND e.eventType = 'CAR_VIEW' " +
+                        "AND e.targetId IN :carIds AND e.userId IS NOT NULL " +
+                        "GROUP BY e.userId, e.targetId " +
+                        "ORDER BY COUNT(e) DESC")
+        List<Object[]> getUserViewCountsForCars(@Param("carIds") List<String> carIds, Pageable pageable);
+
         // =============== SCREEN ANALYTICS ===============
 
         /**

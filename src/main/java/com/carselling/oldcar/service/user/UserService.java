@@ -211,6 +211,30 @@ public class UserService {
     }
 
     /**
+     * Search dealers (accessible by DEALER and ADMIN)
+     */
+    @Transactional(readOnly = true)
+    public Page<UserResponse> searchDealers(String searchTerm, Pageable pageable) {
+        log.info("Searching dealers with term: {}", searchTerm);
+
+        User currentUser = authService.getCurrentUser();
+        // Allow Dealers (for co-listing) and Admins
+        if (!currentUser.hasRole(Role.DEALER) && !currentUser.hasRole(Role.ADMIN)) {
+            throw new InsufficientPermissionException("You don't have permission to search dealers");
+        }
+
+        if (StringUtils.hasText(searchTerm)) {
+            Page<User> dealers = userRepository.searchUsersByRole(searchTerm, Role.DEALER, pageable);
+            return dealers.map(this::convertToUserResponse);
+        } else {
+            // Return all active dealers if no term
+            Page<User> dealers = userRepository
+                    .findActiveDealersByStatus(com.carselling.oldcar.model.DealerStatus.VERIFIED, pageable);
+            return dealers.map(this::convertToUserResponse);
+        }
+    }
+
+    /**
      * Get all users with filtering (admin only)
      */
     @Transactional(readOnly = true)

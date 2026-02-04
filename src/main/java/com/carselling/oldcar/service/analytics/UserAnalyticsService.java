@@ -37,6 +37,7 @@ public class UserAnalyticsService {
     private final com.carselling.oldcar.repository.ChatRoomRepository chatRoomRepository;
     private final com.carselling.oldcar.repository.ChatParticipantRepository chatParticipantRepository;
     private final com.carselling.oldcar.service.car.CarService carService;
+    private final com.carselling.oldcar.repository.UserRepository userRepository;
 
     // Rate limiting: track events per session per minute
     private final ConcurrentHashMap<String, AtomicInteger> sessionEventCounts = new ConcurrentHashMap<>();
@@ -431,6 +432,76 @@ public class UserAnalyticsService {
                 .locationStats(locationStats)
                 .topPerformers(topPerformers)
                 .build();
+    }
+
+    /**
+     * Get list of users who viewed dealer's cars (Leads)
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<com.carselling.oldcar.dto.analytics.CarViewerDto> getCarViewers(
+            Long dealerId, org.springframework.data.domain.Pageable pageable) {
+
+        // 1. Get all car IDs for this dealer
+        List<Long> carIdLongs = carRepository.findCarIdsByOwnerId(dealerId);
+        if (carIdLongs.isEmpty()) {
+            return org.springframework.data.domain.Page.empty(pageable);
+        }
+        List<String> carIds = carIdLongs.stream().map(String::valueOf).toList();
+
+        // 2. Aggregate views by User+Car
+        List<Object[]> rows = eventRepository.getUserViewCountsForCars(carIds, pageable);
+
+        if (rows.isEmpty()) {
+            return org.springframework.data.domain.Page.empty(pageable);
+        }
+
+        // 3. Extract IDs for bulk fetching
+        Set<Long> userIds = new HashSet<>();
+        Set<Long> involvedCarIds = new HashSet<>();
+
+        for (Object[] row : rows) {
+            userIds.add((Long) row[0]);
+            involvedCarIds.add(Long.parseLong((String) row[1]));
+        }
+
+        // 4. Fetch Entities
+        Map<Long, com.carselling.oldcar.model.User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(java.util.stream.Collectors.toMap(com.carselling.oldcar.model.User::getId, u -> u));
+
+        Map<Long, com.carselling.oldcar.model.Car> carMap = carRepository.findAllById(involvedCarIds).stream()
+                .collect(java.util.stream.Collectors.toMap(com.carselling.oldcar.model.Car::getId, c -> c));
+
+        // 5. Assemble DTOs
+        List<com.carselling.oldcar.dto.analytics.CarViewerDto> dtos = new ArrayList<>();
+
+        for (Object[] row : rows) {
+            Long userId = (Long) row[0];
+            String carIdStr = (String) row[1];
+            Long count = (Long) row[2];
+
+            com.carselling.oldcar.model.User user = userMap.get(userId);
+            com.carselling.oldcar.model.Car car = carMap.get(Long.parseLong(carIdStr));
+
+            // Only add if both entities exist (consistency check)
+            if (user != null && car != null) {
+                dtos.add(com.carselling.oldcar.dto.analytics.CarViewerDto.builder()
+                        .userId(userId)
+                        .userName(user.getDisplayName())
+                        .userEmail(user.getEmail())
+                        .userProfileImage(user.getProfileImageUrl())
+                        .carId(carIdStr)
+                        .carMake(car.getMake())
+                        .carModel(car.getModel())
+                        .carYear(car.getYear())
+                        .carImage(car.getImages().isEmpty() ? null : car.getImages().get(0))
+                        .carPrice(car.getPrice() != null ? car.getPrice().longValue() : 0L)
+                        .viewCount(count)
+                        .lastViewedAt(count + " views") // Simple representation
+                        .build());
+            }
+        }
+
+        return new org.springframework.data.domain.PageImpl<>(dtos, pageable, dtos.size());
     }
 
     // =============== CLEANUP ===============

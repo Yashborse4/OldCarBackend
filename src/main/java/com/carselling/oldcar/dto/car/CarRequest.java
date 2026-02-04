@@ -86,4 +86,9 @@ public class CarRequest {
      * If provided, specs from the catalog can be used as defaults.
      */
     private Long carMasterId;
+
+    /**
+     * Optional: ID of the co-owner (dealer) for co-listing.
+     */
+    private Long coOwnerId;
 }

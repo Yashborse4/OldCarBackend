@@ -136,6 +136,33 @@ public class UserAnalyticsController {
     }
 
     /**
+     * Get list of users who viewed this dealer's cars (Leads)
+     * GET /api/analytics/dealer/viewers
+     */
+    @GetMapping("/dealer/viewers")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get interested users", description = "Get list of users who viewed dealer's cars, sorted by view count")
+    public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<com.carselling.oldcar.dto.analytics.CarViewerDto>>> getDealerViewers(
+            @org.springdoc.core.annotations.ParameterObject org.springframework.data.domain.Pageable pageable,
+            Authentication authentication) {
+
+        Long dealerId = getUserId(authentication);
+        if (dealerId == null) {
+            return ResponseEntity.status(401)
+                    .body(ApiResponse.error("Authentication required", "User must be logged in"));
+        }
+
+        log.info("Getting interested users for dealer {}", dealerId);
+
+        org.springframework.data.domain.Page<com.carselling.oldcar.dto.analytics.CarViewerDto> viewers = analyticsService
+                .getCarViewers(dealerId, pageable);
+
+        return ResponseEntity.ok(ApiResponse.success(
+                "Interested users retrieved",
+                "Found " + viewers.getTotalElements() + " interested users",
+                viewers));
+    }
+
+    /**
      * Report mobile app usage analytics
      * POST /api/analytics/mobile-events
      */

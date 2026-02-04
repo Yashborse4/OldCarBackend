@@ -59,6 +59,21 @@ public class UploadedFile {
     @Column(name = "file_hash", length = 64)
     private String fileHash; // SHA-1 or SHA-256
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "storage_status", length = 20)
+    @Builder.Default
+    private StorageStatus storageStatus = StorageStatus.PERMANENT;
+
+    @Column(name = "temp_expires_at")
+    private LocalDateTime tempExpiresAt;
+
+    @Column(name = "validation_status", length = 20)
+    @Builder.Default
+    private ValidationStatus validationStatus = ValidationStatus.PENDING;
+
+    @Column(name = "validation_errors", length = 1000)
+    private String validationErrors;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

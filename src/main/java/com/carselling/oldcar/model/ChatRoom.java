@@ -85,7 +85,8 @@ public class ChatRoom {
     public enum ChatType {
         PRIVATE,
         GROUP,
-        CAR_INQUIRY
+        CAR_INQUIRY,
+        DEALER_NETWORK
     }
 
     public enum InquiryStatus {

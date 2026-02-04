@@ -311,6 +311,10 @@ public class SecurityUtils {
         // Sanitize username to ensure it only contains valid characters
         username = username.replaceAll("[^a-zA-Z0-9_.-]", "_");
 
+        // Append 5 random alphanumeric characters
+        String randomSuffix = java.util.UUID.randomUUID().toString().substring(0, 5);
+        username = username + "_" + randomSuffix;
+
         return username;
     }
 }

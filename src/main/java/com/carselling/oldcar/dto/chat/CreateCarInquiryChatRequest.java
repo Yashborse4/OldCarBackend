@@ -25,6 +25,8 @@ public class CreateCarInquiryChatRequest {
     private String message;
 
     private String messageType;
-    
+
     private String metadata;
+
+    private Long recipientId; // Optional: To target Co-Owner
 }

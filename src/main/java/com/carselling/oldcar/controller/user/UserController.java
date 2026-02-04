@@ -259,6 +259,26 @@ public class UserController {
                                 "Your profile image has been removed from the database."));
         }
 
+        /**
+         * Search dealers (for co-listing)
+         * GET /api/user/search/dealers
+         */
+        @GetMapping("/search/dealers")
+        @PreAuthorize("hasRole('DEALER') or hasRole('ADMIN')")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Search dealers", description = "Search for dealers by name, username or showroom name")
+        public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<UserResponse>>> searchDealers(
+                        @RequestParam(required = false) String query,
+                        org.springframework.data.domain.Pageable pageable) {
+                log.info("Searching dealers with query: {}", query);
+
+                org.springframework.data.domain.Page<UserResponse> dealers = userService.searchDealers(query, pageable);
+
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Dealers found",
+                                "Found " + dealers.getTotalElements() + " dealers matching your query",
+                                dealers));
+        }
+
         // ============ DEALER VERIFICATION ============
 
         /**

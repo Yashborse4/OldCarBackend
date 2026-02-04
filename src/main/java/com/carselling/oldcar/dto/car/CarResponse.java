@@ -39,6 +39,8 @@ public class CarResponse {
     private CarSpecifications specifications;
     private String dealerId;
     private String dealerName;
+    private String coOwnerId;
+    private String coOwnerName;
     private boolean isCoListed;
     @Builder.Default
     private List<String> coListedIn = new ArrayList<>();

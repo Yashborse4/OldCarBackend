@@ -10,6 +10,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.BatchSize;
 
+import org.hibernate.annotations.SQLRestriction;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -29,6 +31,7 @@ import java.util.List;
         @Index(name = "idx_car_is_active", columnList = "is_active"),
         @Index(name = "idx_car_featured", columnList = "is_featured")
 })
+@SQLRestriction("status <> 'DELETED'")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -83,6 +86,10 @@ public class Car {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "co_owner_id", nullable = true)
+    private User coOwner;
 
     @Column(name = "is_active")
     @Builder.Default
@@ -192,6 +199,10 @@ public class Car {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Version
+    @Column(name = "version")
+    private Long version;
+
     @Column(name = "last_viewed_at")
     private LocalDateTime lastViewedAt;
 
@@ -276,11 +287,13 @@ public class Car {
     }
 
     public boolean isOwnedBy(User user) {
-        return this.owner != null && this.owner.getId().equals(user.getId());
+        return (this.owner != null && this.owner.getId().equals(user.getId())) ||
+                (this.coOwner != null && this.coOwner.getId().equals(user.getId()));
     }
 
     public boolean isOwnedBy(Long userId) {
-        return this.owner != null && this.owner.getId().equals(userId);
+        return (this.owner != null && this.owner.getId().equals(userId)) ||
+                (this.coOwner != null && this.coOwner.getId().equals(userId));
     }
 
     public void incrementViewCount() {

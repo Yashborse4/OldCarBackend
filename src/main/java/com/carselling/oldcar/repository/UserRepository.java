@@ -87,13 +87,26 @@ public interface UserRepository extends JpaRepository<User, Long> {
        // Search users by username or email (case insensitive)
        @Query("SELECT u FROM User u WHERE " +
                      "LOWER(u.username) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
-                     "LOWER(u.email) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")
+                     "LOWER(u.email) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+                     "LOWER(u.dealerName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+                     "LOWER(u.showroomName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")
        List<User> searchUsers(@Param("searchTerm") String searchTerm);
 
        @Query("SELECT u FROM User u WHERE " +
                      "LOWER(u.username) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
-                     "LOWER(u.email) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")
+                     "LOWER(u.email) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+                     "LOWER(u.dealerName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+                     "LOWER(u.showroomName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")
        Page<User> searchUsers(@Param("searchTerm") String searchTerm, Pageable pageable);
+
+       // Search users by role and term (e.g. search dealers)
+       @Query("SELECT u FROM User u WHERE " +
+                     "(LOWER(u.username) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+                     "LOWER(u.dealerName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+                     "LOWER(u.showroomName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) AND " +
+                     "u.role = :role AND u.isActive = true")
+       Page<User> searchUsersByRole(@Param("searchTerm") String searchTerm, @Param("role") Role role,
+                     Pageable pageable);
 
        // Advanced search with multiple criteria
        @Query("SELECT u FROM User u WHERE " +

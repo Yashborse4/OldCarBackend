@@ -18,11 +18,11 @@ public class FileUploadConfig {
 
     @Max(50)
     @Min(1)
-    private int maxFileSizeMB = 10;
+    private int maxFileSizeMB = 3; // Updated to 3MB
 
-    @Max(200)
+    @Max(500)
     @Min(1)
-    private int maxVideoSizeMB = 150;
+    private int maxVideoSizeMB = 250; // Updated to 300MB
 
     @Max(100)
     @Min(1)
@@ -45,9 +45,14 @@ public class FileUploadConfig {
             // Video extensions - comprehensive list
             "mp4", "mov", "avi", "mkv", "webm", "3gp", "flv", "wmv", "m4v", "mpeg", "mpg");
 
+    private List<String> allowedImageExtensions = List.of("jpg", "jpeg", "png", "gif", "webp");
+    private List<String> allowedVideoExtensions = List.of("mp4", "mov", "avi", "mkv", "webm", "3gp", "flv", "wmv",
+            "m4v", "mpeg", "mpg");
+
     private boolean scanForViruses = true;
     private boolean validateContentType = true;
     private boolean validateFileExtension = true;
+    private boolean validateMagicNumbers = true;
 
     // Getters and Setters
     public int getMaxFileSizeMB() {
@@ -120,5 +125,29 @@ public class FileUploadConfig {
 
     public void setValidateFileExtension(boolean validateFileExtension) {
         this.validateFileExtension = validateFileExtension;
+    }
+
+    public List<String> getAllowedImageExtensions() {
+        return allowedImageExtensions;
+    }
+
+    public void setAllowedImageExtensions(List<String> allowedImageExtensions) {
+        this.allowedImageExtensions = allowedImageExtensions;
+    }
+
+    public List<String> getAllowedVideoExtensions() {
+        return allowedVideoExtensions;
+    }
+
+    public void setAllowedVideoExtensions(List<String> allowedVideoExtensions) {
+        this.allowedVideoExtensions = allowedVideoExtensions;
+    }
+
+    public boolean isValidateMagicNumbers() {
+        return validateMagicNumbers;
+    }
+
+    public void setValidateMagicNumbers(boolean validateMagicNumbers) {
+        this.validateMagicNumbers = validateMagicNumbers;
     }
 }

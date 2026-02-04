@@ -1,5 +1,6 @@
 package com.carselling.oldcar.b2;
 
+import com.carselling.oldcar.service.FileValidationService;
 import com.carselling.oldcar.dto.file.FileUploadResponse;
 import com.carselling.oldcar.model.ResourceType;
 import com.carselling.oldcar.model.AccessType;
@@ -30,11 +31,15 @@ public class B2FileService {
     private final B2Client b2Client;
     private final UploadedFileRepository uploadedFileRepository;
     private final B2Properties properties;
+    private final FileValidationService fileValidationService;
 
     private final java.util.concurrent.Executor taskExecutor;
 
     public FileUploadResponse uploadFile(MultipartFile file, String folder, User uploader, ResourceType ownerType,
             Long ownerId) throws IOException {
+
+        // 0. Validate File
+        fileValidationService.validateFile(file);
 
         // 1. Calculate Checksum (SHA-1) for Idempotency
         String fileHash = calculateSha1(file);

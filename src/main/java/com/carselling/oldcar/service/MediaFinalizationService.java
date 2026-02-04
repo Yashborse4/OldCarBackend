@@ -55,7 +55,6 @@ public class MediaFinalizationService {
 
             try {
                 // 1. Move file in B2 (Copy to targetFolder + Delete from temp)
-                String sourceFileName = extractB2Name(tempFile.getFileUrl());
                 String targetFileName = targetFolder + "/" + tempFile.getFileName();
 
                 // Use stored fileId for copy
@@ -102,20 +101,6 @@ public class MediaFinalizationService {
         }
 
         return finalizedFiles;
-    }
-
-    private String extractB2Name(String fileUrl) {
-        // Logic to extract "temp/123/file.jpg" from "https://cdn.com/temp/123/file.jpg"
-        // Assuming URL structure known.
-        try {
-            java.net.URI uri = new java.net.URI(fileUrl);
-            String path = uri.getPath();
-            if (path.startsWith("/"))
-                path = path.substring(1);
-            return path;
-        } catch (Exception e) {
-            return fileUrl; // Fallback
-        }
     }
 
     private void validateFileBeforeFinalize(TemporaryFile tempFile) {
