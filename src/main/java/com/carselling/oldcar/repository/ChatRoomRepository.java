@@ -14,10 +14,14 @@ import java.util.Optional;
 @Repository
 public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
 
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
+                     "car", "car.images" })
        @Query("SELECT DISTINCT r FROM ChatRoom r JOIN ChatParticipant p ON p.chatRoom.id = r.id " +
                      "WHERE p.user.id = :userId")
        Page<ChatRoom> findByParticipantUserId(@Param("userId") Long userId, Pageable pageable);
 
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
+                     "car", "car.images" })
        @Query("SELECT DISTINCT r FROM ChatRoom r JOIN ChatParticipant p ON p.chatRoom.id = r.id " +
                      "WHERE p.user.id = :userId AND r.type = :type")
        Page<ChatRoom> findByParticipantUserIdAndType(@Param("userId") Long userId,
@@ -42,17 +46,21 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
 
        @Query("SELECT COUNT(r) FROM ChatRoom r " +
                      "WHERE r.type = com.carselling.oldcar.model.ChatRoom$ChatType.CAR_INQUIRY " +
-                     "AND r.car.owner.id = :sellerId")
+                     "AND (r.car.owner.id = :sellerId OR r.car.coOwner.id = :sellerId)")
        long countCarInquiryChatsForSeller(@Param("sellerId") Long sellerId);
 
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
+                     "car", "car.images" })
        @Query("SELECT r FROM ChatRoom r " +
-                     "WHERE r.car.owner.id = :dealerId " +
+                     "WHERE (r.car.owner.id = :dealerId OR r.car.coOwner.id = :dealerId) " +
                      "AND r.type = com.carselling.oldcar.model.ChatRoom$ChatType.CAR_INQUIRY " +
                      "ORDER BY r.lastActivityAt DESC")
        Page<ChatRoom> findDealerInquiries(@Param("dealerId") Long dealerId, Pageable pageable);
 
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
+                     "car", "car.images" })
        @Query("SELECT r FROM ChatRoom r " +
-                     "WHERE r.car.owner.id = :dealerId " +
+                     "WHERE (r.car.owner.id = :dealerId OR r.car.coOwner.id = :dealerId) " +
                      "AND r.type = com.carselling.oldcar.model.ChatRoom$ChatType.CAR_INQUIRY " +
                      "AND r.status = :status " +
                      "ORDER BY r.lastActivityAt DESC")

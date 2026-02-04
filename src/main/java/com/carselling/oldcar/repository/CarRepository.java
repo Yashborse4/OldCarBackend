@@ -24,6 +24,7 @@ import java.util.List;
 public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificationExecutor<Car> {
 
        // Basic finder methods
+       // Basic finder methods
        List<Car> findByOwner(User owner);
 
        Page<Car> findByOwner(User owner, Pageable pageable);
@@ -33,6 +34,9 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
 
        @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "images" })
        Page<Car> findByOwnerId(Long ownerId, Pageable pageable);
+
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "images", "coOwner" })
+       Page<Car> findByOwnerIdOrCoOwnerId(Long ownerId, Long coOwnerId, Pageable pageable);
 
        /**
         * Find car by idempotency key and owner for duplicate prevention on retries.
@@ -219,16 +223,16 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
 
        boolean existsByIdAndOwnerId(Long id, Long ownerId);
 
-       @Query("SELECT c.id FROM Car c WHERE c.owner.id = :ownerId")
+       @Query("SELECT c.id FROM Car c WHERE c.owner.id = :ownerId OR c.coOwner.id = :ownerId")
        List<Long> findCarIdsByOwnerId(@Param("ownerId") Long ownerId);
 
-       @Query(value = "SELECT AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) / 86400.0) FROM cars WHERE owner_id = :ownerId", nativeQuery = true)
+       @Query(value = "SELECT AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) / 86400.0) FROM cars WHERE (owner_id = :ownerId OR co_owner_id = :ownerId) AND status <> 'DELETED'", nativeQuery = true)
        Double getAverageCarAgeInDaysByOwnerId(@Param("ownerId") Long ownerId);
 
-       @Query("SELECT COUNT(c) FROM Car c WHERE c.owner.id = :ownerId AND c.isActive = true")
+       @Query("SELECT COUNT(c) FROM Car c WHERE (c.owner.id = :ownerId OR c.coOwner.id = :ownerId) AND c.isActive = true")
        long countActiveCarsByOwnerId(@Param("ownerId") Long ownerId);
 
-       @Query("SELECT COALESCE(SUM(c.viewCount), 0) FROM Car c WHERE c.owner.id = :ownerId")
+       @Query("SELECT COALESCE(SUM(c.viewCount), 0) FROM Car c WHERE (c.owner.id = :ownerId OR c.coOwner.id = :ownerId)")
        Long sumViewCountByOwnerId(@Param("ownerId") Long ownerId);
 
        long countByOwnerRole(@Param("role") Role role);
@@ -246,6 +250,14 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        @Modifying
        @Query("UPDATE Car c SET c.viewCount = c.viewCount + 1 WHERE c.id = :carId")
        int incrementViewCount(@Param("carId") Long carId);
+
+       @Modifying
+       @Query("UPDATE Car c SET c.inquiryCount = c.inquiryCount + 1 WHERE c.id = :carId")
+       int incrementInquiryCount(@Param("carId") Long carId);
+
+       @Modifying
+       @Query("UPDATE Car c SET c.shareCount = c.shareCount + 1 WHERE c.id = :carId")
+       int incrementShareCount(@Param("carId") Long carId);
 
        @Modifying
        @Query("UPDATE Car c SET c.isFeatured = :featured, c.featuredUntil = :featuredUntil WHERE c.id = :carId")
@@ -278,6 +290,10 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        @Modifying
        @Query("UPDATE Car c SET c.isFeatured = false, c.featuredUntil = null WHERE c.featuredUntil < CURRENT_TIMESTAMP")
        int expireFeaturedCars();
+
+       @Modifying
+       @Query("UPDATE Car c SET c.version = 0 WHERE c.id = :id AND c.version IS NULL")
+       int initializeVersion(@Param("id") Long id);
 
        // Statistics queries for admin dashboard
        @Query("SELECT c.make, COUNT(c) FROM Car c WHERE c.isActive = true GROUP BY c.make ORDER BY COUNT(c) DESC")
@@ -417,4 +433,8 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        @Query("SELECT c FROM Car c WHERE c.isActive = true " +
                      "ORDER BY c.viewCount DESC, c.isFeatured DESC, c.createdAt DESC")
        List<Car> findRecommendedCars(@Param("userId") Long userId, Pageable pageable);
+
+       @Override
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "images" })
+       Page<Car> findAll(org.springframework.data.jpa.domain.Specification<Car> spec, Pageable pageable);
 }

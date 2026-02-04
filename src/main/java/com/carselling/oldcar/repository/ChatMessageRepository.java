@@ -37,13 +37,13 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
                      @Param("query") String query,
                      Pageable pageable);
 
-       @Query("SELECT m.chatRoom.id, COUNT(m) FROM ChatMessage m " +
-                     "WHERE m.chatRoom.id IN (" +
-                     "   SELECT p.chatRoom.id FROM com.carselling.oldcar.model.ChatParticipant p " +
-                     "   WHERE p.user.id = :userId" +
-                     ") " +
+       @Query("SELECT p.chatRoom.id, COUNT(m) " +
+                     "FROM ChatParticipant p " +
+                     "JOIN ChatMessage m ON m.chatRoom.id = p.chatRoom.id " +
+                     "WHERE p.user.id = :userId " +
+                     "AND m.id > COALESCE(p.lastReadMessageId, 0) " +
                      "AND m.isDeleted = false " +
-                     "GROUP BY m.chatRoom.id")
+                     "GROUP BY p.chatRoom.id")
        List<Object[]> getUnreadCountByChat(@Param("userId") Long userId);
 
        Optional<ChatMessage> findBySenderIdAndClientMessageId(Long senderId, String clientMessageId);
