@@ -1,6 +1,7 @@
 package com.carselling.oldcar.service;
 
 import com.carselling.oldcar.b2.B2Client;
+import com.carselling.oldcar.b2.B2Properties;
 import com.carselling.oldcar.model.ResourceType;
 import com.carselling.oldcar.model.TemporaryFile;
 import com.carselling.oldcar.model.UploadedFile;
@@ -22,6 +23,7 @@ import java.util.Optional;
 public class MediaFinalizationService {
 
     private final B2Client b2Client;
+    private final B2Properties properties;
     private final TemporaryFileRepository temporaryFileRepository;
     private final UploadedFileRepository uploadedFileRepository;
 
@@ -60,27 +62,20 @@ public class MediaFinalizationService {
                 b2Client.copyFile(tempFile.getFileId(), targetFileName);
 
                 // Delete source file (temp)
-                b2Client.deleteFileVersion(sourceFileName, tempFile.getFileId());
+                // DISABLED as per user requirement: Keep temp file for 24h as backup.
+                // TempFileCleanupService will handle deletion.
+                // b2Client.deleteFileVersion(sourceFileName, tempFile.getFileId());
 
                 // Update URL
-                // Logic to construct new URL: similar to source but with targetFolder
-                // e.g. "https://cdn.com/temp/123/foo.jpg" ->
-                // "https://cdn.com/cars/456/images/foo.jpg"
-
-                // Since we don't know exact domain logic here perfectly without properties
-                // which we inject via B2Client maybe?
-                // Or we can just do simple replacement.
-                // Safer: Extract domain from source URL and append target path.
-
-                String newUrl = tempFile.getFileUrl();
-                try {
-                    java.net.URI uri = new java.net.URI(tempFile.getFileUrl());
-                    newUrl = uri.getScheme() + "://" + uri.getAuthority() + "/" + targetFileName;
-                    // Ensure path encoding if needed? targetFileName usually safe.
-                } catch (Exception e) {
-                    // Fallback
-                    newUrl = tempFile.getFileUrl().replace(sourceFileName, targetFileName);
+                // Construct new URL using configured CDN domain
+                String domain = properties.getCdnDomain();
+                if (domain.endsWith("/")) {
+                    domain = domain.substring(0, domain.length() - 1);
                 }
+
+                // Assuming targetFileName is safe (e.g. "cars/123/images/file.jpg")
+                // And simple concatenation works for Cloudflare/B2 mapping.
+                String newUrl = domain + "/" + targetFileName;
 
                 UploadedFile uploadedFile = UploadedFile.builder()
                         .fileName(tempFile.getFileName())

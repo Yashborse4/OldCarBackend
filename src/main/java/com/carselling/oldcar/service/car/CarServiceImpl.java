@@ -421,6 +421,39 @@ public class CarServiceImpl implements CarService {
         car.setVariant(request.getVariant());
         car.setUsage(request.getUsage());
 
+        // Validate and set Video URL
+        if (request.getVideoUrl() != null && !request.getVideoUrl().isBlank()) {
+            String newVideoUrl = request.getVideoUrl();
+            String oldVideoUrl = car.getVideoUrl();
+
+            // Only update if different
+            if (!newVideoUrl.equals(oldVideoUrl)) {
+                // Cleanup old video if it exists
+                if (oldVideoUrl != null && !oldVideoUrl.isBlank()) {
+                    try {
+                        b2FileService.deleteFile(oldVideoUrl);
+                        log.debug("Deleted replaced video during update: {}", oldVideoUrl);
+                    } catch (Exception e) {
+                        log.warn("Failed to delete replaced video: {}", oldVideoUrl);
+                    }
+                }
+
+                fileValidationService.validateFileUrl(newVideoUrl);
+                car.setVideoUrl(newVideoUrl);
+            }
+        } else if (request.getVideoUrl() != null && request.getVideoUrl().isEmpty()) {
+            // Explicitly allow clearing if empty string is passed
+            String oldVideoUrl = car.getVideoUrl();
+            if (oldVideoUrl != null && !oldVideoUrl.isBlank()) {
+                try {
+                    b2FileService.deleteFile(oldVideoUrl);
+                } catch (Exception e) {
+                    log.warn("Falied to delete old video: {}", oldVideoUrl);
+                }
+            }
+            car.setVideoUrl(null);
+        }
+
         // Validate and set image URL - only allow trusted sources
         if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
             fileValidationService.validateFileUrl(request.getImageUrl());
@@ -455,53 +488,42 @@ public class CarServiceImpl implements CarService {
 
     /**
      * Delete vehicle
-     * Performs a HARD DELETE after cleaning up associated media files.
-     * Analytics are preserved via loose coupling (target_id).
+     * Performs a SOFT DELETE in Database, but HARD DELETE in Storage (Clean
+     * folder).
      */
     public void deleteVehicle(String id, Long currentUserId, boolean hard) {
-        log.debug("Deleting vehicle: {} by user: {} (force hard delete)", id, currentUserId);
+        log.debug("Deleting vehicle: {} by user: {}", id, currentUserId);
 
         Car car = carRepository.findById(Long.parseLong(id))
                 .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
 
         assertCanModifyCar(car, currentUserId, "delete vehicles");
 
-        // 1. Delete Media Files from Firebase
+        // 1. Hard Cleanup of Storage (Folder level)
         try {
-            // Delete images
-            if (car.getImages() != null) {
-                for (String imageUrl : car.getImages()) {
-                    if (imageUrl != null && !imageUrl.isBlank()) {
-                        try {
-                            b2FileService.deleteFile(imageUrl);
-                            log.debug("Deleted image: {}", imageUrl);
-                        } catch (Exception e) {
-                            log.warn("Failed to delete image: {} - {}", imageUrl, e.getMessage());
-                        }
-                    }
-                }
-            }
-
-            // Delete video
-            if (car.getVideoUrl() != null && !car.getVideoUrl().isBlank()) {
-                try {
-                    b2FileService.deleteFile(car.getVideoUrl());
-                    log.debug("Deleted video: {}", car.getVideoUrl());
-                } catch (Exception e) {
-                    log.warn("Failed to delete video: {} - {}", car.getVideoUrl(), e.getMessage());
-                }
-            }
+            String folderPath = "cars/" + id;
+            log.info("Cleaning up storage for deleted car: {}", folderPath);
+            b2FileService.deleteFolder(folderPath);
         } catch (Exception e) {
-            log.error("Error during media cleanup for car {}: {}", id, e.getMessage());
-            // Continue with DB delete even if media delete fails to avoid inconsistent
-            // state
+            log.error("Error during storage cleanup for car {}: {}", id, e.getMessage());
+            // Continue with DB update to ensure user intent is met
         }
 
-        // 2. Perform Hard Delete
-        carRepository.delete(car);
-        log.info("Hard deleted vehicle with ID: {} by user: {}", id, currentUserId);
+        // 2. Perform Soft Delete (DB)
+        car.setStatus(CarStatus.DELETED);
+        car.setIsActive(false);
+        car.setIsAvailable(false);
+        car.setIsSold(false); // Can't be sold if deleted
+        car.setUpdatedAt(LocalDateTime.now());
+        car.setImageUrl(null); // Clear image refs
+        car.setVideoUrl(null);
+        car.setImages(new ArrayList<>()); // Clear image list
+
+        carRepository.save(car);
+
+        log.info("Soft deleted vehicle with ID: {} by user: {} (Storage wiped)", id, currentUserId);
         auditLogService.logDataAccess("Car", car.getId(), "DELETE", getUsername(currentUserId),
-                "Vehicle hard deleted by user " + currentUserId);
+                "Vehicle soft deleted (storage wiped) by user " + currentUserId);
     }
 
     /**

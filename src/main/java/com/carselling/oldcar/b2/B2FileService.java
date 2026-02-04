@@ -196,13 +196,24 @@ public class B2FileService {
             try {
                 // If we have a fileId, delete that specific version (safer/cleaner in B2)
                 if (file.getFileId() != null) {
-                    b2Client.deleteFileVersion(file.getFileName(), file.getFileId());
+                    // Extract B2 File Name (Key) from URL
+                    // URL: https://cdn.domain.com/folder/file.ext
+                    // Key: folder/file.ext
+                    String domain = properties.getCdnDomain();
+                    String b2Key = fileUrl.replace(domain + "/", "");
+                    if (b2Key.startsWith("/")) {
+                        b2Key = b2Key.substring(1);
+                    }
+
+                    try {
+                        // Decode just in case URL encoding messes up finding the file
+                        b2Key = java.net.URLDecoder.decode(b2Key, StandardCharsets.UTF_8);
+                        b2Client.deleteFileVersion(b2Key, file.getFileId());
+                    } catch (Exception e) {
+                        log.warn("Failed to delete from B2: {} due to {}", b2Key, e.getMessage());
+                        // Continue to delete from DB
+                    }
                 } else {
-                    // Fallback or just log warning?
-                    // Without fileId, we might need to hide it or find it by name.
-                    // For now, attempting delete by name IF your client supported it, but B2
-                    // requires fileId.
-                    // We'll leave it as "cannot delete from storage" but delete record.
                     log.warn("No B2 fileId for {}, skipping storage deletion.", file.getFileName());
                 }
 
@@ -214,6 +225,18 @@ public class B2FileService {
             }
         }
         return false;
+    }
+
+    /**
+     * Delete an entire folder/prefix
+     */
+    public void deleteFolder(String folderPath) {
+        if (folderPath == null || folderPath.isBlank()) {
+            return;
+        }
+        // Ensure folder path ends with slash if not already, to match prefix behavior
+        String prefix = folderPath.endsWith("/") ? folderPath : folderPath + "/";
+        b2Client.deleteFilesWithPrefix(prefix);
     }
 
     // ============================================================================================
@@ -233,7 +256,9 @@ public class B2FileService {
 
     public DirectUploadInitResponse initDirectUpload(String originalFileName, String folder, User uploader) {
         String tempFolder;
-        if (folder != null && folder.startsWith("cars/")) {
+        if (folder != null && folder.startsWith("temp/")) {
+            tempFolder = folder;
+        } else if (folder != null && folder.startsWith("cars/")) {
             String carId = extractCarIdFromFolder(folder);
             if (carId != null && !carId.isBlank()) {
                 tempFolder = "temp/cars/" + carId + "/images";
@@ -251,21 +276,11 @@ public class B2FileService {
 
         // B2 requires the file name to be URL-encoded for the upload request header if
         // it contains special chars
-        // But the path itself is the "file name" in B2 concept (including folders)
         String b2FileName = URLEncoder.encode(fullPath, StandardCharsets.UTF_8).replace("+", "%20");
 
         // 1. Get One-Time Upload URL from B2
         B2Client.GetUploadUrlResponse uploadUrl = b2Client.getUploadUrl();
 
-        // 2. Construct future public URL (though it might not be public yet for temp)
-        // Note: Temp files might need a different path or authentication if they
-        // shouldn't be public.
-        // For now, assuming standard CDN path but we might restrict access logic
-        // elsewhere or via B2 buckets.
-        // B2 bucket is usually either all public or all private. If public, "temp/" is
-        // public.
-        // We will assume "temp/" is public for the user to verify (preview) before
-        // finalizing.
         String domain = properties.getCdnDomain();
         if (domain.endsWith("/")) {
             domain = domain.substring(0, domain.length() - 1);
@@ -287,35 +302,22 @@ public class B2FileService {
         String fileHash = fileInfo.getContentSha1();
 
         // 2. DUPLICATE DETECTION
-        // Check if this hash already exists in PERMANENT files for this user (or
-        // globally if public)
-        // Checking mostly for this user to avoid re-uploading same file
-        // NOTE: hash might be "none" for large files uploaded via multi-part in B2,
-        // handle that?
-        // Basic implementation assumes small-ish files with SHA1.
-
         if (fileHash != null && !fileHash.equals("none")) {
             Optional<UploadedFile> existing = uploadedFileRepository.findByFileHashAndUploadedById(fileHash,
                     uploader.getId());
             if (existing.isPresent()) {
                 log.info("Duplicate file detected for user {}: {}", uploader.getId(), fileHash);
-                // We should ideally DELETE the temp file just uploaded to save space, and
-                // return the existing one.
-                // Or just point to existing.
-                // Let's delete the 'temp' file that was just uploaded.
+                // Delete temp copy
                 try {
                     b2Client.deleteFileVersion(b2FileName, fileId);
                 } catch (Exception e) {
                     log.error("Failed to delete duplicate temp file from B2: {}", b2FileName, e);
                 }
-
-                // Return existing file as "UploadedFile" directly?
-                // The caller expects confirmation. We can reuse.
                 return existing.get();
             }
         }
 
-        // 3. Save as TemporaryFile
+        // 3. Save as TemporaryFile or UploadedFile based on path
         String decodedPath = java.net.URLDecoder.decode(b2FileName, StandardCharsets.UTF_8);
         String fileName = decodedPath.contains("/") ? decodedPath.substring(decodedPath.lastIndexOf("/") + 1)
                 : decodedPath;
@@ -325,6 +327,26 @@ public class B2FileService {
             domain = domain.substring(0, domain.length() - 1);
         }
         String publicUrl = domain + "/" + decodedPath;
+
+        // DIRECT FINALIZATION: If path is not "temp/", save directly as UploadedFile
+        if (!decodedPath.startsWith("temp/")) {
+            UploadedFile finalFile = UploadedFile.builder()
+                    .fileUrl(publicUrl)
+                    .fileName(fileName)
+                    .originalFileName(originalFileName != null ? originalFileName : fileName)
+                    .contentType(contentType != null ? contentType : "application/octet-stream")
+                    .size(fileSize != null ? fileSize : 0L)
+                    .uploadedBy(uploader)
+                    .ownerType(ownerType)
+                    .ownerId(ownerId)
+                    .accessType(AccessType.PUBLIC) // Default to Public for direct uploads
+                    .fileHash(fileHash)
+                    .fileId(fileId)
+                    .build();
+
+            log.info("Directly finalized upload: {}", publicUrl);
+            return uploadedFileRepository.save(finalFile);
+        }
 
         TemporaryFile tempFile = TemporaryFile.builder()
                 .fileUrl(publicUrl)

@@ -27,9 +27,9 @@ public class FileCleanupService {
     private final B2Client b2Client;
 
     /**
-     * Run daily at 2 AM to clean up files older than 24 hours.
+     * Run daily at 2 AM IST to clean up files older than 24 hours.
      */
-    @Scheduled(cron = "0 0 2 * * ?")
+    @Scheduled(cron = "0 0 2 * * ?", zone = "Asia/Kolkata")
     @Transactional
     public void cleanupAbandonedFiles() {
         log.info("Starting cleanup of abandoned temporary files...");

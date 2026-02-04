@@ -25,10 +25,10 @@ public class TempFileCleanupService {
     private final B2Client b2Client;
 
     /**
-     * Run cleanup every hour.
+     * Run daily at 2 AM IST.
      * Deletes files older than 24 hours.
      */
-    @Scheduled(cron = "0 0 * * * *") // Every hour
+    @Scheduled(cron = "0 0 2 * * ?", zone = "Asia/Kolkata")
     @Transactional
     public void cleanupAbandonedFiles() {
         log.info("Starting cleanup of abandoned temporary files...");

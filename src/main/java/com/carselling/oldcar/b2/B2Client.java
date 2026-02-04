@@ -1,3 +1,4 @@
+
 package com.carselling.oldcar.b2;
 
 import lombok.Data;
@@ -12,6 +13,9 @@ import org.springframework.beans.factory.InitializingBean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.backblaze.b2.client.structures.B2FileVersion;
+import com.backblaze.b2.client.structures.B2ListFileVersionsRequest;
+import com.backblaze.b2.client.exceptions.B2Exception;
 
 @Component
 @RequiredArgsConstructor
@@ -160,6 +164,33 @@ public class B2Client implements InitializingBean {
             log.info("Deleted file version {} from B2", fileName);
         } catch (Exception e) {
             log.error("Error deleting file from B2", e);
+        }
+    }
+
+    public void deleteFilesWithPrefix(String prefix) {
+        try {
+            String bucketId = getCachedBucketId();
+            log.info("Deleting files with prefix: {}", prefix);
+
+            // Create request with prefix for server-side filtering
+            B2ListFileVersionsRequest request = B2ListFileVersionsRequest
+                    .builder(bucketId)
+                    .setPrefix(prefix)
+                    .build();
+
+            // Iterate over file versions matching the prefix
+            for (B2FileVersion version : client.fileVersions(request)) {
+                try {
+                    client.deleteFileVersion(version.getFileName(), version.getFileId());
+                    log.debug("Deleted file version: {} ({})", version.getFileName(), version.getFileId());
+                } catch (Exception e) {
+                    log.warn("Failed to delete file version: {}", version.getFileName(), e);
+                }
+            }
+            log.info("Finished deleting files with prefix: {}", prefix);
+        } catch (Exception e) {
+            log.error("Error deleting files with prefix: {}", prefix, e);
+            throw new RuntimeException("Failed to delete folder/prefix in B2", e);
         }
     }
 
