@@ -1291,8 +1291,6 @@ public class ChatService {
             throw new AccessDeniedException("Access denied to chat room");
         }
 
-        // For now, return all messages that contain the query (simple implementation)
-        // In production, this would use proper full-text search
-        return getChatMessages(chatId, userId, pageable);
+        return searchMessagesInChat(chatId, query, userId, pageable);
     }
 }

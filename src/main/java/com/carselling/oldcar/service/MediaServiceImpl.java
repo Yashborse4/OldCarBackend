@@ -38,6 +38,7 @@ public class MediaServiceImpl implements MediaService {
                                                        // we explicitly use B2
     private final com.carselling.oldcar.repository.UserRepository userRepository;
     private final com.carselling.oldcar.repository.UploadedFileRepository uploadedFileRepository;
+    private final com.carselling.oldcar.repository.ChatParticipantRepository chatParticipantRepository;
 
     private User resolveUser(Long userId) {
         return userRepository.findById(userId)
@@ -445,9 +446,11 @@ public class MediaServiceImpl implements MediaService {
                 return false;
 
             case CHAT_ATTACHMENT:
-                // TODO: Implement chat participant check when ChatService is available
-                // For now, only owner (checked above) can access
-                log.debug("Chat attachment access check - participant verification not yet implemented");
+                if (file.getOwnerId() != null) {
+                    return chatParticipantRepository
+                            .findByChatRoomIdAndUserIdAndIsActiveTrue(file.getOwnerId(), user.getId())
+                            .isPresent();
+                }
                 return false;
 
             case USER_PROFILE:

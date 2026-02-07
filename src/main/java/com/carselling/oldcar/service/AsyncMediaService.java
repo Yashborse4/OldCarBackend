@@ -30,9 +30,7 @@ public class AsyncMediaService {
             updateStatus(carId, MediaStatus.PROCESSING);
 
             // Step 2: Validate Files exist (and potentially scan them)
-            // For now, we assume they are valid B2 URLs or paths.
-            // In a real scenario, we would download, scan (ClamAV), and verify dimensions.
-            // Here we just verify reasonable URL format.
+            // We verify reasonable URL format and extension.
 
             List<String> validImageUrls = new ArrayList<>();
             String videoUrl = null;
