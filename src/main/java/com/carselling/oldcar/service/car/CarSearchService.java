@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 public class CarSearchService {
 
     private final CarSearchProvider searchProvider;
+    private final com.carselling.oldcar.repository.UserRepository userRepository;
 
     /**
      * Search cars based on the unified request DTO.
@@ -80,7 +81,13 @@ public class CarSearchService {
         return searchProvider.getTrendingSearchTerms(limit);
     }
 
-    public List<String> getRecentSearches(User user, int limit) {
+    public List<String> getRecentSearches(Long userId, int limit) {
+        User user = userRepository.findById(userId)
+                .orElse(null); // Or throw exception if strict, but for recent searches, null safe return is better?
+                               // Actually provider expects User. If User not found, return empty list.
+        if (user == null) {
+            return java.util.Collections.emptyList();
+        }
         return searchProvider.getRecentSearches(user, limit);
     }
 

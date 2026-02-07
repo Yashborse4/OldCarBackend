@@ -92,38 +92,16 @@ public class CarSearchController {
                         return ResponseEntity.ok(ApiResponse.success("No user", "Recent searches", List.of()));
                 }
 
-                // Fetch user entity (assuming UserPrincipal has ID or we fetch it)
-                // Simplified: Assuming we can pass UserPrincipal directly or fetch user by
-                // email
-                // Ideally we pass User entity to service, or Service looks it up.
-                // For now, let's assume AdvancedSearchService can handle ID or we fetch user.
-                // But AdvancedSearchService expects User.
-                // We need to fetch User.
-                // Hack for now: Mocking user lookup or assuming security context holds User
-                // object.
-                // Better: Let service handle retrieval by ID if we change signature.
-                // Given limitations, I will assume we can convert or service needs update.
-                // NOTE: Controller doesn't have UserRepo injected.
-                // I will update AdvancedSearchService to accept ID instead of User object for
-                // easier usage,
-                // OR assume I can't change Service signature easily in one Go?
-                // Actually I can changing Service signature is fine.
-                // BUT, AdvancedSearchService::getRecentSearches(User user) is what I defined.
-                // Let's rely on standard current user fetch if possible.
-                // I'll skip implementation detail for now and just return success with empty
-                // list if not authed,
-                // or fetch user if I had the repo.
-                // Wait, I can't compile if I don't pass User.
-                // Let's assume passed UserPrincipal has getUser() method?
-                // Or better, let's inject UserRepository here?
-                // Or update Service to take ID. Updating Service to take User ID is cleaner.
+                // Extract user ID from UserPrincipal
+                Long userId = currentUser.getId();
+
+                // Call service with user ID
+                List<String> recentSearches = carSearchService.getRecentSearches(userId, limit);
 
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Recent searches",
                                 "Recent searches",
-                                List.of() // user lookup pending, will fix in next step if needed or assume service
-                                          // handles it
-                ));
+                                recentSearches));
         }
 
         @GetMapping("/trending")

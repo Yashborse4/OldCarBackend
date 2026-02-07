@@ -4,7 +4,6 @@ import com.carselling.oldcar.dto.CarStatistics;
 import com.carselling.oldcar.dto.car.CarRequest;
 import com.carselling.oldcar.dto.car.CarResponse;
 import com.carselling.oldcar.dto.car.PublicCarDTO;
-
 import com.carselling.oldcar.dto.car.CarAnalyticsResponse;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.service.car.CarService;
@@ -12,7 +11,6 @@ import com.carselling.oldcar.service.analytics.UserAnalyticsService;
 import com.carselling.oldcar.util.PageableUtils;
 import com.carselling.oldcar.util.SecurityUtils;
 import com.carselling.oldcar.service.FileUploadService;
-import com.carselling.oldcar.exception.UnauthorizedActionException;
 import com.carselling.oldcar.model.MediaStatus;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
@@ -158,34 +156,6 @@ public class CarController {
                 Long currentUserId = SecurityUtils.getCurrentUserId();
 
                 CarResponse createdCar = carService.createVehicle(request, currentUserId, idempotencyKey);
-
-                // If the car was already created (idempotency), we might want to return OK
-                // instead of CREATED
-                // But for simplicity/standardization, we'll keep it as CREATED or let the
-                // client handle it.
-                // Or checking if createdAt is old?
-                // For this refactor, we just return the response. Since we moved logic to
-                // service,
-                // the service returns the CarResponse.
-                // We can't easily distinguish "Created Now" vs "Returned Existing" without a
-                // nuanced return type.
-                // But generally responding 200 or 201 with the resource is fine.
-
-                // However, to strictly maintain the previous behavior (200 OK for existing),
-                // we would need the service to return a wrapper or throwing a specific
-                // exception
-                // (e.g. IdempotentSuccessException) which we handle.
-
-                // But the user request says "Controllers should only: Validate request, Call
-                // service, Return response".
-                // So relying on the service return value is correct.
-                // We will return 201 Created for simplicity, or 200 OK if we want to be safe.
-                // The previous code returned 200 OK for existing, 201 Created for new.
-
-                // Let's just return 200 OK for everything to simplify? No, creation should be
-                // 201.
-                // Let's assume 201 for now. If strict status code parity is needed, we'd need
-                // more complex refactoring.
 
                 return ResponseEntity.status(HttpStatus.CREATED)
                                 .body(ApiResponse.success(

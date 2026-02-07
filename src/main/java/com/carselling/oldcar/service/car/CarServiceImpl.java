@@ -282,6 +282,9 @@ public class CarServiceImpl implements CarService {
                 .insuranceClaims(request.getInsuranceClaims())
                 .variant(request.getVariant())
                 .usage(request.getUsage())
+                .latitude(request.getLatitude())
+                .longitude(request.getLongitude())
+                .location(request.getLocation())
                 // Initialize as INACTIVE until media is ready
                 .isActive(false)
                 .isAvailable(false)
@@ -483,6 +486,9 @@ public class CarServiceImpl implements CarService {
         car.setInsuranceClaims(request.getInsuranceClaims());
         car.setVariant(request.getVariant());
         car.setUsage(request.getUsage());
+        car.setLatitude(request.getLatitude());
+        car.setLongitude(request.getLongitude());
+        car.setLocation(request.getLocation());
 
         // Update Co-Owner if provided
         if (request.getCoOwnerId() != null) {
@@ -583,24 +589,17 @@ public class CarServiceImpl implements CarService {
         assertCanModifyCar(car, currentUserId, "update vehicles");
 
         // Check dealer verification for public visibility
-        if ("AVAILABLE".equalsIgnoreCase(status) && !car.getOwner().canListCarsPublicly()) {
-            // Allow them to set it, but force isActive=false if they are not verified?
-            // Or reject the request? The requirement is "dealer car visibility status will
-            // be false".
-            // Let's allow saving "AVAILABLE" intent but keep isActive=false if unverified.
-            // Actually, to be safe and clear, let's allow the status update to 'AVAILABLE'
-            // in the DB
-            // but ensure isActive remains false effectively hiding it.
-            // BUT, our visibility logic relies on isActive.
+        boolean isPublishing = "PUBLISHED".equalsIgnoreCase(status) || "AVAILABLE".equalsIgnoreCase(status);
+        if (isPublishing && !car.getOwner().canListCarsPublicly()) {
+            log.warn("Unverified dealer {} attempting to publish car {}. Visibility will remain restricted.",
+                    currentUserId, id);
+            // We allow the status change to proceed (it will be mapped to PUBLISHED below if 'AVAILABLE' is sent, or strictly validated),
+            // but the visibility (isActive) will be suppressed below in the switch case.
+        }
 
-            // Re-reading logic in getAllVehicles: filter(car -> isAdmin ||
-            // isVehicleVisible(car))
-            // isVehicleVisible checks isActive.
-
-            // So if they try to set "AVAILABLE", we should probably warn or set it but keep
-            // hidden?
-            // "dealer should be able to upload car... but no one see the car"
-            // So we allow the operation, but override the effective visibility.
+        // Map legacy 'AVAILABLE' to 'PUBLISHED' if necessary, or let valueOf handle it
+        if ("AVAILABLE".equalsIgnoreCase(status)) {
+            status = "PUBLISHED";
         }
 
         // Update status based on string value
