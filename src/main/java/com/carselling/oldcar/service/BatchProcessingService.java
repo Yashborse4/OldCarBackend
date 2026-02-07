@@ -145,12 +145,21 @@ public class BatchProcessingService {
             });
 
             // Upload CSV file to storage
-
-            // In a real implementation, you would upload this to S3 or file storage
-            // For now, we'll simulate the process
+            byte[] csvBytes = csvContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            String fileName = "vehicles_export_" + jobId + ".csv";
+            
+            com.carselling.oldcar.dto.file.FileUploadResponse uploadResponse = fileUploadService.uploadFile(
+                    csvBytes, 
+                    fileName, 
+                    "text/csv", 
+                    "exports/" + user.getId(), 
+                    user, 
+                    com.carselling.oldcar.model.ResourceType.OTHER, 
+                    user.getId()
+            );
 
             status.setStatus("COMPLETED");
-            status.setDownloadUrl("/api/batch/download/" + jobId);
+            status.setDownloadUrl(uploadResponse.getFileUrl());
             status.setCompletedAt(LocalDateTime.now());
 
             // Send completion notification with download link

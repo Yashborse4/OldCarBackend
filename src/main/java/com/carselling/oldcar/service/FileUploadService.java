@@ -37,6 +37,10 @@ public class FileUploadService {
         return b2FileService.uploadFile(file, folder, uploader, ownerType, ownerId);
     }
 
+    public FileUploadResponse uploadFile(byte[] content, String fileName, String contentType, String folder, User uploader, ResourceType ownerType, Long ownerId) {
+        return b2FileService.uploadFile(content, fileName, contentType, folder, uploader, ownerType, ownerId);
+    }
+
     /**
      * Legacy upload method (Deprecated) - Use strict version instead
      */

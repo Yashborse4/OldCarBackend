@@ -67,11 +67,10 @@ public class B2FileService {
         String uniqueFileName = generateUniqueFileName(originalFileName, uploader.getId());
         String fullPath = folder + "/" + uniqueFileName;
 
-        // B2 requires the file name to be URL-encoded for the upload request header if
-        // it contains special chars
-        // But the path itself is the "file name" in B2 concept (including folders)
-        String b2FileName = URLEncoder.encode(fullPath, StandardCharsets.UTF_8).replace("+", "%20"); // Simple encoding
-                                                                                                     // match
+        // B2 SDK handles the logical path (including folders) correctly.
+        // encoding here would cause B2 to treat it as a flat filename with %2F instead
+        // of folders.
+        String b2FileName = fullPath;
 
         log.info("Uploading file to B2: {}", fullPath);
 
@@ -143,6 +142,76 @@ public class B2FileService {
                 .build();
     }
 
+    public FileUploadResponse uploadFile(byte[] content, String fileName, String contentType, String folder, User uploader, ResourceType ownerType, Long ownerId) {
+        String fileHash = calculateSha1(content);
+
+        // Idempotency check
+        Optional<UploadedFile> existing = uploadedFileRepository.findByFileHashAndUploadedById(fileHash, uploader.getId());
+        if (existing.isPresent()) {
+            UploadedFile existingFile = existing.get();
+             return FileUploadResponse.builder()
+                    .fileName(existingFile.getFileName())
+                    .originalFileName(existingFile.getOriginalFileName())
+                    .fileUrl(existingFile.getFileUrl())
+                    .fileId(existingFile.getFileId())
+                    .fileSize(existingFile.getSize())
+                    .contentType(existingFile.getContentType())
+                    .folder(folder)
+                    .uploadedAt(existingFile.getCreatedAt())
+                    .build();
+        }
+
+        String uniqueFileName = generateUniqueFileName(fileName, uploader.getId());
+        String fullPath = folder + "/" + uniqueFileName;
+        String b2FileName = fullPath;
+
+        // Metadata
+        java.util.Map<String, String> fileMetadata = new java.util.HashMap<>();
+        fileMetadata.put("uploaded-by-user-id", String.valueOf(uploader.getId()));
+        fileMetadata.put("owner-type", ownerType.name());
+        if (ownerId != null) {
+            fileMetadata.put("owner-id", String.valueOf(ownerId));
+        }
+        fileMetadata.put("upload-timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+
+        B2Client.UploadFileResponse b2Response = b2Client.uploadFile(b2FileName, content, contentType, fileMetadata);
+
+        String domain = properties.getCdnDomain();
+        if (domain.endsWith("/")) {
+            domain = domain.substring(0, domain.length() - 1);
+        }
+        String publicUrl = domain + "/" + fullPath;
+
+        AccessType accessType = (ownerType == ResourceType.CHAT_ATTACHMENT || ownerType == ResourceType.OTHER) ? AccessType.PRIVATE : AccessType.PUBLIC;
+
+        UploadedFile uploadedFile = UploadedFile.builder()
+                .fileUrl(publicUrl)
+                .fileName(uniqueFileName)
+                .originalFileName(fileName)
+                .contentType(contentType)
+                .size((long) content.length)
+                .uploadedBy(uploader)
+                .ownerType(ownerType)
+                .ownerId(ownerId)
+                .accessType(accessType)
+                .fileHash(fileHash)
+                .fileId(b2Response.getFileId())
+                .build();
+
+        uploadedFileRepository.save(uploadedFile);
+
+        return FileUploadResponse.builder()
+                .fileName(uniqueFileName)
+                .originalFileName(fileName)
+                .fileUrl(publicUrl)
+                .fileId(b2Response.getFileId())
+                .fileSize((long) content.length)
+                .contentType(contentType)
+                .folder(folder)
+                .uploadedAt(LocalDateTime.now())
+                .build();
+    }
+
     public List<FileUploadResponse> uploadMultipleFiles(List<MultipartFile> files, String folder,
             User uploader, ResourceType ownerType, Long ownerId) {
 
@@ -164,6 +233,22 @@ public class B2FileService {
         return futures.stream()
                 .map(java.util.concurrent.CompletableFuture::join)
                 .collect(java.util.stream.Collectors.toList());
+    }
+
+    private String calculateSha1(byte[] content) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-1");
+            byte[] hash = digest.digest(content);
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-1 algorithm not found", e);
+        }
     }
 
     private String calculateSha1(MultipartFile file) throws IOException {
