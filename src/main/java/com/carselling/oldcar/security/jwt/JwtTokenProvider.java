@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
-import java.security.Key;
 
 import java.time.ZoneId;
 import java.util.Date;
@@ -35,7 +34,7 @@ public class JwtTokenProvider {
     @Value("${app.jwt.refresh-token-expiration-ms}")
     private long refreshTokenExpirationMs;
 
-    private Key key;
+    private javax.crypto.SecretKey key;
 
     private final Map<String, Long> blacklistedTokens = new ConcurrentHashMap<>();
 
@@ -91,11 +90,11 @@ public class JwtTokenProvider {
         claims.put("tokenType", "refresh");
 
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(user.getUsername())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + refreshTokenExpirationMs))
-                .signWith(key, SignatureAlgorithm.HS256)
+                .claims(claims)
+                .subject(user.getUsername())
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + refreshTokenExpirationMs))
+                .signWith(key)
                 .compact();
     }
 
@@ -120,11 +119,11 @@ public class JwtTokenProvider {
                         : 0L);
 
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(user.getUsername())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + expirationMs))
-                .signWith(key, SignatureAlgorithm.HS256)
+                .claims(claims)
+                .subject(user.getUsername())
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + expirationMs))
+                .signWith(key)
                 .compact();
     }
 
@@ -151,11 +150,11 @@ public class JwtTokenProvider {
         }
 
         try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(key)
+            Claims claims = Jwts.parser()
+                    .verifyWith((javax.crypto.SecretKey) key) // strict casting for binding
                     .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+                    .parseSignedClaims(token)
+                    .getPayload();
             // First try to get from explicit username claim, then fall back to subject
             String username = (String) claims.get("username");
             if (username != null) {
@@ -178,11 +177,11 @@ public class JwtTokenProvider {
         }
 
         try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(key)
+            Claims claims = Jwts.parser()
+                    .verifyWith((javax.crypto.SecretKey) key)
                     .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+                    .parseSignedClaims(token)
+                    .getPayload();
 
             Object userId = claims.get("userId");
             if (userId instanceof Integer) {
@@ -231,11 +230,11 @@ public class JwtTokenProvider {
      */
     public String getTokenType(String token) {
         try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(key)
+            Claims claims = Jwts.parser()
+                    .verifyWith((javax.crypto.SecretKey) key)
                     .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+                    .parseSignedClaims(token)
+                    .getPayload();
             return (String) claims.get("tokenType");
         } catch (Exception e) {
             log.error("Failed to extract token type from token", e);
@@ -267,11 +266,11 @@ public class JwtTokenProvider {
         }
 
         try {
-            Jwts.parserBuilder()
-                    .setSigningKey(key)
-                    .setAllowedClockSkewSeconds(60) // Allow 60 seconds of skew for device time differences
+            Jwts.parser()
+                    .verifyWith((javax.crypto.SecretKey) key)
+                    .clockSkewSeconds(60) // Allow 60 seconds of skew for device time differences
                     .build()
-                    .parseClaimsJws(token);
+                    .parseSignedClaims(token);
             return true;
         } catch (MalformedJwtException e) {
             log.error("Invalid JWT token format", e);
@@ -300,11 +299,11 @@ public class JwtTokenProvider {
      */
     public Date getExpirationDateFromToken(String token) {
         try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(key)
+            Claims claims = Jwts.parser()
+                    .verifyWith((javax.crypto.SecretKey) key)
                     .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+                    .parseSignedClaims(token)
+                    .getPayload();
             return claims.getExpiration();
         } catch (Exception e) {
             log.error("Failed to extract expiration date from token", e);
@@ -327,11 +326,11 @@ public class JwtTokenProvider {
     @SuppressWarnings("unchecked")
     public List<String> getAuthoritiesFromToken(String token) {
         try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(key)
+            Claims claims = Jwts.parser()
+                    .verifyWith((javax.crypto.SecretKey) key)
                     .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+                    .parseSignedClaims(token)
+                    .getPayload();
 
             Object roles = claims.get("roles");
             if (roles instanceof List) {

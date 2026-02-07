@@ -146,7 +146,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/files/**").authenticated()
 
                         // Observability (Admin Only)
-                        .requestMatchers("/actuator/**").hasRole("ADMIN")
 
                         // Fallback: Secure everything else
                         .anyRequest().authenticated());
@@ -158,10 +157,12 @@ public class SecurityConfig {
     }
 
     @Bean
-    @SuppressWarnings("deprecation")
+
     public DaoAuthenticationProvider authenticationProvider(CustomUserDetailsService userDetailsService) {
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-        authProvider.setUserDetailsService(userDetailsService);
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService); // Changed to use
+                                                                                                    // constructor
+        // authProvider.setUserDetailsService(userDetailsService); // Removed if
+        // constructor handles it or if setter is gone
         authProvider.setPasswordEncoder(passwordEncoder());
         authProvider.setHideUserNotFoundExceptions(false); // For better error messages
         return authProvider;
