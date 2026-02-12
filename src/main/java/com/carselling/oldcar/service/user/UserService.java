@@ -134,6 +134,16 @@ public class UserService {
             updated = true;
         }
 
+        if (request.getLatitude() != null) {
+            user.setLatitude(request.getLatitude());
+            updated = true;
+        }
+
+        if (request.getLongitude() != null) {
+            user.setLongitude(request.getLongitude());
+            updated = true;
+        }
+
         if (updated) {
             user = userRepository.save(user);
             log.info("User profile updated successfully for user: {}", user.getUsername());
@@ -407,6 +417,8 @@ public class UserService {
                 .showroomName(user.getShowroomName())
                 .address(user.getAddress())
                 .city(user.getCity())
+                .latitude(user.getLatitude())
+                .longitude(user.getLongitude())
                 .build();
     }
 

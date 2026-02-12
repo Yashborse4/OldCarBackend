@@ -29,7 +29,8 @@ import java.util.List;
         @Index(name = "idx_car_owner", columnList = "owner_id"),
         @Index(name = "idx_car_created_at", columnList = "created_at"),
         @Index(name = "idx_car_is_active", columnList = "is_active"),
-        @Index(name = "idx_car_featured", columnList = "is_featured")
+        @Index(name = "idx_car_featured", columnList = "is_featured"),
+        @Index(name = "idx_car_retry", columnList = "status, next_retry_at")
 })
 @SQLRestriction("status <> 'DELETED'")
 @Data
@@ -161,6 +162,10 @@ public class Car {
     @Column(length = 50)
     private String color;
 
+    @Size(max = 20, message = "Registration number must not exceed 20 characters")
+    @Column(name = "registration_number", length = 20)
+    private String registrationNumber;
+
     @Column(name = "number_of_owners")
     @Min(value = 1, message = "Number of owners must be at least 1")
     @Max(value = 20, message = "Number of owners cannot exceed 20")
@@ -236,6 +241,13 @@ public class Car {
     @Column(name = "media_status", length = 20)
     @Builder.Default
     private MediaStatus mediaStatus = MediaStatus.INIT;
+
+    @Column(name = "next_retry_at")
+    private LocalDateTime nextRetryAt;
+
+    @Column(name = "retry_count")
+    @Builder.Default
+    private Integer retryCount = 0;
 
     // Helper methods for backward compatibility
     public User getUser() {

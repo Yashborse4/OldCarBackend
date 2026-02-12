@@ -17,20 +17,20 @@ import java.math.BigDecimal;
 @Builder
 public class CarRequest {
 
-    @NotBlank(message = "Make is required")
+    @NotBlank(message = "Make is required", groups = { com.carselling.oldcar.dto.validation.OnCreate.class })
     @Size(min = 2, max = 50, message = "Make must be between 2 and 50 characters")
     private String make;
 
-    @NotBlank(message = "Model is required")
+    @NotBlank(message = "Model is required", groups = { com.carselling.oldcar.dto.validation.OnCreate.class })
     @Size(min = 1, max = 100, message = "Model must be between 1 and 100 characters")
     private String model;
 
-    @NotNull(message = "Year is required")
+    @NotNull(message = "Year is required", groups = { com.carselling.oldcar.dto.validation.OnCreate.class })
     @Min(value = 1900, message = "Year must be after 1900")
     @Max(value = 2030, message = "Year must not exceed 2030")
     private Integer year;
 
-    @NotNull(message = "Price is required")
+    @NotNull(message = "Price is required", groups = { com.carselling.oldcar.dto.validation.OnCreate.class })
     @DecimalMin(value = "0.0", inclusive = false, message = "Price must be greater than 0")
     @DecimalMax(value = "999999999.99", message = "Price cannot exceed 999,999,999.99")
     @Digits(integer = 9, fraction = 2, message = "Price must have at most 9 integer digits and 2 decimal places")
@@ -70,8 +70,16 @@ public class CarRequest {
     private Boolean insuranceClaims;
     private String variant;
     private String status;
+
+    @Size(max = 20, message = "Registration number must not exceed 20 characters")
+    private String registrationNumber;
     private String usage;
     private String condition;
+
+    private Double latitude;
+    private Double longitude;
+    @Size(max = 200, message = "Location must not exceed 200 characters")
+    private String location;
 
     private java.util.List<String> images;
 

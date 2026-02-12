@@ -37,7 +37,7 @@ public class RecommendationService {
      * Get cars similar to a specific car (Content-Based)
      */
     @Transactional(readOnly = true)
-    public List<VehicleRecommendationDto> getSimilarCars(Long carId) {
+    public List<VehicleRecommendationDto> getSimilarCars(Long carId, String city) {
         log.debug("Generating similar car recommendations for car ID: {}", carId);
 
         return carRepository.findById(carId)
@@ -46,13 +46,29 @@ public class RecommendationService {
                     BigDecimal minPrice = price.multiply(BigDecimal.valueOf(0.8)); // -20%
                     BigDecimal maxPrice = price.multiply(BigDecimal.valueOf(1.2)); // +20%
 
-                    List<Car> similarCars = carRepository.findSimilarCars(
-                            sourceCar.getMake(),
-                            sourceCar.getModel(),
-                            minPrice,
-                            maxPrice,
-                            sourceCar.getId(),
-                            PageRequest.of(0, DEFAULT_RECOMMENDATION_LIMIT));
+                    List<Car> similarCars;
+
+                    if (city != null && !city.isEmpty()) {
+                        similarCars = carRepository.findSimilarCarsInCity(
+                                sourceCar.getMake(),
+                                sourceCar.getModel(),
+
+                                sourceCar.getYear() - 5,
+                                sourceCar.getYear() + 5,
+                                minPrice,
+                                maxPrice,
+                                sourceCar.getId(),
+                                city,
+                                PageRequest.of(0, DEFAULT_RECOMMENDATION_LIMIT));
+                    } else {
+                        similarCars = carRepository.findSimilarCars(
+                                sourceCar.getMake(),
+                                sourceCar.getModel(),
+                                minPrice,
+                                maxPrice,
+                                sourceCar.getId(),
+                                PageRequest.of(0, DEFAULT_RECOMMENDATION_LIMIT));
+                    }
 
                     return similarCars.stream()
                             .map(car -> new VehicleRecommendationDto(
@@ -68,7 +84,7 @@ public class RecommendationService {
      * Get personalized recommendations for a user
      */
     @Transactional(readOnly = true)
-    public List<VehicleRecommendationDto> getPersonalizedRecommendations(Long userId) {
+    public List<VehicleRecommendationDto> getPersonalizedRecommendations(Long userId, String city) {
         log.debug("Generating personalized recommendations for user ID: {}", userId);
 
         // 1. Get Last Viewed Car (Cold Start Mitigation)
@@ -81,7 +97,7 @@ public class RecommendationService {
                     && lastEvent.getTargetId() != null) {
                 try {
                     Long lastViewedCarId = Long.parseLong(lastEvent.getTargetId());
-                    List<VehicleRecommendationDto> similar = getSimilarCars(lastViewedCarId);
+                    List<VehicleRecommendationDto> similar = getSimilarCars(lastViewedCarId, city);
                     if (!similar.isEmpty()) {
                         // Enrich reason
                         similar.forEach(r -> r.setReason("Because you viewed similar cars"));

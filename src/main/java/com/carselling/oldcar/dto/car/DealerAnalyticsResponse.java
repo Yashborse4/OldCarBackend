@@ -14,8 +14,11 @@ public class DealerAnalyticsResponse {
     private long totalViews;
     private long totalInquiries;
     private long totalShares;
+    private long totalSaves;
     private long totalVehicles;
     private double avgDaysOnMarket;
+    private double conversionRate;
+    private int engagementScore;
 
     private List<MonthlyStat> monthlyStats;
     private List<LocationStat> locationStats;

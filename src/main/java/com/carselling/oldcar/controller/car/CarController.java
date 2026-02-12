@@ -27,7 +27,12 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.CacheControl;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.validation.annotation.Validated;
+import com.carselling.oldcar.dto.validation.OnCreate;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * Enhanced Car Controller V2 - Aligned with API Requirements
@@ -83,10 +88,12 @@ public class CarController {
                 Pageable pageable = PageableUtils.createPageable(page, size, sort);
                 Page<PublicCarDTO> cars = carService.getPublicVehicles(pageable);
 
-                return ResponseEntity.ok(ApiResponse.success(
-                                "Public vehicles retrieved",
-                                "List of vehicles with public information",
-                                cars));
+                return ResponseEntity.ok()
+                                .cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS).cachePublic())
+                                .body(ApiResponse.success(
+                                                "Public vehicles retrieved",
+                                                "List of vehicles with public information",
+                                                cars));
         }
 
         /**
@@ -98,7 +105,9 @@ public class CarController {
         public ResponseEntity<ApiResponse<PublicCarDTO>> getPublicVehicleById(@PathVariable String id) {
                 log.debug("Getting public vehicle by ID: {}", id);
                 PublicCarDTO car = carService.getPublicVehicleById(id);
-                return ResponseEntity.ok(ApiResponse.success("Vehicle retrieved", "Public vehicle details", car));
+                return ResponseEntity.ok()
+                                .cacheControl(CacheControl.maxAge(120, TimeUnit.SECONDS).cachePublic())
+                                .body(ApiResponse.success("Vehicle retrieved", "Public vehicle details", car));
         }
 
         /**
@@ -147,7 +156,7 @@ public class CarController {
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
         @Operation(summary = "Create a new vehicle", description = "Create a new vehicle listing")
         public ResponseEntity<ApiResponse<CarResponse>> createVehicle(
-                        @Valid @RequestBody CarRequest request,
+                        @Validated(OnCreate.class) @RequestBody CarRequest request,
                         @Parameter(description = "Idempotency key to prevent duplicate requests") @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey) {
 
                 log.info("Creating new vehicle: {} {} (idempotency key: {})",

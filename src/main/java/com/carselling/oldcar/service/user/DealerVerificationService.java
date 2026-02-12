@@ -14,6 +14,7 @@ import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.DealerVerificationRepository;
 import com.carselling.oldcar.repository.UserRepository;
 import com.carselling.oldcar.service.auth.AuthService;
+import com.carselling.oldcar.service.car.CarService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -36,6 +37,7 @@ public class DealerVerificationService {
     private final DealerVerificationRepository verificationRepository;
     private final UserRepository userRepository;
     private final AuthService authService;
+    private final CarService carService;
 
     /**
      * Submit a new verification request (POST /api/dealer/verification/apply)
@@ -229,6 +231,14 @@ public class DealerVerificationService {
         log.info("DealerVerificationAudit action=APPROVE requestId={} dealerId={} adminId={}",
                 requestId, dealer.getId(), adminId);
 
+        // Auto-activate dealer cars
+        try {
+            carService.activateDealerCars(dealer.getId());
+        } catch (Exception e) {
+            log.error("Failed to auto-activate cars for dealer {}: {}", dealer.getId(), e.getMessage());
+            // Don't fail the verification approval just because auto-publish failed
+        }
+
         return convertToResponseDto(saved);
     }
 
@@ -317,7 +327,8 @@ public class DealerVerificationService {
     private void assertAdmin() {
         User currentUser = requireCurrentUser();
         if (!currentUser.hasRole(Role.ADMIN)) {
-            throw new InsufficientPermissionException("You don't have permission to perform admin verification actions");
+            throw new InsufficientPermissionException(
+                    "You don't have permission to perform admin verification actions");
         }
     }
 }

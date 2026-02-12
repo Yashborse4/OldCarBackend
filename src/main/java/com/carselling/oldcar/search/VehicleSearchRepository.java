@@ -129,9 +129,9 @@ public class VehicleSearchRepository {
   // implementations here.
 
   public List<VehicleSearchDocument> findByActiveTrueAndDealerVerifiedTrue(int page, int size) {
-    Query query = BoolQuery.of(b -> b
+    Query query = Query.of(q -> q.bool(b -> b
         .must(m -> m.term(t -> t.field("active").value(v -> v.booleanValue(true))))
-        .must(m -> m.term(t -> t.field("dealerVerified").value(v -> v.booleanValue(true)))))._toQuery();
+        .must(m -> m.term(t -> t.field("dealerVerified").value(v -> v.booleanValue(true))))));
 
     return search(query, page * size, size);
   }
@@ -155,18 +155,18 @@ public class VehicleSearchRepository {
               .fields("brand^3", "model^3", "variant", "city")));
     }
 
-    return search(bool.build()._toQuery(), page * size, size);
+    return search(Query.of(q -> q.bool(bool.build())), page * size, size);
   }
 
   public List<VehicleSearchDocument> findSuggestions(String prefix) {
     if (prefix == null)
       return new ArrayList<>();
 
-    Query query = BoolQuery.of(b -> b
+    Query query = Query.of(q -> q.bool(b -> b
         .should(s -> s.prefix(p -> p.field("brand").value(prefix)))
         .should(s -> s.prefix(p -> p.field("model").value(prefix)))
         .should(s -> s.wildcard(w -> w.field("brand").value("*" + prefix + "*")))
-        .should(s -> s.wildcard(w -> w.field("model").value("*" + prefix + "*"))))._toQuery();
+        .should(s -> s.wildcard(w -> w.field("model").value("*" + prefix + "*")))));
 
     return search(query, 0, 10);
   }
@@ -189,10 +189,99 @@ public class VehicleSearchRepository {
               .lte(org.opensearch.client.json.JsonData.of(maxPrice))));
     }
 
-    List<VehicleSearchDocument> results = search(bool.build()._toQuery(),
+    List<VehicleSearchDocument> results = search(Query.of(q -> q.bool(bool.build())),
         pageable.getPageNumber() * pageable.getPageSize(), pageable.getPageSize());
 
     // Note: Returning Spring PageImpl ideally needs total count
     return new org.springframework.data.domain.PageImpl<>(results, pageable, results.size());
+  }
+
+  public boolean isClusterHealthy() {
+    try {
+      var health = client.cluster().health();
+      var status = health.status();
+      return status != org.opensearch.client.opensearch._types.HealthStatus.Red;
+    } catch (Exception e) {
+      log.error("Failed to check Elasticsearch cluster health", e);
+      return false;
+    }
+  }
+
+  // --- Index Management for Blue-Green Deployment ---
+
+  public void createIndex(String indexName) {
+    try {
+      client.indices().create(c -> c.index(indexName));
+      log.info("Created new index: {}", indexName);
+    } catch (IOException e) {
+      log.error("Failed to create index {}", indexName, e);
+      throw new RuntimeException("Failed to create index " + indexName, e);
+    }
+  }
+
+  public void updateAlias(String alias, String newIndex) {
+    try {
+      // 1. Check if alias exists and get old indices
+      var exists = client.indices().existsAlias(a -> a.name(alias));
+
+      if (exists.value()) {
+        var aliasResponse = client.indices().getAlias(a -> a.name(alias));
+        List<String> oldIndices = new ArrayList<>(aliasResponse.result().keySet());
+
+        // 2. Atomic switch: remove alias from old indices, add to new index
+        client.indices().updateAliases(u -> {
+          for (String oldIndex : oldIndices) {
+            u.actions(a -> a.remove(r -> r.index(oldIndex).alias(alias)));
+          }
+          u.actions(a -> a.add(ad -> ad.index(newIndex).alias(alias)));
+          return u;
+        });
+
+        // 3. Delete old indices (Optional: could be delayed)
+        for (String oldIndex : oldIndices) {
+          if (!oldIndex.equals(newIndex)) { // Safety check
+            deleteIndex(oldIndex);
+          }
+        }
+      } else {
+        // First time setup
+        client.indices().updateAliases(u -> u.actions(a -> a.add(ad -> ad.index(newIndex).alias(alias))));
+      }
+      log.info("Updated alias {} to point to {}", alias, newIndex);
+    } catch (IOException e) {
+      log.error("Failed to update alias {}", alias, e);
+      throw new RuntimeException("Failed to update alias " + alias, e);
+    }
+  }
+
+  public void deleteIndex(String indexName) {
+    try {
+      client.indices().delete(d -> d.index(indexName));
+      log.info("Deleted index: {}", indexName);
+    } catch (IOException e) {
+      log.error("Failed to delete index {}", indexName, e);
+      // Non-fatal, just log
+    }
+  }
+
+  // Overloaded saveAll for Blue-Green (explicit index)
+  public void saveAll(String indexName, List<VehicleSearchDocument> documents) {
+    if (documents.isEmpty())
+      return;
+
+    try {
+      BulkRequest.Builder br = new BulkRequest.Builder();
+      for (VehicleSearchDocument doc : documents) {
+        br.operations(op -> op
+            .index(idx -> idx
+                .index(indexName)
+                .id(doc.getId())
+                .document(doc)));
+      }
+      client.bulk(br.build());
+    } catch (IOException e) {
+      log.error("Failed to bulk index {} vehicles into {}", documents.size(), indexName, e);
+      throw new RuntimeException("Failed to bulk index vehicles", e);
+    }
   }
 }

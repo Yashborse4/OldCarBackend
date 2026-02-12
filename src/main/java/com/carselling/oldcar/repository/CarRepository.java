@@ -1,6 +1,8 @@
 package com.carselling.oldcar.repository;
 
 import com.carselling.oldcar.model.Car;
+import com.carselling.oldcar.model.CarStatus;
+import com.carselling.oldcar.model.MediaStatus;
 import com.carselling.oldcar.model.DealerStatus; // Added import
 import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.model.User;
@@ -402,6 +404,21 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
                      @Param("excludeId") Long excludeId,
                      Pageable pageable);
 
+       @Query("SELECT c FROM Car c WHERE c.make = :make AND c.model = :model AND " +
+                     "c.year BETWEEN :yearFrom AND :yearTo AND " +
+                     "c.price BETWEEN :priceFrom AND :priceTo AND " +
+                     "c.id != :excludeId AND c.isActive = true AND " +
+                     "(:city IS NULL OR LOWER(c.location) LIKE LOWER(CONCAT('%', :city, '%')))")
+       List<Car> findSimilarCarsInCity(@Param("make") String make,
+                     @Param("model") String model,
+                     @Param("yearFrom") Integer yearFrom,
+                     @Param("yearTo") Integer yearTo,
+                     @Param("priceFrom") BigDecimal priceFrom,
+                     @Param("priceTo") BigDecimal priceTo,
+                     @Param("excludeId") Long excludeId,
+                     @Param("city") String city,
+                     Pageable pageable);
+
        @Query("SELECT AVG(c.price), MIN(c.price), MAX(c.price), COUNT(c) " +
                      "FROM Car c WHERE c.make = :make AND c.model = :model AND " +
                      "(:yearFrom IS NULL OR c.year >= :yearFrom) AND " +
@@ -437,4 +454,22 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        @Override
        @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "images" })
        Page<Car> findAll(org.springframework.data.jpa.domain.Specification<Car> spec, Pageable pageable);
+
+       // Incremental Indexing Support
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "images" })
+       Page<Car> findByUpdatedAtAfter(LocalDateTime updatedAt, Pageable pageable);
+
+       // Optimized startup query to find stuck processing cars without loading
+       // everything
+       List<Car> findByStatusAndMediaStatusAndCreatedAtAfter(CarStatus status, MediaStatus mediaStatus,
+                     LocalDateTime createdAt);
+
+       /**
+        * Find cars due for retry. Used by batch job.
+        * Index: (status, next_retry_at) matches here (partial or full depending on DB
+        * optimizer for mediaStatus)
+        * Limit 10 to batch process
+        */
+       List<Car> findTop10ByStatusAndMediaStatusAndNextRetryAtBeforeOrderByNextRetryAtAsc(
+                     CarStatus status, MediaStatus mediaStatus, LocalDateTime now);
 }

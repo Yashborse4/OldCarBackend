@@ -131,7 +131,7 @@ public class FileController {
         /**
          * DIRECT UPLOAD: Complete
          */
-        @PostMapping("/direct-upload-url")
+        @PostMapping("/direct/complete")
         @PreAuthorize("isAuthenticated()")
         @io.swagger.v3.oas.annotations.Operation(summary = "Get direct upload URL", description = "Get a presigned URL for direct file upload")
         @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {

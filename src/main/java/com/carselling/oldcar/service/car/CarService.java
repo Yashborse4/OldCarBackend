@@ -74,4 +74,6 @@ public interface CarService {
     Long getCarOwnerId(String carId);
 
     java.util.List<CarResponse> getVehiclesByIds(java.util.List<String> ids);
+
+    void activateDealerCars(Long dealerId);
 }

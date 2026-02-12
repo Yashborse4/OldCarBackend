@@ -195,7 +195,8 @@ public interface UserAnalyticsEventRepository extends JpaRepository<UserAnalytic
                         "AND e.targetId IN :carIds AND e.userId IS NOT NULL " +
                         "GROUP BY e.userId, e.targetId " +
                         "ORDER BY COUNT(e) DESC")
-        List<Object[]> getUserViewCountsForCars(@Param("carIds") List<String> carIds, Pageable pageable);
+        org.springframework.data.domain.Slice<Object[]> getUserViewCountsForCars(@Param("carIds") List<String> carIds,
+                        Pageable pageable);
 
         // =============== SCREEN ANALYTICS ===============
 

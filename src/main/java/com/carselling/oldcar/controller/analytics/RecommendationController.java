@@ -13,6 +13,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -34,8 +35,10 @@ public class RecommendationController {
      */
     @GetMapping("/similar/{carId}")
     @Operation(summary = "Get similar cars", description = "Get cars similar to specific listing")
-    public ResponseEntity<ApiResponse<List<VehicleRecommendationDto>>> getSimilarCars(@PathVariable Long carId) {
-        List<VehicleRecommendationDto> recommendations = recommendationService.getSimilarCars(carId);
+    public ResponseEntity<ApiResponse<List<VehicleRecommendationDto>>> getSimilarCars(
+            @PathVariable Long carId,
+            @RequestParam(value = "city", required = false) String city) {
+        List<VehicleRecommendationDto> recommendations = recommendationService.getSimilarCars(carId, city);
         return ResponseEntity.ok(ApiResponse.success("Similar cars retrieved", recommendations));
     }
 
@@ -45,10 +48,11 @@ public class RecommendationController {
     @GetMapping("/personalized")
     @Operation(summary = "Get personalized feed", description = "Get recommendations based on user history")
     public ResponseEntity<ApiResponse<List<VehicleRecommendationDto>>> getPersonalizedRecommendations(
-            Authentication authentication) {
+            Authentication authentication,
+            @RequestParam(value = "city", required = false) String city) {
         if (authentication == null || !authentication.isAuthenticated()) {
             // Return trending if not auth? Or simple empty. Auth is optional?
-            // Usually /personalized implies auth.
+            // Usually /personalized implies auth
             // If we want public trending, maybe another endpoint or handle null here.
             // Let's enforce auth for "personalized".
             return ResponseEntity.status(401).body(ApiResponse.error("Authentication required for personalized feed"));
@@ -56,7 +60,7 @@ public class RecommendationController {
 
         UserPrincipal user = (UserPrincipal) authentication.getPrincipal(); // Assuming principal is UserPrincipal
         List<VehicleRecommendationDto> recommendations = recommendationService
-                .getPersonalizedRecommendations(user.getId());
+                .getPersonalizedRecommendations(user.getId(), city);
 
         return ResponseEntity.ok(ApiResponse.success("Personalized recommendations retrieved", recommendations));
     }

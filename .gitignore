@@ -64,6 +64,7 @@ logs/
 backup*/
 tmp/
 temp/
+agents/
 
 # Test coverage
 *.exec
@@ -195,3 +196,6 @@ build_final*.txt
 build_log*.txt
 build_security*.txt
 compilation_log*.txt
+compile_error.txt
+status_full.txt
+compile_errors.txt

@@ -93,6 +93,12 @@ public class User {
     @Column(length = 100)
     private String location;
 
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
     @Column(name = "phone_number", length = 20)
     @Pattern(regexp = "^[+]?[1-9]\\d{1,14}$", message = "Please provide a valid phone number")
     private String phoneNumber;

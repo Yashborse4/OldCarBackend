@@ -1,8 +1,7 @@
 package com.carselling.oldcar.scheduler;
 
 import com.carselling.oldcar.b2.B2Client;
-import com.backblaze.b2.client.structures.B2UploadFileRequest;
-import com.carselling.oldcar.b2.B2Properties;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,7 +21,8 @@ import java.util.concurrent.TimeUnit;
 public class DatabaseBackupScheduler {
 
     private final B2Client b2Client;
-    private final B2Properties b2Properties;
+
+    private final JobExecutionService jobExecutionService;
 
     @Value("${spring.datasource.url}")
     private String dbUrl;
@@ -37,45 +37,147 @@ public class DatabaseBackupScheduler {
     // "0 0 2 * * *" with zone="Asia/Kolkata"
     @Scheduled(cron = "0 0 2 * * *", zone = "Asia/Kolkata")
     public void scheduleDatabaseBackup() {
-        log.info("Starting scheduled nightly PostgreSQL backup execution at {}", LocalDateTime.now());
+        jobExecutionService.executeWithMetrics("DatabaseBackup", () -> {
+            log.info("Starting scheduled nightly PostgreSQL backup execution at {}", LocalDateTime.now());
 
-        File backupFile = null;
-        try {
-            // 1. Generate Backup File Name
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String fileName = "backup_carselling_" + timestamp + ".sql";
-            backupFile = File.createTempFile("pg_backup_", ".sql");
+            File backupFile = null;
+            try {
+                // 1. Generate Backup File Name
+                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+                String fileName = "backup_carselling_" + timestamp + ".sql";
+                backupFile = File.createTempFile("pg_backup_", ".sql");
 
-            // 2. Perform Dump
-            performPgDump(backupFile);
+                // 2. Perform Dump
+                performPgDump(backupFile);
 
-            if (backupFile.length() == 0) {
-                throw new RuntimeException("Backup file is empty, pg_dump likely failed.");
-            }
+                if (backupFile.length() == 0) {
+                    throw new RuntimeException("Backup file is empty, pg_dump likely failed.");
+                }
 
-            log.info("Database dump created successfully. Size: {} bytes. Uploading to B2...", backupFile.length());
+                // 2a. Calculate Checksum (SHA-1) for verification
+                String localChecksum = calculateSha1(backupFile);
+                log.info("Calculated SHA-1 checksum for backup: {}", localChecksum);
 
-            // 3. Upload to B2
-            String b2Path = "postgresql_backups/" + fileName;
+                log.info("Database dump created successfully. Size: {} bytes. Uploading to B2...", backupFile.length());
 
-            // Using generic map for file info
-            b2Client.uploadFile(b2Path, backupFile, "application/sql", Map.of(
-                    "type", "automated-backup",
-                    "timestamp", timestamp));
+                // 3. Upload to B2
+                String b2Path = "postgresql_backups/" + fileName;
 
-            log.info("Successfully uploaded database backup to B2: {}", b2Path);
+                // Using generic map for file info
+                var uploadResponse = b2Client.uploadFile(b2Path, backupFile, "application/sql", Map.of(
+                        "type", "automated-backup",
+                        "timestamp", timestamp,
+                        "checksum", localChecksum));
 
-        } catch (Exception e) {
-            log.error("Failed to perform scheduled database backup", e);
-        } finally {
-            // 4. Cleanup
-            if (backupFile != null && backupFile.exists()) {
-                boolean deleted = backupFile.delete();
-                if (!deleted) {
-                    log.warn("Failed to delete temporary backup file: {}", backupFile.getAbsolutePath());
+                log.info("Successfully uploaded database backup to B2: {}", b2Path);
+
+                // 3a. Verify Checksum
+                String b2Checksum = uploadResponse.getContentSha1();
+                boolean verified = localChecksum.equalsIgnoreCase(b2Checksum);
+
+                if (!verified && !"none".equalsIgnoreCase(b2Checksum)) {
+                    throw new RuntimeException(
+                            "Backup Verification Failed! Local: " + localChecksum + ", B2: " + b2Checksum);
+                } else if ("none".equalsIgnoreCase(b2Checksum)) {
+                    log.warn("B2 returned 'none' for checksum, skipping strict verification. Local: {}", localChecksum);
+                    verified = true;
+                } else {
+                    log.info("Backup Verified Successfully using SHA-1.");
+                }
+
+                return Map.of("backupSize", backupFile.length(), "b2Path", b2Path, "checksum", localChecksum,
+                        "verified", verified);
+
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to perform scheduled database backup", e);
+            } finally {
+                // 4. Cleanup
+                if (backupFile != null && backupFile.exists()) {
+                    boolean deleted = backupFile.delete();
+                    if (!deleted) {
+                        log.warn("Failed to delete temporary backup file: {}", backupFile.getAbsolutePath());
+                    }
+                }
+
+                // 5. Enforce Retention Policy (Grandfather-Father-Son)
+                try {
+                    cleanupOldBackups();
+                } catch (Exception e) {
+                    log.error("Failed to execute backup retention cleanup", e);
+                    // Don't fail the whole job if cleanup fails, but log it
                 }
             }
+        });
+    }
+
+    private void cleanupOldBackups() {
+        log.info("Starting backup retention cleanup...");
+        String prefix = "postgresql_backups/";
+
+        // 1. List all backups
+        java.util.List<com.backblaze.b2.client.structures.B2FileVersion> allFiles = b2Client.listFiles(prefix);
+        if (allFiles.isEmpty()) {
+            return;
         }
+
+        // 2. Sort by date (descending)
+        allFiles.sort((a, b) -> Long.compare(b.getUploadTimestamp(), a.getUploadTimestamp()));
+
+        java.util.Set<String> filesToKeep = new java.util.HashSet<>();
+        java.time.LocalDate today = java.time.LocalDate.now();
+
+        // Retention Policy:
+        // - Daily: Keep last 7 days
+        // - Weekly: Keep Sundays for last 4 weeks
+        // - Monthly: Keep 1st of month for last 6 months
+
+        // Daily (Last 7 days)
+        for (int i = 0; i < 7; i++) {
+            java.time.LocalDate date = today.minusDays(i);
+            findBackupForDate(allFiles, date).ifPresent(f -> filesToKeep.add(f.getFileId()));
+        }
+
+        // Weekly (Last 4 Sundays)
+        java.time.LocalDate lastSunday = today
+                .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.SUNDAY));
+        for (int i = 0; i < 4; i++) {
+            java.time.LocalDate date = lastSunday.minusWeeks(i);
+            findBackupForDate(allFiles, date).ifPresent(f -> filesToKeep.add(f.getFileId()));
+        }
+
+        // Monthly (Last 6 Months - 1st of Month)
+        for (int i = 0; i < 6; i++) {
+            java.time.LocalDate date = today.minusMonths(i).withDayOfMonth(1);
+            findBackupForDate(allFiles, date).ifPresent(f -> filesToKeep.add(f.getFileId()));
+        }
+
+        // 3. Delete files not in 'keep' set
+        for (com.backblaze.b2.client.structures.B2FileVersion file : allFiles) {
+            // Check if it's a backup file (matches pattern) to avoid deleting other stuff
+            // if any
+            if (!file.getFileName().contains("backup_carselling_")) {
+                continue;
+            }
+
+            if (!filesToKeep.contains(file.getFileId())) {
+                log.info("Retention Cleanup: Deleting old backup {}", file.getFileName());
+                b2Client.deleteFileVersion(file.getFileName(), file.getFileId());
+            }
+        }
+        log.info("Backup retention cleanup completed.");
+    }
+
+    private java.util.Optional<com.backblaze.b2.client.structures.B2FileVersion> findBackupForDate(
+            java.util.List<com.backblaze.b2.client.structures.B2FileVersion> files,
+            java.time.LocalDate date) {
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+        String dateStr = date.format(formatter); // e.g., 20240205
+
+        // Return the *latest* backup for that date (files are sorted desc)
+        return files.stream()
+                .filter(f -> f.getFileName().contains(dateStr))
+                .findFirst();
     }
 
     private void performPgDump(File outputFile) throws IOException, InterruptedException {
@@ -149,5 +251,25 @@ public class DatabaseBackupScheduler {
             }
             throw new RuntimeException("pg_dump exited with error code: " + process.exitValue());
         }
+    }
+
+    private String calculateSha1(File file) throws IOException, java.security.NoSuchAlgorithmException {
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-1");
+        try (java.io.InputStream fis = new java.io.FileInputStream(file)) {
+            byte[] buffer = new byte[8192];
+            int n = 0;
+            while ((n = fis.read(buffer)) != -1) {
+                digest.update(buffer, 0, n);
+            }
+        }
+        byte[] hash = digest.digest();
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : hash) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1)
+                hexString.append('0');
+            hexString.append(hex);
+        }
+        return hexString.toString();
     }
 }

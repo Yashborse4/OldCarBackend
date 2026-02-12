@@ -7,6 +7,7 @@ import com.carselling.oldcar.model.UserAnalyticsEvent;
 import com.carselling.oldcar.model.UserAnalyticsEvent.EventType;
 import com.carselling.oldcar.model.UserAnalyticsEvent.TargetType;
 import com.carselling.oldcar.model.UserSession;
+import com.carselling.oldcar.repository.CarInteractionEventRepository;
 import com.carselling.oldcar.repository.UserAnalyticsEventRepository;
 import com.carselling.oldcar.repository.UserSessionRepository;
 import com.carselling.oldcar.repository.CarRepository;
@@ -32,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class UserAnalyticsService {
 
     private final UserAnalyticsEventRepository eventRepository;
+    private final CarInteractionEventRepository carEventRepository;
     private final UserSessionRepository sessionRepository;
     private final CarRepository carRepository;
     private final com.carselling.oldcar.repository.ChatRoomRepository chatRoomRepository;
@@ -255,36 +257,43 @@ public class UserAnalyticsService {
     // =============== INSIGHTS ===============
 
     /**
-     * Get car-level insights
+     * Get car-level insights (Legacy / Quick Check)
      */
     @Transactional(readOnly = true)
     public Map<String, Object> getCarInsights(String carId) {
+        // Use generic event repo for this legacy method or simple check
         Map<String, Object> insights = new HashMap<>();
+        try {
+            Long cId = Long.parseLong(carId);
 
-        // Event counts by type
-        List<Object[]> eventCounts = eventRepository.getCarEventCounts(carId);
-        Map<String, Long> events = new HashMap<>();
-        for (Object[] row : eventCounts) {
-            events.put(((EventType) row[0]).name(), (Long) row[1]);
+            // Use CarInteractionEventRepository for accuracy
+            List<Object[]> eventCounts = carEventRepository.getEventCountsByCarId(cId);
+            Map<String, Long> events = new HashMap<>();
+            for (Object[] row : eventCounts) {
+                events.put(((com.carselling.oldcar.model.CarInteractionEvent.EventType) row[0]).name(), (Long) row[1]);
+            }
+            insights.put("eventCounts", events);
+
+            insights.put("totalViews", carEventRepository.countViewsByCarId(cId));
+            insights.put("uniqueViewers", carEventRepository.countUniqueViewersByCarId(cId));
+
+            // Trend (last 30 days)
+            LocalDateTime startDate = LocalDateTime.now().minusDays(30);
+            List<Object[]> dailyViews = carEventRepository.getDailyViewCountsByCarId(cId, startDate);
+            insights.put("dailyViews", dailyViews);
+
+        } catch (NumberFormatException e) {
+            // fallback
         }
-        insights.put("eventCounts", events);
-
-        // Basic metrics
-        insights.put("totalViews", eventRepository.countCarViews(carId));
-        insights.put("uniqueViewers", eventRepository.countUniqueCarViewers(carId));
-        insights.put("avgViewDuration", eventRepository.getAverageCarViewDuration(carId));
-
-        // Trend (last 30 days)
-        LocalDateTime startDate = LocalDateTime.now().minusDays(30);
-        List<Object[]> dailyViews = eventRepository.getDailyCarViews(carId, startDate);
-        insights.put("dailyViews", dailyViews);
-
         return insights;
     }
 
     /**
-     * Get dealer performance insights
+     * Get Dealer
+     * 
+     * performance insights (List of cars)
      */
+
     @Transactional(readOnly = true)
     public Map<String, Object> getDealerInsights(List<String> carIds) {
         Map<String, Object> insights = new HashMap<>();
@@ -299,34 +308,185 @@ public class UserAnalyticsService {
         for (Object[] row : engagement) {
             events.put(((EventType) row[0]).name(), (Long) row[1]);
         }
-        insights.put("totalEngagement", events);
-
         return insights;
     }
 
     /**
+     * Get full analytics for a single car (Event-Sourced).
+     * Calculates KPIs like conversion rate, engagement score, and contact rate.
+     */
+    @Transactional(readOnly = true)
+    public com.carselling.oldcar.dto.car.CarAnalyticsResponse getCarAnalytics(Long carId) {
+        // 1. Get raw event counts from CarInteractionEvent
+        List<Object[]> eventCounts = carEventRepository.getEventCountsByCarId(carId);
+        long views = 0;
+        long shares = 0;
+        long saves = 0;
+        long chatInquiries = 0;
+        long callInquiries = 0;
+        long whatsappInquiries = 0;
+        long contactClicks = 0;
+
+        for (Object[] row : eventCounts) {
+            com.carselling.oldcar.model.CarInteractionEvent.EventType type = (com.carselling.oldcar.model.CarInteractionEvent.EventType) row[0];
+            Long count = (Long) row[1];
+            switch (type) {
+                case CAR_VIEW -> views = count;
+                case SHARE -> shares = count;
+                case SAVE -> saves = count;
+                case CHAT_OPEN -> chatInquiries = count;
+                case CALL_CLICK -> callInquiries = count;
+                case WHATSAPP_CLICK -> whatsappInquiries = count;
+                case CONTACT_CLICK -> contactClicks = count;
+                case TEST_DRIVE_REQUEST -> contactClicks += count;
+                case COMPARE_ADD, IMAGE_VIEW, UNSAVE -> {
+                } // Ignore these for now
+            }
+        }
+
+        // 2. Unique viewers
+        long uniqueViewers = carEventRepository.countUniqueViewersByCarId(carId);
+
+        // 3. KPI Calculations
+        long totalContacts = chatInquiries + callInquiries + whatsappInquiries + contactClicks;
+
+        double conversionRate = 0.0;
+        if (views > 0) {
+            conversionRate = ((double) totalContacts / views) * 100.0;
+        }
+
+        double contactRate = 0.0;
+        if (uniqueViewers > 0) {
+            contactRate = ((double) totalContacts / uniqueViewers) * 100.0;
+        }
+
+        // Engagement Score (0-100)
+        long weightedScore = (views * 1) + (saves * 10) + (shares * 20) + (totalContacts * 50);
+        int engagementScore = (int) Math.min(100, (weightedScore / 10));
+
+        // 4. Daily Views Trend (Last 30 days)
+        LocalDateTime thirtyDaysAgo = java.time.LocalDate.now().minusDays(30).atStartOfDay();
+        List<Object[]> dailyViewData = carEventRepository.getDailyViewCountsByCarId(carId, thirtyDaysAgo);
+        List<com.carselling.oldcar.dto.car.CarAnalyticsResponse.DailyView> viewsTimeline = new ArrayList<>();
+
+        long dailyViews = 0; // Today
+        long weeklyViews = 0; // Last 7 days
+        long monthlyViews = 0; // Last 30 days
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate sevenDaysAgoDate = today.minusDays(7);
+
+        for (Object[] row : dailyViewData) {
+            java.time.LocalDate date = null;
+            if (row[0] instanceof java.sql.Date) {
+                date = ((java.sql.Date) row[0]).toLocalDate();
+            } else if (row[0] instanceof java.util.Date) {
+                date = ((java.util.Date) row[0]).toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+            } else {
+                date = java.time.LocalDate.parse(row[0].toString());
+            }
+
+            Long count = (Long) row[1];
+
+            viewsTimeline.add(com.carselling.oldcar.dto.car.CarAnalyticsResponse.DailyView.builder()
+                    .date(date.toString())
+                    .views(count)
+                    .build());
+
+            monthlyViews += count;
+            if (!date.isBefore(sevenDaysAgoDate)) {
+                weeklyViews += count;
+            }
+            if (date.equals(today)) {
+                dailyViews += count;
+            }
+        }
+
+        return com.carselling.oldcar.dto.car.CarAnalyticsResponse.builder()
+                .vehicleId(carId.toString())
+                .views(views)
+                .uniqueViewers(uniqueViewers)
+                .inquiries(totalContacts)
+                .shares(shares)
+                .saves(saves)
+                .conversionRate(Math.round(conversionRate * 10.0) / 10.0)
+                .contactRate(Math.round(contactRate * 10.0) / 10.0)
+                .engagementScore(engagementScore)
+                .viewsBreakdown(com.carselling.oldcar.dto.car.CarAnalyticsResponse.ViewsBreakdown.builder()
+                        .dailyViews(dailyViews)
+                        .weeklyViews(weeklyViews)
+                        .monthlyViews(monthlyViews)
+                        .viewsTimeline(viewsTimeline)
+                        .build())
+                .inquiriesBreakdown(com.carselling.oldcar.dto.car.CarAnalyticsResponse.InquiriesBreakdown.builder()
+                        .chatInquiries(chatInquiries)
+                        .callInquiries(callInquiries)
+                        .whatsappInquiries(whatsappInquiries)
+                        .totalContacts(totalContacts)
+                        .commonQuestions(List.of())
+                        .build())
+                .build();
+    }
+
+    /**
      * Get Dealer Dashboard Statistics
-     * Aggregates data from Cars and Chats
      */
     @Transactional(readOnly = true)
     public com.carselling.oldcar.dto.car.DealerDashboardResponse getDealerDashboardStats(Long dealerId) {
         log.debug("Getting dealer dashboard statistics for user: {}", dealerId);
 
-        // Optimized count query instead of countByOwnerId which might be generic
-        // Note: activeCars variable was unused in original code, but calculation is
-        // useful context
-        // long activeCars = carRepository.countActiveCarsByOwnerId(dealerId);
+        // Use CarInteractionEventRepository logic (Aggregate all cars)
+        List<Long> carIds = carRepository.findCarIdsByOwnerId(dealerId);
 
-        Long totalViewsRaw = carRepository.sumViewCountByOwnerId(dealerId);
-        long totalViews = totalViewsRaw != null ? totalViewsRaw : 0L;
+        long totalViews = 0;
+        long totalShares = 0;
+        long totalSaves = 0;
+        long totalInquiriesEvents = 0;
 
+        if (!carIds.isEmpty()) {
+            List<Object[]> dealerEvents = carEventRepository.getDealerTotalEngagement(carIds);
+            for (Object[] row : dealerEvents) {
+                com.carselling.oldcar.model.CarInteractionEvent.EventType type = (com.carselling.oldcar.model.CarInteractionEvent.EventType) row[0];
+                Long count = (Long) row[1];
+
+                if (type == com.carselling.oldcar.model.CarInteractionEvent.EventType.CAR_VIEW) {
+                    totalViews += count;
+                } else if (type == com.carselling.oldcar.model.CarInteractionEvent.EventType.SHARE) {
+                    totalShares += count;
+                } else if (type == com.carselling.oldcar.model.CarInteractionEvent.EventType.SAVE) {
+                    totalSaves += count;
+                } else if (type == com.carselling.oldcar.model.CarInteractionEvent.EventType.CONTACT_CLICK
+                        || type == com.carselling.oldcar.model.CarInteractionEvent.EventType.CHAT_OPEN
+                        || type == com.carselling.oldcar.model.CarInteractionEvent.EventType.WHATSAPP_CLICK
+                        || type == com.carselling.oldcar.model.CarInteractionEvent.EventType.CALL_CLICK) {
+                    totalInquiriesEvents += count;
+                }
+            }
+        }
+
+        // 2. Counts from other sources
         long contactRequests = chatRoomRepository.countCarInquiryChatsForSeller(dealerId);
         long totalUniqueVisitors = chatParticipantRepository.countUniqueInquiryUsersForSeller(dealerId);
+        long totalCarsAdded = carRepository.countByOwnerId(dealerId);
+        long activeCars = carRepository.countActiveCarsByOwnerId(dealerId);
+
+        // 3. Calculate KPIs
+        // Total inquiries = chat requests (actual chats) + click events (intent)
+        long totalLeads = contactRequests + totalInquiriesEvents;
+
+        double conversionRate = 0.0;
+        if (totalViews > 0) {
+            conversionRate = ((double) totalLeads / totalViews) * 100.0;
+        }
 
         return com.carselling.oldcar.dto.car.DealerDashboardResponse.builder()
                 .totalViews(totalViews)
                 .totalUniqueVisitors(totalUniqueVisitors)
+                .totalCarsAdded(totalCarsAdded)
+                .activeCars(activeCars)
                 .contactRequestsReceived(contactRequests)
+                .totalShares(totalShares)
+                .totalSaves(totalSaves)
+                .conversionRate(Math.round(conversionRate * 10.0) / 10.0)
                 .build();
     }
 
@@ -335,7 +495,7 @@ public class UserAnalyticsService {
      */
     @Transactional(readOnly = true)
     public com.carselling.oldcar.dto.car.DealerAnalyticsResponse getDealerAnalytics(Long dealerId) {
-        // 1. Get all car IDs for this dealer (Optimized: ID projection only)
+        // 1. Get all car IDs for this dealer
         List<Long> carIdLongs = carRepository.findCarIdsByOwnerId(dealerId);
 
         if (carIdLongs.isEmpty()) {
@@ -344,45 +504,63 @@ public class UserAnalyticsService {
                     .totalViews(0)
                     .totalInquiries(0)
                     .totalShares(0)
+                    .totalSaves(0)
                     .avgDaysOnMarket(0)
+                    .conversionRate(0.0)
+                    .engagementScore(0)
                     .monthlyStats(Collections.emptyList())
                     .locationStats(Collections.emptyList())
                     .topPerformers(Collections.emptyList())
                     .build();
         }
 
-        List<String> carIds = carIdLongs.stream().map(String::valueOf).toList();
-
         // 2. Aggregate Totals
-        // Use single query results filtered in memory (list of aggregates, small size)
-        List<Object[]> totalEngagement = eventRepository.getDealerTotalEngagement(carIds);
+        List<Object[]> totalEngagement = carEventRepository.getDealerTotalEngagement(carIdLongs);
 
         long totalViews = 0;
         long totalInquiries = 0;
         long totalShares = 0;
+        long totalSaves = 0;
 
         for (Object[] row : totalEngagement) {
-            EventType type = (EventType) row[0];
+            com.carselling.oldcar.model.CarInteractionEvent.EventType type = (com.carselling.oldcar.model.CarInteractionEvent.EventType) row[0];
             Long count = (Long) row[1];
-            if (type == EventType.CAR_VIEW)
+            if (type == com.carselling.oldcar.model.CarInteractionEvent.EventType.CAR_VIEW)
                 totalViews += count;
-            else if (type == EventType.CAR_CONTACT_CLICK || type == EventType.CAR_CALL_CLICK
-                    || type == EventType.CAR_CHAT_OPEN || type == EventType.CAR_WHATSAPP_CLICK)
+            else if (type == com.carselling.oldcar.model.CarInteractionEvent.EventType.CONTACT_CLICK
+                    || type == com.carselling.oldcar.model.CarInteractionEvent.EventType.CALL_CLICK
+                    || type == com.carselling.oldcar.model.CarInteractionEvent.EventType.CHAT_OPEN
+                    || type == com.carselling.oldcar.model.CarInteractionEvent.EventType.WHATSAPP_CLICK)
                 totalInquiries += count;
-            else if (type == EventType.CAR_SHARE)
+            else if (type == com.carselling.oldcar.model.CarInteractionEvent.EventType.SHARE)
                 totalShares += count;
+            else if (type == com.carselling.oldcar.model.CarInteractionEvent.EventType.SAVE)
+                totalSaves += count;
         }
 
-        // 3. Calculate Avg Days on Market (Optimized: DB calculation)
+        // 3. Calculate KPIs
+        double conversionRate = 0.0;
+        if (totalViews > 0) {
+            conversionRate = ((double) totalInquiries / totalViews) * 100.0;
+        }
+
+        // Engagement Score Calculation (Average across portfolio)
+        long totalWeightedScore = (totalViews * 1) + (totalSaves * 10) + (totalShares * 20) + (totalInquiries * 50);
+        int engagementScore = 0;
+        if (!carIdLongs.isEmpty()) {
+            long avgWeightedScore = totalWeightedScore / carIdLongs.size();
+            engagementScore = (int) Math.min(100, avgWeightedScore / 5);
+        }
+
+        // 4. Calculate Avg Days on Market
         Double avgDaysVal = carRepository.getAverageCarAgeInDaysByOwnerId(dealerId);
         double avgDays = avgDaysVal != null ? avgDaysVal : 0.0;
 
-        // 4. Monthly Stats (Last 6 Months)
+        // 5. Monthly Stats (Last 6 Months)
         LocalDateTime sixMonthsAgo = LocalDateTime.now().minusMonths(6);
-        List<Object[]> monthlyViews = eventRepository.getDealerMonthlyViews(carIds, sixMonthsAgo);
-        List<Object[]> monthlyInquiries = eventRepository.getDealerMonthlyInquiries(carIds, sixMonthsAgo);
+        List<Object[]> monthlyViews = carEventRepository.getDealerMonthlyViews(carIdLongs, sixMonthsAgo);
+        List<Object[]> monthlyInquiries = carEventRepository.getDealerMonthlyInquiries(carIdLongs, sixMonthsAgo);
 
-        // Merge lists into DTO
         Map<String, com.carselling.oldcar.dto.car.DealerAnalyticsResponse.MonthlyStat> statsMap = new LinkedHashMap<>();
 
         // Populate views
@@ -401,8 +579,8 @@ public class UserAnalyticsService {
             statsMap.get(month).setInquiries((Long) row[1]);
         }
 
-        // 5. Location Stats
-        List<Object[]> locationData = eventRepository.getDealerLocationStats(carIds);
+        // 6. Location Stats
+        List<Object[]> locationData = carEventRepository.getDealerLocationStats(carIdLongs);
         List<com.carselling.oldcar.dto.car.DealerAnalyticsResponse.LocationStat> locationStats = locationData.stream()
                 .limit(5)
                 .map(row -> com.carselling.oldcar.dto.car.DealerAnalyticsResponse.LocationStat.builder()
@@ -411,23 +589,26 @@ public class UserAnalyticsService {
                         .build())
                 .toList();
 
-        // 6. Top Performers (Top 5 viewed cars)
-        List<String> topCarIds = eventRepository.findTopPerformedCarIds(carIds,
+        // 7. Top Performers (Top 5 viewed cars)
+        List<Long> topCarIds = carEventRepository.findTopPerformedCarIds(carIdLongs,
                 org.springframework.data.domain.PageRequest.of(0, 5));
 
         List<com.carselling.oldcar.dto.car.CarResponse> topPerformers = Collections.emptyList();
 
         if (!topCarIds.isEmpty()) {
-            // Fetch full car details using CarService to reuse mapping logic
-            topPerformers = carService.getVehiclesByIds(topCarIds);
+            List<String> topCarIdStrings = topCarIds.stream().map(Object::toString).toList();
+            topPerformers = carService.getVehiclesByIds(topCarIdStrings);
         }
 
         return com.carselling.oldcar.dto.car.DealerAnalyticsResponse.builder()
-                .totalVehicles(carIds.size())
+                .totalVehicles(carIdLongs.size())
                 .totalViews(totalViews)
                 .totalInquiries(totalInquiries)
                 .totalShares(totalShares)
+                .totalSaves(totalSaves)
                 .avgDaysOnMarket(avgDays)
+                .conversionRate(Math.round(conversionRate * 10.0) / 10.0)
+                .engagementScore(engagementScore)
                 .monthlyStats(new ArrayList<>(statsMap.values()))
                 .locationStats(locationStats)
                 .topPerformers(topPerformers)
@@ -446,10 +627,11 @@ public class UserAnalyticsService {
         if (carIdLongs.isEmpty()) {
             return org.springframework.data.domain.Page.empty(pageable);
         }
-        List<String> carIds = carIdLongs.stream().map(String::valueOf).toList();
 
         // 2. Aggregate views by User+Car
-        List<Object[]> rows = eventRepository.getUserViewCountsForCars(carIds, pageable);
+        org.springframework.data.domain.Slice<Object[]> slice = carEventRepository.getUserViewCountsForCars(carIdLongs,
+                pageable);
+        List<Object[]> rows = slice.getContent();
 
         if (rows.isEmpty()) {
             return org.springframework.data.domain.Page.empty(pageable);
@@ -461,7 +643,7 @@ public class UserAnalyticsService {
 
         for (Object[] row : rows) {
             userIds.add((Long) row[0]);
-            involvedCarIds.add(Long.parseLong((String) row[1]));
+            involvedCarIds.add((Long) row[1]);
         }
 
         // 4. Fetch Entities
@@ -476,27 +658,26 @@ public class UserAnalyticsService {
 
         for (Object[] row : rows) {
             Long userId = (Long) row[0];
-            String carIdStr = (String) row[1];
+            Long carId = (Long) row[1];
             Long count = (Long) row[2];
 
             com.carselling.oldcar.model.User user = userMap.get(userId);
-            com.carselling.oldcar.model.Car car = carMap.get(Long.parseLong(carIdStr));
+            com.carselling.oldcar.model.Car car = carMap.get(carId);
 
-            // Only add if both entities exist (consistency check)
             if (user != null && car != null) {
                 dtos.add(com.carselling.oldcar.dto.analytics.CarViewerDto.builder()
                         .userId(userId)
                         .userName(user.getDisplayName())
                         .userEmail(user.getEmail())
                         .userProfileImage(user.getProfileImageUrl())
-                        .carId(carIdStr)
+                        .carId(carId.toString())
                         .carMake(car.getMake())
                         .carModel(car.getModel())
                         .carYear(car.getYear())
                         .carImage(car.getImages().isEmpty() ? null : car.getImages().get(0))
                         .carPrice(car.getPrice() != null ? car.getPrice().longValue() : 0L)
                         .viewCount(count)
-                        .lastViewedAt(count + " views") // Simple representation
+                        .lastViewedAt(count + " views")
                         .build());
             }
         }
@@ -522,9 +703,24 @@ public class UserAnalyticsService {
     @Transactional
     public void expireStaleSessions() {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(30);
-        int expired = sessionRepository.expireStaleSessions(cutoff);
-        if (expired > 0) {
-            log.info("Expired {} stale sessions", expired);
+        // Batch processing to avoid large table locks
+        int totalExpired = 0;
+        // Process up to 10 batches (10,000 records) per run to avoid infinite loops if
+        // backlog is huge
+        for (int i = 0; i < 10; i++) {
+            List<UserSession> staleSessions = sessionRepository.findTop1000ByIsActiveTrueAndStartedAtBefore(cutoff);
+            if (staleSessions.isEmpty()) {
+                break;
+            }
+
+            List<String> ids = staleSessions.stream().map(UserSession::getSessionId).toList();
+            int count = sessionRepository.expireSessionsByIds(ids);
+            totalExpired += count;
+            log.debug("Expired batch {} of {} sessions", i + 1, count);
+        }
+
+        if (totalExpired > 0) {
+            log.info("Expired total {} stale sessions", totalExpired);
         }
     }
 

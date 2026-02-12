@@ -137,6 +137,7 @@ public class JwtTokenProvider {
             case DEALER -> List.of("ROLE_DEALER", "car:read", "car:create", "car:update:own",
                     "car:delete:own", "car:feature", "analytics:view");
             case USER -> List.of("ROLE_USER", "car:read", "car:create", "car:update:own", "car:delete:own");
+            case ANONYMOUS -> List.of("ROLE_ANONYMOUS");
         };
     }
 

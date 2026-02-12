@@ -46,6 +46,8 @@ public class UserResponse {
     private String showroomName;
     private String address;
     private String city;
+    private Double latitude;
+    private Double longitude;
 
     // Helper method
     public String getDisplayName() {

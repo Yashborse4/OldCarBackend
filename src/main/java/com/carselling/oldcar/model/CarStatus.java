@@ -10,6 +10,7 @@ public enum CarStatus {
     RESERVED, // Temporarily held
     ARCHIVED, // Hidden by owner
     DELETED, // Soft deleted
-    PROCESSING // System is processing (e.g., media upload) - though MediaStatus handles
-               // specific media
+    PROCESSING, // System is processing (e.g., media upload) - though MediaStatus handles
+                // specific media
+    PENDING_VERIFICATION // Waiting for dealer verification
 }

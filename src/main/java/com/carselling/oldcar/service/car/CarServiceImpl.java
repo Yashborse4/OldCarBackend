@@ -6,7 +6,6 @@ import com.carselling.oldcar.dto.car.PublicCarDTO;
 import com.carselling.oldcar.dto.car.PrivateCarDTO;
 import com.carselling.oldcar.dto.car.CarSearchCriteria;
 import com.carselling.oldcar.dto.car.CarAnalyticsResponse;
-
 import com.carselling.oldcar.dto.CarStatistics;
 import com.carselling.oldcar.dto.user.UserSummary;
 import com.carselling.oldcar.model.Role;
@@ -29,21 +28,31 @@ import com.carselling.oldcar.specification.CarSpecification;
 import com.carselling.oldcar.service.auth.AuthService;
 import com.carselling.oldcar.service.FileValidationService;
 import com.carselling.oldcar.service.MediaFinalizationService;
-import com.carselling.oldcar.service.TempFileTransferService;
+
 import com.carselling.oldcar.service.AuditLogService;
+import com.carselling.oldcar.service.ViewCountService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.multipart.MultipartFile;
@@ -64,9 +73,12 @@ public class CarServiceImpl implements CarService {
     private final B2FileService b2FileService; // Injected instead of Firebase
     private final FileValidationService fileValidationService;
     private final com.carselling.oldcar.repository.UploadedFileRepository uploadedFileRepository;
+    private final com.carselling.oldcar.repository.TemporaryFileRepository temporaryFileRepository;
     private final MediaFinalizationService mediaFinalizationService;
-    private final TempFileTransferService tempFileTransferService;
+
     private final AuditLogService auditLogService;
+    private final ViewCountService viewCountService;
+    private final PlatformTransactionManager transactionManager;
 
     /**
      * Get all vehicles with pagination
@@ -88,13 +100,15 @@ public class CarServiceImpl implements CarService {
     }
 
     /**
-     * Get vehicle by ID
+     * Get vehicle by ID.
+     * View count is incremented asynchronously via {@link ViewCountService}
+     * to avoid a write bottleneck on every read.
      */
-    @Transactional
+    @Transactional(readOnly = true)
     public CarResponse getVehicleById(String id) {
         log.debug("Getting vehicle by ID: {}", id);
 
-        Car car = findCarAndEnsureVersion(Long.parseLong(id));
+        Car car = findCarAndEnsureVersion(parseCarId(id));
 
         if (car.getStatus() == CarStatus.DELETED) {
             throw new ResourceNotFoundException("Car", "id", id);
@@ -111,16 +125,19 @@ public class CarServiceImpl implements CarService {
             throw new ResourceNotFoundException("Car", "id", id);
         }
 
-        // Increment view count
-        car.setViewCount(car.getViewCount() != null ? (long) car.getViewCount() + 1L : 1L);
-        carRepository.save(car);
+        // Fire-and-forget: async bulk UPDATE instead of load-modify-save
+        // Owner's own views are excluded by ViewCountService
+        Long viewerUserId = currentUser != null ? currentUser.getId() : null;
+        viewCountService.incrementAsync(car.getId(), viewerUserId, car.getOwner().getId());
 
         return convertToResponseV2(car);
     }
 
     /**
-     * Get all public vehicles
+     * Get all public vehicles.
+     * Cached for 2 minutes to reduce DB hits on the most-trafficked listing page.
      */
+    @Cacheable(value = "publicCars", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()")
     @Transactional(readOnly = true)
     public Page<PublicCarDTO> getPublicVehicles(Pageable pageable) {
         // Enforce visibility: USER = Always, DEALER = Only if verified using efficient
@@ -130,11 +147,14 @@ public class CarServiceImpl implements CarService {
     }
 
     /**
-     * Get public vehicle by ID
+     * Get public vehicle by ID.
+     * Cached for 5 minutes — individual car details change less often than
+     * listings.
      */
+    @Cacheable(value = "publicCarDetail", key = "#id")
     @Transactional(readOnly = true)
     public PublicCarDTO getPublicVehicleById(String id) {
-        Car car = carRepository.findById(Long.parseLong(id))
+        Car car = carRepository.findById(parseCarId(id))
                 .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
 
         if (car.getStatus() == CarStatus.DELETED) {
@@ -149,20 +169,22 @@ public class CarServiceImpl implements CarService {
     }
 
     /**
-     * Get private vehicle by ID (Authenticated)
+     * Get private vehicle by ID (Authenticated).
+     * View count is incremented asynchronously.
      */
     @Transactional(readOnly = true)
     public PrivateCarDTO getPrivateVehicleById(String id) {
-        Car car = carRepository.findById(Long.parseLong(id))
+        Car car = carRepository.findById(parseCarId(id))
                 .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
 
         if (car.getStatus() == CarStatus.DELETED) {
             throw new ResourceNotFoundException("Car", "id", id);
         }
 
-        // Increment view count
-        car.setViewCount(car.getViewCount() != null ? (long) car.getViewCount() + 1L : 1L);
-        carRepository.save(car);
+        // Fire-and-forget: async bulk UPDATE — owner views excluded
+        User currentUser = authService.getCurrentUserOrNull();
+        Long viewerUserId = currentUser != null ? currentUser.getId() : null;
+        viewCountService.incrementAsync(car.getId(), viewerUserId, car.getOwner().getId());
 
         return convertToPrivateDTO(car);
     }
@@ -240,9 +262,17 @@ public class CarServiceImpl implements CarService {
 
     /**
      * Create vehicle with optional idempotency key.
+     * Evicts public car caches so new listings appear immediately.
      */
+    @Caching(evict = {
+            @CacheEvict(value = "publicCars", allEntries = true),
+            @CacheEvict(value = "publicCarDetail", allEntries = true)
+    })
     public CarResponse createVehicle(CarRequest request, Long currentUserId, String idempotencyKey) {
         log.debug("Creating new vehicle for user: {} (idempotency: {})", currentUserId, idempotencyKey);
+
+        // Validate request inputs
+        validateCarRequest(request);
 
         // Check for duplicate request using idempotency key
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -285,6 +315,7 @@ public class CarServiceImpl implements CarService {
                 .latitude(request.getLatitude())
                 .longitude(request.getLongitude())
                 .location(request.getLocation())
+                .registrationNumber(request.getRegistrationNumber())
                 // Initialize as INACTIVE until media is ready
                 .isActive(false)
                 .isAvailable(false)
@@ -294,7 +325,7 @@ public class CarServiceImpl implements CarService {
                 .owner(owner)
                 // Ignore images in initial creation - they must be uploaded via upload API
                 .images(new ArrayList<>())
-                .status(CarStatus.DRAFT)
+                .status(CarStatus.PROCESSING)
                 .mediaStatus(MediaStatus.INIT)
                 .idempotencyKey(idempotencyKey)
                 .createdAt(LocalDateTime.now())
@@ -322,73 +353,64 @@ public class CarServiceImpl implements CarService {
 
         Car savedCar = carRepository.save(car); // Save first to get ID for folder structure
 
-        // Finalize Temporary Media if provided
+        // Link Temporary Files to Car and Trigger Finalization
         if (request.getTempFileIds() != null && !request.getTempFileIds().isEmpty()) {
+
+            // 1. Link TemporaryFiles to Car (Crucial for resume logic)
+            // Using injected temporaryFileRepository
+            List<com.carselling.oldcar.model.TemporaryFile> temporaryFiles = temporaryFileRepository
+                    .findAllById(request.getTempFileIds());
+
+            log.info("Found {} temporary files for car creation (IDs: {})", temporaryFiles.size(),
+                    request.getTempFileIds());
+
             // Validate limits (Max 9 images, 1 video)
-            List<UploadedFile> tempFiles = uploadedFileRepository.findAllById(request.getTempFileIds());
-            long videoCount = tempFiles.stream()
+            long videoCount = temporaryFiles.stream()
                     .filter(f -> fileValidationService.isVideoFile(f.getOriginalFileName()))
                     .count();
             if (videoCount > 1) {
                 throw new BusinessException("Maximum 1 video allowed per vehicle");
             }
 
-            long imageCount = tempFiles.stream()
+            long imageCount = temporaryFiles.stream()
                     .filter(f -> fileValidationService.isImageFile(f.getOriginalFileName()))
                     .count();
             if (imageCount > 9) {
                 throw new BusinessException("Maximum 9 images allowed per vehicle");
             }
 
-            try {
-                log.info("Finalizing {} temporary files for car {}", request.getTempFileIds().size(), savedCar.getId());
-                String targetFolder = "cars/" + savedCar.getId() + "/images";
-
-                List<UploadedFile> finalizedFiles = mediaFinalizationService
-                        .finalizeUploads(request.getTempFileIds(), targetFolder,
-                                ResourceType.CAR_IMAGE, savedCar.getId(), owner);
-
-                if (finalizedFiles.isEmpty()) {
-                    log.warn("Media finalization returned no files for car {}. Marking as FAILED.", savedCar.getId());
-                    car.setMediaStatus(MediaStatus.FAILED);
-                    // Keep DRAFT
-                } else {
-                    List<String> finalizedUrls = finalizedFiles.stream()
-                            .map(UploadedFile::getFileUrl)
-                            .collect(Collectors.toList());
-
-                    car.setImages(finalizedUrls);
-
-                    // If we have images, set the first as banner
-                    if (!finalizedUrls.isEmpty()) {
-                        car.setImageUrl(finalizedUrls.get(0));
-                    }
-
-                    car.setMediaStatus(MediaStatus.READY);
-
-                    // If verified dealer, auto active? logic duplicated from uploadMedia
-                    autoActivateIfEligible(car);
-                }
-
-                // Save again with images and status
-                savedCar = carRepository.save(car);
-
-            } catch (Exception e) {
-                log.error("Failed to finalize media for car {}: {}", savedCar.getId(), e.getMessage());
-                // Explicitly fail media status
-                car.setMediaStatus(MediaStatus.FAILED);
-                carRepository.save(car);
-                // We do NOT throw exception here to allow the Car to be created, enabling the
-                // user to retry upload
+            // 2. Set Car ID and Save
+            for (com.carselling.oldcar.model.TemporaryFile tf : temporaryFiles) {
+                tf.setCarId(savedCar.getId());
             }
-        }
+            temporaryFileRepository.saveAll(temporaryFiles);
+            log.info("Linked {} temporary files to Car ID: {}", temporaryFiles.size(), savedCar.getId());
 
-        // Legacy fallback:If imageUrl (Banner) is NOT provided, but we have images, use
-        // the first
-        // one as banner
-        if ((car.getImageUrl() == null || car.getImageUrl().isBlank()) && !car.getImages().isEmpty()) {
-            car.setImageUrl(car.getImages().get(0));
-            carRepository.save(car); // Save update
+            // 3. Trigger Async Finalization
+            // Running in background thread to return response immediately
+            // 3. Trigger Async Finalization AFTER transaction commit
+            // This prevents race condition where async thread reads carId=null before
+            // commit
+            final Long carId = savedCar.getId();
+            final List<Long> fileIds = request.getTempFileIds();
+            final Long userId = currentUserId;
+
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                                try {
+                                    finalizeMedia(String.valueOf(carId), fileIds, userId);
+                                } catch (Exception e) {
+                                    log.error("Async media finalization failed for car {}", carId, e);
+                                }
+                            });
+                        }
+                    });
+
+            // Return immediately with PROCESSING status (set during build)
+            return convertToResponseV2(savedCar);
         }
 
         log.info("Created new vehicle with ID: {} for user: {}", savedCar.getId(), currentUserId);
@@ -396,6 +418,67 @@ public class CarServiceImpl implements CarService {
                 "Vehicle created by user " + currentUserId);
 
         return convertToResponseV2(savedCar);
+    }
+
+    /**
+     * Finalizes media for a car.
+     * Designed to be idempotent and resumable.
+     */
+    public CarResponse finalizeMedia(String carIdStr, List<Long> tempFileIds, Long currentUserId) {
+        Long carId = parseCarId(carIdStr);
+        Car car = findCarAndEnsureVersion(carId);
+        User owner = car.getOwner();
+
+        // Security check
+        if (currentUserId != null && !owner.getId().equals(currentUserId)) {
+            throw new SecurityException("You do not own this vehicle");
+        }
+
+        if (car.getStatus() == CarStatus.ARCHIVED) {
+            throw new BusinessException("Cannot update media when vehicle status is ARCHIVED");
+        }
+
+        try {
+            log.info("Finalizing media for car {}", carId);
+            // Change: Pass base folder only. MediaFinalizationService will append /images
+            // or /videos
+            String targetFolder = "cars/" + carId;
+
+            List<UploadedFile> finalizedFiles = mediaFinalizationService
+                    .finalizeUploads(tempFileIds, targetFolder,
+                            ResourceType.CAR_IMAGE, carId, owner);
+
+            if (finalizedFiles.isEmpty()) {
+                log.warn("Media finalization returned no files for car {}. Marking as FAILED.", carId);
+                car.setMediaStatus(MediaStatus.FAILED);
+                car.setStatus(CarStatus.DRAFT);
+            } else {
+                List<String> finalizedUrls = finalizedFiles.stream()
+                        .map(UploadedFile::getFileUrl)
+                        .collect(Collectors.toList());
+
+                car.setImages(finalizedUrls);
+                if (!finalizedUrls.isEmpty()) {
+                    car.setImageUrl(finalizedUrls.get(0));
+                }
+                car.setMediaStatus(MediaStatus.READY);
+                autoActivateIfEligible(car);
+            }
+
+            Car savedCar = carRepository.save(car);
+            return convertToResponseV2(savedCar);
+
+        } catch (SecurityException e) {
+            log.error("Security violation during media finalization for car {}: {}", carId, e.getMessage());
+            car.setMediaStatus(MediaStatus.FAILED);
+            car.setStatus(CarStatus.DRAFT);
+            carRepository.save(car);
+            throw e;
+        } catch (Exception e) {
+            log.error("Transient error finalizing media for car {}: {}. Will be retried.", carId, e.getMessage());
+            // Do NOT set FAILED status here. Leave as PROCESSING/INIT for retry job.
+            throw new BusinessException("Media finalization failed: " + e.getMessage());
+        }
     }
 
     /**
@@ -458,37 +541,74 @@ public class CarServiceImpl implements CarService {
     }
 
     /**
-     * Update vehicle
+     * Update vehicle.
+     * Evicts public car caches so updates are reflected immediately.
      */
+    @Caching(evict = {
+            @CacheEvict(value = "publicCars", allEntries = true),
+            @CacheEvict(value = "publicCarDetail", allEntries = true)
+    })
     public CarResponse updateVehicle(String id, CarRequest request, Long currentUserId) {
         log.debug("Updating vehicle: {} by user: {}", id, currentUserId);
 
-        Car car = findCarAndEnsureVersion(Long.parseLong(id));
+        // Validate request inputs
+        validateCarRequest(request);
+
+        // Additional validation specific to updates if needed, but generic validation
+        // covers basics
+
+        Car car = findCarAndEnsureVersion(parseCarId(id));
 
         assertCanModifyCar(car, currentUserId, "update vehicles");
 
-        // Update fields
-        car.setMake(request.getMake());
-        car.setModel(request.getModel());
-        car.setYear(request.getYear());
-        validatePriceChange(car, request.getPrice(), currentUserId);
-        car.setPrice(request.getPrice());
-        car.setDescription(request.getDescription());
-        car.setMileage(request.getMileage());
-        car.setFuelType(request.getFuelType());
-        car.setTransmission(request.getTransmission());
-        car.setColor(request.getColor());
-        car.setNumberOfOwners(request.getNumberOfOwners());
-        car.setAccidentHistory(request.getAccidentHistory());
-        car.setRepaintedParts(request.getRepaintedParts());
-        car.setEngineIssues(request.getEngineIssues());
-        car.setFloodDamage(request.getFloodDamage());
-        car.setInsuranceClaims(request.getInsuranceClaims());
-        car.setVariant(request.getVariant());
-        car.setUsage(request.getUsage());
-        car.setLatitude(request.getLatitude());
-        car.setLongitude(request.getLongitude());
-        car.setLocation(request.getLocation());
+        // Update fields (Partial Update - Check for Nulls)
+        if (request.getMake() != null)
+            car.setMake(request.getMake());
+        if (request.getModel() != null)
+            car.setModel(request.getModel());
+        if (request.getYear() != null)
+            car.setYear(request.getYear());
+
+        if (request.getPrice() != null) {
+            validatePriceChange(car, request.getPrice(), currentUserId);
+            car.setPrice(request.getPrice());
+        }
+
+        if (request.getDescription() != null)
+            car.setDescription(request.getDescription());
+        if (request.getMileage() != null)
+            car.setMileage(request.getMileage());
+        if (request.getFuelType() != null)
+            car.setFuelType(request.getFuelType());
+        if (request.getTransmission() != null)
+            car.setTransmission(request.getTransmission());
+        if (request.getColor() != null)
+            car.setColor(request.getColor());
+        if (request.getNumberOfOwners() != null)
+            car.setNumberOfOwners(request.getNumberOfOwners());
+
+        if (request.getAccidentHistory() != null)
+            car.setAccidentHistory(request.getAccidentHistory());
+        if (request.getRepaintedParts() != null)
+            car.setRepaintedParts(request.getRepaintedParts());
+        if (request.getEngineIssues() != null)
+            car.setEngineIssues(request.getEngineIssues());
+        if (request.getFloodDamage() != null)
+            car.setFloodDamage(request.getFloodDamage());
+        if (request.getInsuranceClaims() != null)
+            car.setInsuranceClaims(request.getInsuranceClaims());
+        if (request.getVariant() != null)
+            car.setVariant(request.getVariant());
+        if (request.getUsage() != null)
+            car.setUsage(request.getUsage());
+        if (request.getLatitude() != null)
+            car.setLatitude(request.getLatitude());
+        if (request.getLongitude() != null)
+            car.setLongitude(request.getLongitude());
+        if (request.getLocation() != null)
+            car.setLocation(request.getLocation());
+        if (request.getRegistrationNumber() != null)
+            car.setRegistrationNumber(request.getRegistrationNumber());
 
         // Update Co-Owner if provided
         if (request.getCoOwnerId() != null) {
@@ -532,42 +652,56 @@ public class CarServiceImpl implements CarService {
     }
 
     /**
-     * Delete vehicle
-     * Performs a SOFT DELETE in Database, but HARD DELETE in Storage (Clean
-     * folder).
+     * Delete vehicle.
+     * Performs a SOFT DELETE in Database (Transactional), then HARD DELETE in
+     * Storage (Non-Transactional).
+     * Uses NOT_SUPPORTED propagation to ensure B2 cleanup doesn't hold a DB
+     * transaction open.
      */
+    @Caching(evict = {
+            @CacheEvict(value = "publicCars", allEntries = true),
+            @CacheEvict(value = "publicCarDetail", allEntries = true)
+    })
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void deleteVehicle(String id, Long currentUserId, boolean hard) {
         log.debug("Deleting vehicle: {} by user: {}", id, currentUserId);
 
-        Car car = findCarAndEnsureVersion(Long.parseLong(id));
+        Long carId = parseCarId(id);
 
-        assertCanModifyCar(car, currentUserId, "delete vehicles");
+        // 1. Perform Soft Delete (DB) in a short, isolated transaction
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.execute(status -> {
+            Car car = findCarAndEnsureVersion(carId);
+            assertCanModifyCar(car, currentUserId, "delete vehicles");
 
-        // 1. Hard Cleanup of Storage (Folder level)
+            car.setStatus(CarStatus.DELETED);
+            car.setIsActive(false);
+            car.setIsAvailable(false);
+            car.setIsSold(false); // Can't be sold if deleted
+            car.setUpdatedAt(LocalDateTime.now());
+            car.setImageUrl(null); // Clear image refs
+            car.setVideoUrl(null);
+            car.setImages(new ArrayList<>()); // Clear image list
+
+            carRepository.save(car);
+
+            auditLogService.logDataAccess("Car", car.getId(), "DELETE", getUsername(currentUserId),
+                    "Vehicle soft deleted (storage queued for wipe) by user " + currentUserId);
+            return null;
+        });
+
+        // 2. Hard Cleanup of Storage (Folder level)
+        // Executed OUTSIDE the transaction to prevent optimistic locking failures if
+        // this takes time
         try {
-            String folderPath = "cars/" + id;
-            log.info("Cleaning up storage for deleted car: {}", folderPath);
-            b2FileService.deleteFolder(folderPath);
+            log.info("Cleaning up all media for deleted car: {}", id);
+            mediaFinalizationService.cleanupCarMedia(carId);
         } catch (Exception e) {
             log.error("Error during storage cleanup for car {}: {}", id, e.getMessage());
-            // Continue with DB update to ensure user intent is met
+            // Continue; DB is already consistent
         }
 
-        // 2. Perform Soft Delete (DB)
-        car.setStatus(CarStatus.DELETED);
-        car.setIsActive(false);
-        car.setIsAvailable(false);
-        car.setIsSold(false); // Can't be sold if deleted
-        car.setUpdatedAt(LocalDateTime.now());
-        car.setImageUrl(null); // Clear image refs
-        car.setVideoUrl(null);
-        car.setImages(new ArrayList<>()); // Clear image list
-
-        carRepository.save(car);
-
-        log.info("Soft deleted vehicle with ID: {} by user: {} (Storage wiped)", id, currentUserId);
-        auditLogService.logDataAccess("Car", car.getId(), "DELETE", getUsername(currentUserId),
-                "Vehicle soft deleted (storage wiped) by user " + currentUserId);
+        log.info("Soft deleted vehicle with ID: {} by user: {}", id, currentUserId);
     }
 
     /**
@@ -579,12 +713,17 @@ public class CarServiceImpl implements CarService {
     }
 
     /**
-     * Update vehicle status
+     * Update vehicle status.
+     * Evicts caches since status changes affect public visibility.
      */
+    @Caching(evict = {
+            @CacheEvict(value = "publicCars", allEntries = true),
+            @CacheEvict(value = "publicCarDetail", allEntries = true)
+    })
     public CarResponse updateVehicleStatus(String id, String status, Long currentUserId) {
         log.debug("Updating vehicle status: {} to {} by user: {}", id, status, currentUserId);
 
-        Car car = findCarAndEnsureVersion(Long.parseLong(id));
+        Car car = findCarAndEnsureVersion(parseCarId(id));
 
         assertCanModifyCar(car, currentUserId, "update vehicles");
 
@@ -593,7 +732,8 @@ public class CarServiceImpl implements CarService {
         if (isPublishing && !car.getOwner().canListCarsPublicly()) {
             log.warn("Unverified dealer {} attempting to publish car {}. Visibility will remain restricted.",
                     currentUserId, id);
-            // We allow the status change to proceed (it will be mapped to PUBLISHED below if 'AVAILABLE' is sent, or strictly validated),
+            // We allow the status change to proceed (it will be mapped to PUBLISHED below
+            // if 'AVAILABLE' is sent, or strictly validated),
             // but the visibility (isActive) will be suppressed below in the switch case.
         }
 
@@ -605,6 +745,12 @@ public class CarServiceImpl implements CarService {
         // Update status based on string value
         try {
             CarStatus newStatus = CarStatus.valueOf(status.toUpperCase());
+
+            // Validate status transition is allowed
+            if (car.getStatus() != null) {
+                validateStatusTransition(car.getStatus(), newStatus);
+            }
+
             car.setStatus(newStatus);
 
             // Sync legacy booleans based on status
@@ -627,6 +773,11 @@ public class CarServiceImpl implements CarService {
                     car.setIsAvailable(false);
                     car.setIsSold(false);
                     car.setIsActive(true);
+                    break;
+                case PENDING_VERIFICATION:
+                    car.setIsActive(false);
+                    car.setIsAvailable(true);
+                    car.setIsSold(false);
                     break;
                 case PROCESSING:
                     car.setIsActive(false);
@@ -746,8 +897,14 @@ public class CarServiceImpl implements CarService {
             for (String existingUrl : existingImages) {
                 if (existingUrl != null && !existingUrl.isBlank() && !imageUrls.contains(existingUrl)) {
                     try {
+                        // Delete from B2
                         b2FileService.deleteFile(existingUrl);
-                        log.debug("Deleted replaced image: {}", existingUrl);
+                        log.debug("Deleted replaced image from B2: {}", existingUrl);
+
+                        // Delete DB record to prevent orphans
+                        uploadedFileRepository.findByFileUrl(existingUrl)
+                                .ifPresent(uploadedFileRepository::delete);
+
                     } catch (Exception e) {
                         log.warn("Failed to delete replaced image: {} - {}", existingUrl, e.getMessage());
                     }
@@ -772,8 +929,6 @@ public class CarServiceImpl implements CarService {
         // visible
         car.setMediaStatus(MediaStatus.READY);
 
-        // Auto-activate if verified dealer
-        // Auto-activate if verified dealer
         autoActivateIfEligible(car);
 
         car.setUpdatedAt(LocalDateTime.now());
@@ -784,12 +939,6 @@ public class CarServiceImpl implements CarService {
         return convertToResponseV2(updatedCar);
     }
 
-    /**
-     * Search vehicles with filters and optional free-text query.
-     *
-     * This method is used by /api/cars/search and is the main entry point for
-     * the advanced search experience in the mobile app.
-     */
     /**
      * Search vehicles with filters and optional free-text query.
      * Refactored to use JPA Specification to avoid LOWER(bytea) errors and improve
@@ -818,6 +967,10 @@ public class CarServiceImpl implements CarService {
     /**
      * Get vehicle analytics
      */
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.carselling.oldcar.service.analytics.UserAnalyticsService userAnalyticsService;
+
     @Transactional(readOnly = true)
     public CarAnalyticsResponse getVehicleAnalytics(String id, Long currentUserId) {
         log.debug("Getting analytics for vehicle: {} by user: {}", id, currentUserId);
@@ -827,17 +980,9 @@ public class CarServiceImpl implements CarService {
 
         assertCanModifyCar(car, currentUserId, "view analytics for");
 
-        return CarAnalyticsResponse.builder()
-                .vehicleId(id)
-                .views((long) (car.getViewCount() != null ? car.getViewCount() : 0))
-                .inquiries((long) (car.getInquiryCount() != null ? car.getInquiryCount() : 0))
-                .shares((long) (car.getShareCount() != null ? car.getShareCount() : 0))
-                .coListings(0L)
-                .avgTimeOnMarket(0)
-                .lastActivity(LocalDateTime.now())
-                .topLocations(List.of()) // No location tracking yet
-                .dealerInterest(0)
-                .build();
+        // Delegate to UserAnalyticsService for event-sourced metrics
+        // This ensures consistent data with the dashboard and excludes owner views
+        return userAnalyticsService.getCarAnalytics(car.getId());
     }
 
     /**
@@ -872,7 +1017,7 @@ public class CarServiceImpl implements CarService {
     public void trackVehicleView(String id) {
         log.debug("Tracking view for vehicle: {}", id);
         try {
-            Long carId = Long.parseLong(id);
+            Long carId = parseCarId(id);
             carRepository.incrementViewCount(carId);
         } catch (Exception e) {
             log.warn("Failed to increment view count for car {}: {}", id, e.getMessage());
@@ -1167,70 +1312,6 @@ public class CarServiceImpl implements CarService {
         carRepository.save(car);
     }
 
-    /**
-     * Finalize media for existing car
-     */
-    public CarResponse finalizeMedia(String id, java.util.List<Long> tempFileIds, Long currentUserId) {
-        log.info("Finalizing media for car: {} by user: {}", id, currentUserId);
-
-        Car car = carRepository.findById(Long.parseLong(id))
-                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id));
-
-        assertCanModifyCar(car, currentUserId, "upload media for");
-
-        CarStatus status = car.getStatus();
-        if (status == CarStatus.SOLD || status == CarStatus.ARCHIVED || status == CarStatus.DELETED) {
-            throw new BusinessException("Cannot modify media when vehicle status is " + status.name());
-        }
-
-        if (tempFileIds != null && !tempFileIds.isEmpty()) {
-            try {
-                log.info("Finalizing {} temporary files for car {}", tempFileIds.size(), id);
-
-                // Use new temp file transfer service
-                List<UploadedFile> finalizedFiles = tempFileTransferService
-                        .transferTempFilesToPermanent(tempFileIds, ResourceType.CAR_IMAGE,
-                                car.getId(), car.getOwner());
-
-                List<String> finalizedUrls = finalizedFiles.stream()
-                        .map(UploadedFile::getFileUrl)
-                        .collect(Collectors.toList());
-
-                // Append to existing images (handle null safely)
-                List<String> currentImages = car.getImages() != null
-                        ? new ArrayList<>(car.getImages())
-                        : new ArrayList<>();
-                currentImages.addAll(finalizedUrls);
-                car.setImages(currentImages);
-
-                car.setMediaStatus(MediaStatus.READY); // Single public visibility state
-
-                // If we have images, ensure banner set
-                if (!currentImages.isEmpty() && (car.getImageUrl() == null || car.getImageUrl().isBlank())) {
-                    car.setImageUrl(currentImages.get(0));
-                    car.setMediaStatus(MediaStatus.READY);
-
-                    if (car.getOwner().canListCarsPublicly()) {
-                        car.setIsActive(true);
-                        car.setIsAvailable(true);
-                    }
-                }
-
-                car.setUpdatedAt(LocalDateTime.now());
-                Car updatedCar = carRepository.save(car);
-                auditLogService.logDataAccess("Car", updatedCar.getId(), "MEDIA_FINALIZE", getUsername(currentUserId),
-                        "Media finalized for vehicle by user " + currentUserId);
-                return convertToResponseV2(updatedCar);
-
-            } catch (Exception e) {
-                log.error("Failed to finalize media for car {}: {}", id, e.getMessage());
-                throw new RuntimeException("Media finalization failed", e);
-            }
-        }
-
-        return convertToResponseV2(car);
-    }
-
     @Override
     @Transactional(readOnly = true)
     public boolean isVehicleOwner(String id, Long userId) {
@@ -1312,19 +1393,63 @@ public class CarServiceImpl implements CarService {
 
     private void autoActivateIfEligible(Car car) {
         if (car.getOwner().canListCarsPublicly()) {
+            // Verified Dealer: Auto-activate and Publish
             car.setIsActive(true);
             car.setIsAvailable(true);
-            // If it was DRAFT, move to PUBLISHED or equivalent active state
-            if (car.getStatus() == CarStatus.DRAFT) {
+
+            // If it was PROCESSING, DRAFT (Legacy) or PENDING_VERIFICATION, move to
+            // PUBLISHED
+            if (car.getStatus() == CarStatus.PROCESSING || car.getStatus() == CarStatus.DRAFT
+                    || car.getStatus() == CarStatus.PENDING_VERIFICATION) {
                 car.setStatus(CarStatus.PUBLISHED);
             }
         } else {
-            // Unverified dealer -> Pending approval / Inactive
+            // Unverified Dealer: Keep Inactive (Pending Verification)
             car.setIsActive(false);
-            if (car.getStatus() == CarStatus.DRAFT) {
-                car.setStatus(CarStatus.PROCESSING);
+
+            // Explicitly set as PENDING_VERIFICATION if it was DRAFT, PUBLISHED, or
+            // PROCESSING
+            if (car.getStatus() == CarStatus.DRAFT || car.getStatus() == CarStatus.PUBLISHED
+                    || car.getStatus() == CarStatus.PROCESSING) {
+                car.setStatus(CarStatus.PENDING_VERIFICATION);
+            }
+            log.info("Dealer {} is unverified. Car {} moved to PENDING_VERIFICATION state.",
+                    car.getOwner().getId(), car.getId());
+        }
+    }
+
+    /**
+     * Activate all cars for a verify dealer (Called when dealer is verified)
+     */
+    @Transactional
+    public void activateDealerCars(Long dealerId) {
+        log.info("Activating all pending cars for newly verified dealer: {}", dealerId);
+
+        // Find all cars by this dealer with PENDING_VERIFICATION or PROCESSING
+        Specification<Car> spec = (root, query, cb) -> {
+            return cb.and(
+                    cb.equal(root.get("owner").get("id"), dealerId),
+                    cb.or(
+                            cb.equal(root.get("status"), CarStatus.PENDING_VERIFICATION),
+                            cb.equal(root.get("status"), CarStatus.PROCESSING)));
+        };
+
+        List<Car> pendingCars = carRepository.findAll(spec);
+
+        for (Car car : pendingCars) {
+            // Only activate if media is ready
+            if (car.getMediaStatus() == MediaStatus.READY) {
+                car.setStatus(CarStatus.PUBLISHED);
+                car.setIsActive(true);
+                car.setIsAvailable(true);
+                car.setUpdatedAt(LocalDateTime.now());
+                log.info("Auto-publishing car {} for verified dealer {}", car.getId(), dealerId);
+            } else {
+                log.info("Skipping auto-publish for car {} - Media not ready", car.getId());
             }
         }
+
+        carRepository.saveAll(pendingCars);
     }
 
     private void updateCarVideo(Car car, String newVideoUrl) {
@@ -1351,6 +1476,139 @@ public class CarServiceImpl implements CarService {
                 }
             }
             car.setVideoUrl(null);
+        }
+    }
+
+    // ==================== ROBUST ERROR HANDLING HELPERS ====================
+
+    /**
+     * Safely parse car ID string to Long.
+     * Throws BusinessException with user-friendly message for invalid IDs.
+     */
+    private Long parseCarId(String id) {
+        if (id == null || id.isBlank()) {
+            throw new BusinessException("Vehicle ID is required");
+        }
+        try {
+            return Long.parseLong(id.trim());
+        } catch (NumberFormatException e) {
+            throw new BusinessException("Invalid vehicle ID format: " + id);
+        }
+    }
+
+    /**
+     * Validate CreateCarRequest input fields.
+     */
+    /**
+     * Removed legacy validateCreateCarRequest in favor of generic
+     * validateCarRequest
+     */
+    // private void validateCreateCarRequest(CreateCarRequest request) {
+    // if (request == null) {
+    // throw new BusinessException("Vehicle data is required");
+    // }
+    // ...
+    // }
+
+    /**
+     * Validate UpdateCarRequest input fields.
+     */
+    /**
+     * Removed legacy validateUpdateCarRequest in favor of generic
+     * validateCarRequest
+     */
+    // private void validateUpdateCarRequest(UpdateCarRequest request) {
+    // ...
+    // }
+    // if(request==null)
+
+    // // Only validate fields if they are present (not null)
+    // int currentYear = LocalDateTime.now().getYear();if(request.getYear()!=null)
+    // {
+    // if (request.getYear() < 1900 || request.getYear() > currentYear + 1) {
+    // throw new BusinessException("Invalid year. Must be between 1900 and " +
+    // (currentYear + 1));
+    // if(request==null){throw new BusinessException("Vehicle data is required");}
+    // // Only validate fields if they are present (not null)
+    // int currentYear = LocalDateTime.now().getYear();if(request.getYear()!=null)
+    // {
+    // if (request.getYear() < 1900 || request.getYear() > currentYear + 1) {
+    // throw new BusinessException("Invalid year. Must be between 1900 and " +
+    // (currentYear + 1));
+    // }
+    // }if(request.getMileage()!=null)
+    // {
+    // if (request.getMileage() < 0 || request.getMileage() > 9999999) {
+    // throw new BusinessException("Invalid mileage. Must be between 0 and 9,999,999
+    // km");
+    // }
+    // }
+    // }
+
+    /**
+     * Validate car request input fields.
+     */
+    private void validateCarRequest(CarRequest request) {
+        if (request == null) {
+            throw new BusinessException("Vehicle data is required");
+        }
+
+        // Year validation: 1900 to next year
+        int currentYear = LocalDateTime.now().getYear();
+        if (request.getYear() != null) {
+            if (request.getYear() < 1900 || request.getYear() > currentYear + 1) {
+                throw new BusinessException("Invalid year. Must be between 1900 and " + (currentYear + 1));
+            }
+        }
+
+        // Mileage validation: 0 to 9,999,999 km
+        if (request.getMileage() != null) {
+            if (request.getMileage() < 0 || request.getMileage() > 9999999) {
+                throw new BusinessException("Invalid mileage. Must be between 0 and 9,999,999 km");
+            }
+        }
+
+        // Make validation
+        if (request.getMake() == null || request.getMake().isBlank()) {
+            throw new BusinessException("Vehicle make is required");
+        }
+
+        // Model validation
+        if (request.getModel() == null || request.getModel().isBlank()) {
+            throw new BusinessException("Vehicle model is required");
+        }
+    }
+
+    /**
+     * Status transition state machine.
+     * Defines which status transitions are allowed.
+     */
+    private static final Map<CarStatus, Set<CarStatus>> ALLOWED_STATUS_TRANSITIONS = Map.of(
+            CarStatus.PROCESSING,
+            EnumSet.of(CarStatus.PUBLISHED, CarStatus.PENDING_VERIFICATION, CarStatus.ARCHIVED, CarStatus.DELETED),
+            CarStatus.PENDING_VERIFICATION, EnumSet.of(CarStatus.PUBLISHED, CarStatus.ARCHIVED, CarStatus.DELETED),
+            CarStatus.PUBLISHED, EnumSet.of(CarStatus.SOLD, CarStatus.RESERVED, CarStatus.ARCHIVED, CarStatus.DELETED),
+            CarStatus.SOLD, EnumSet.of(CarStatus.ARCHIVED, CarStatus.DELETED),
+            CarStatus.RESERVED, EnumSet.of(CarStatus.PUBLISHED, CarStatus.SOLD, CarStatus.DELETED),
+            CarStatus.ARCHIVED, EnumSet.of(CarStatus.PUBLISHED, CarStatus.DELETED),
+            CarStatus.DRAFT, EnumSet.of(CarStatus.PROCESSING, CarStatus.PUBLISHED, CarStatus.DELETED),
+            CarStatus.DELETED, EnumSet.noneOf(CarStatus.class) // Terminal state
+    );
+
+    /**
+     * Validate status transition is allowed.
+     */
+    private void validateStatusTransition(CarStatus currentStatus, CarStatus newStatus) {
+        if (currentStatus == newStatus) {
+            return; // No change, always allowed
+        }
+
+        Set<CarStatus> allowed = ALLOWED_STATUS_TRANSITIONS.get(currentStatus);
+        if (allowed == null || !allowed.contains(newStatus)) {
+            throw new BusinessException(
+                    String.format("Cannot transition from %s to %s. Allowed transitions: %s",
+                            currentStatus, newStatus,
+                            allowed != null ? allowed : "none"));
         }
     }
 

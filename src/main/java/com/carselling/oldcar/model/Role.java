@@ -10,7 +10,8 @@ package com.carselling.oldcar.model;
 public enum Role {
     USER("USER", "Standard user, can buy and sell own cars"),
     DEALER("DEALER", "Professional seller with enhanced features"),
-    ADMIN("ADMIN", "Full administrative access");
+    ADMIN("ADMIN", "Full administrative access"),
+    ANONYMOUS("ANONYMOUS", "Unauthenticated user");
 
     private final String name;
     private final String description;
@@ -55,6 +56,7 @@ public enum Role {
                 case "car:read", "car:create", "car:update:own", "car:delete:own" -> true;
                 default -> false;
             };
+            case ANONYMOUS -> false;
         };
     }
 }

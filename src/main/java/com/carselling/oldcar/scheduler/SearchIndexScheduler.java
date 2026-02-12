@@ -7,8 +7,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
-
 @Component
 @ConditionalOnProperty(name = "elasticsearch.enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
@@ -16,6 +14,7 @@ import java.time.LocalDateTime;
 public class SearchIndexScheduler {
 
     private final AdvancedSearchService advancedSearchService;
+    private final JobExecutionService jobExecutionService;
 
     /**
      * Re-indexes all vehicles from the database to OpenSearch.
@@ -26,12 +25,28 @@ public class SearchIndexScheduler {
      */
     @Scheduled(cron = "0 0 2 * * *", zone = "Asia/Kolkata")
     public void scheduleReindexing() {
-        log.info("Starting scheduled nightly re-indexing job at {}", LocalDateTime.now());
-        try {
-            advancedSearchService.bulkSyncVehiclesToElasticsearch();
-            log.info("Scheduled nightly re-indexing job completed successfully.");
-        } catch (Exception e) {
-            log.error("Scheduled nightly re-indexing job failed.", e);
-        }
+        jobExecutionService.executeWithMetrics("VehicleReindexing", () -> {
+            // 1. Check Health
+            if (!advancedSearchService.isIndexHealthy()) {
+                throw new RuntimeException("Skipping re-indexing job: Elasticsearch cluster is unhealthy.");
+            }
+
+            // 2. Check for last successful run
+            var lastRun = jobExecutionService.getLastSuccessfulJob("VehicleReindexing");
+
+            int count;
+            // 3. Decide: Incremental vs Full
+            if (lastRun != null && lastRun.getEndTime() != null) {
+                // Incremental
+                log.info("Starting Incremental Indexing. Last run: {}", lastRun.getEndTime());
+                count = advancedSearchService.incrementalSyncVehicles(lastRun.getEndTime());
+            } else {
+                // Full Blue-Green
+                log.info("Starting Full Blue-Green Indexing (First run or previous failed).");
+                count = advancedSearchService.bulkSyncVehiclesToElasticsearch();
+            }
+
+            return java.util.Map.of("recordsProcessed", count, "mode", lastRun != null ? "INCREMENTAL" : "FULL");
+        });
     }
 }

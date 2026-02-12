@@ -19,54 +19,66 @@ import java.util.Optional;
 @Repository
 public interface UserSessionRepository extends JpaRepository<UserSession, String> {
 
-    Optional<UserSession> findBySessionId(String sessionId);
+        Optional<UserSession> findBySessionId(String sessionId);
 
-    Page<UserSession> findByUserId(Long userId, Pageable pageable);
+        Page<UserSession> findByUserId(Long userId, Pageable pageable);
 
-    List<UserSession> findByUserIdAndIsActiveTrue(Long userId);
+        List<UserSession> findByUserIdAndIsActiveTrue(Long userId);
 
-    /**
-     * Get active session count
-     */
-    @Query("SELECT COUNT(s) FROM UserSession s WHERE s.isActive = true")
-    long countActiveSessions();
+        /**
+         * Get active session count
+         */
+        @Query("SELECT COUNT(s) FROM UserSession s WHERE s.isActive = true")
+        long countActiveSessions();
 
-    /**
-     * Get sessions started in date range
-     */
-    @Query("SELECT COUNT(s) FROM UserSession s WHERE s.startedAt BETWEEN :startDate AND :endDate")
-    long countSessionsInRange(@Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate);
+        /**
+         * Get sessions started in date range
+         */
+        @Query("SELECT COUNT(s) FROM UserSession s WHERE s.startedAt BETWEEN :startDate AND :endDate")
+        long countSessionsInRange(@Param("startDate") LocalDateTime startDate,
+                        @Param("endDate") LocalDateTime endDate);
 
-    /**
-     * Get average session duration
-     */
-    @Query("SELECT AVG(s.durationSeconds) FROM UserSession s " +
-            "WHERE s.startedAt BETWEEN :startDate AND :endDate AND s.durationSeconds IS NOT NULL")
-    Double getAverageSessionDuration(@Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate);
+        /**
+         * Get average session duration
+         */
+        @Query("SELECT AVG(s.durationSeconds) FROM UserSession s " +
+                        "WHERE s.startedAt BETWEEN :startDate AND :endDate AND s.durationSeconds IS NOT NULL")
+        Double getAverageSessionDuration(@Param("startDate") LocalDateTime startDate,
+                        @Param("endDate") LocalDateTime endDate);
 
-    /**
-     * Get session count by device type
-     */
-    @Query("SELECT s.deviceType, COUNT(s) FROM UserSession s " +
-            "WHERE s.startedAt BETWEEN :startDate AND :endDate AND s.deviceType IS NOT NULL " +
-            "GROUP BY s.deviceType")
-    List<Object[]> getSessionsByDevice(@Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate);
+        /**
+         * Get session count by device type
+         */
+        @Query("SELECT s.deviceType, COUNT(s) FROM UserSession s " +
+                        "WHERE s.startedAt BETWEEN :startDate AND :endDate AND s.deviceType IS NOT NULL " +
+                        "GROUP BY s.deviceType")
+        List<Object[]> getSessionsByDevice(@Param("startDate") LocalDateTime startDate,
+                        @Param("endDate") LocalDateTime endDate);
 
-    /**
-     * Expire stale sessions (no activity for 30 minutes)
-     */
-    @Modifying
-    @Query("UPDATE UserSession s SET s.isActive = false, s.endedAt = CURRENT_TIMESTAMP " +
-            "WHERE s.isActive = true AND s.startedAt < :cutoff")
-    int expireStaleSessions(@Param("cutoff") LocalDateTime cutoff);
+        /**
+         * Expire stale sessions (no activity for 30 minutes)
+         */
+        /**
+         * Find IDs of stale sessions for batch processing.
+         * Uses LIMIT via Pageable logic in name derived query or separate JPQL.
+         * Here we utilize naming convention for "Top/First"
+         */
+        List<UserSession> findTop1000ByIsActiveTrueAndStartedAtBefore(LocalDateTime cutoff);
 
-    /**
-     * Delete old sessions for retention
-     */
-    @Modifying
-    @Query("DELETE FROM UserSession s WHERE s.startedAt < :cutoffDate")
-    int deleteOldSessions(@Param("cutoffDate") LocalDateTime cutoffDate);
+        @Modifying
+        @Query("UPDATE UserSession s SET s.isActive = false, s.endedAt = CURRENT_TIMESTAMP WHERE s.sessionId IN :ids")
+        int expireSessionsByIds(@Param("ids") List<String> ids);
+
+        // Deprecated: Potentially locks too many rows
+        @Modifying
+        @Query("UPDATE UserSession s SET s.isActive = false, s.endedAt = CURRENT_TIMESTAMP " +
+                        "WHERE s.isActive = true AND s.startedAt < :cutoff")
+        int expireStaleSessions(@Param("cutoff") LocalDateTime cutoff);
+
+        /**
+         * Delete old sessions for retention
+         */
+        @Modifying
+        @Query("DELETE FROM UserSession s WHERE s.startedAt < :cutoffDate")
+        int deleteOldSessions(@Param("cutoffDate") LocalDateTime cutoffDate);
 }

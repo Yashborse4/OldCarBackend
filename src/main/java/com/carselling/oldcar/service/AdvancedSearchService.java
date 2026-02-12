@@ -160,14 +160,7 @@ public class AdvancedSearchService {
      */
     @Transactional(readOnly = true)
     public boolean isIndexHealthy() {
-        try {
-            // A small count query is usually enough to validate connectivity.
-            vehicleSearchRepository.count();
-            return true;
-        } catch (Exception ex) {
-            log.warn("Elasticsearch health check failed: {}", ex.getMessage());
-            return false;
-        }
+        return vehicleSearchRepository.isClusterHealthy();
     }
 
     @Transactional(readOnly = true)
@@ -189,13 +182,116 @@ public class AdvancedSearchService {
     }
 
     @Transactional(readOnly = true)
-    public void bulkSyncVehiclesToElasticsearch() {
-        List<Car> cars = carRepository.findAll();
-        List<VehicleSearchDocument> docs = cars.stream()
-                .map(this::mapCarToDocument)
-                .collect(Collectors.toList());
-        vehicleSearchRepository.saveAll(docs);
-        log.info("Bulk indexed {} cars into Elasticsearch", docs.size());
+    public int bulkSyncVehiclesToElasticsearch() {
+        // 1. Create new index name details
+        String aliasName = "vehicle_search";
+        String newIndexName = "vehicle_search_"
+                + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(java.time.LocalDateTime.now());
+
+        log.info("Starting Blue-Green indexing. New index: {}", newIndexName);
+
+        // 2. Create the new index
+        try {
+            vehicleSearchRepository.createIndex(newIndexName);
+        } catch (Exception e) {
+            log.error("Assuming index creation handled or failed: {}", e.getMessage());
+        }
+
+        int batchSize = 500;
+        int totalProcessed = 0;
+        int page = 0;
+        Page<Car> carPage;
+
+        do {
+            carPage = carRepository.findAll(org.springframework.data.domain.PageRequest.of(page, batchSize));
+            List<Car> cars = carPage.getContent();
+
+            if (cars.isEmpty()) {
+                break;
+            }
+
+            List<VehicleSearchDocument> docs = cars.stream()
+                    .map(this::mapCarToDocument)
+                    .collect(Collectors.toList());
+
+            // 3. Index into the NEW index
+            vehicleSearchRepository.saveAll(newIndexName, docs);
+            totalProcessed += docs.size();
+
+            log.info("Indexed batch {}/{} ({} records)", page + 1, carPage.getTotalPages(), docs.size());
+
+            // Pause to reduce load
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Batch indexing interrupted during pause", e);
+                break;
+            }
+
+            page++;
+        } while (carPage.hasNext());
+
+        log.info("Bulk indexed total {} cars into Elasticsearch", totalProcessed);
+        // 4. Switch Alias (Simplified success check, assuming no exception if we
+        // reached here)
+        log.info("Indexing complete. Switching alias {} to {}", aliasName, newIndexName);
+        try {
+            vehicleSearchRepository.updateAlias(aliasName, newIndexName);
+            log.info("Blue-Green deployment successful.");
+        } catch (Exception e) {
+            log.error("Failed to switch alias", e);
+            // Cleanup
+            vehicleSearchRepository.deleteIndex(newIndexName);
+            throw new RuntimeException("Blue-Green alias switch failed", e);
+        }
+
+        log.info("Bulk indexed total {} cars into Elasticsearch", totalProcessed);
+        return totalProcessed;
+    }
+
+    @Transactional(readOnly = true)
+    public int incrementalSyncVehicles(java.time.LocalDateTime since) {
+        log.info("Starting incremental indexing for cars updated after {}", since);
+        int batchSize = 500;
+        int totalProcessed = 0;
+        int page = 0;
+        Page<Car> carPage;
+
+        do {
+            carPage = carRepository.findByUpdatedAtAfter(since,
+                    org.springframework.data.domain.PageRequest.of(page, batchSize));
+            List<Car> cars = carPage.getContent();
+
+            if (cars.isEmpty()) {
+                break;
+            }
+
+            List<VehicleSearchDocument> docs = cars.stream()
+                    .map(this::mapCarToDocument)
+                    .collect(Collectors.toList());
+
+            // For incremental, we write to the active alias "vehicle_search"
+            // We reuse the method we created but pass the alias name
+            vehicleSearchRepository.saveAll("vehicle_search", docs);
+            totalProcessed += docs.size();
+
+            log.info("Incrementally indexed batch {}/{} ({} records)", page + 1, carPage.getTotalPages(), docs.size());
+
+            // Pause to reduce load
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Batch indexing interrupted", e);
+                break;
+            }
+
+            page++;
+        } while (carPage.hasNext());
+
+        log.info("Incremental indexing completed. Total processed: {}", totalProcessed);
+        return totalProcessed;
     }
 
     private VehicleSearchDocument mapCarToDocument(Car car) {

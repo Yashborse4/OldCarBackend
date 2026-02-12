@@ -40,4 +40,7 @@ public class UpdateUserRequest {
 
     @Size(max = 100, message = "City must not exceed 100 characters")
     private String city;
+
+    private Double latitude;
+    private Double longitude;
 }

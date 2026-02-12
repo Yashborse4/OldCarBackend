@@ -39,21 +39,45 @@ public class FileValidationService {
             "application/x-php", "text/x-php", "application/x-httpd-php", "application/javascript");
 
     // Common file signatures (Magic Numbers)
-    private static final Map<String, List<String>> FILE_SIGNATURES = new HashMap<>();
+    private static final Map<String, List<FileSignature>> FILE_SIGNATURES = new HashMap<>();
+
+    private static class FileSignature {
+        int offset;
+        String hexSignature;
+
+        public FileSignature(String hexSignature, int offset) {
+            this.hexSignature = hexSignature;
+            this.offset = offset;
+        }
+
+        public FileSignature(String hexSignature) {
+            this(hexSignature, 0);
+        }
+    }
 
     static {
         // JPEG: FF D8 FF
-        FILE_SIGNATURES.put("jpg", List.of("FFD8FF"));
-        FILE_SIGNATURES.put("jpeg", List.of("FFD8FF"));
+        FILE_SIGNATURES.put("jpg", List.of(new FileSignature("FFD8FF")));
+        FILE_SIGNATURES.put("jpeg", List.of(new FileSignature("FFD8FF")));
         // PNG: 89 50 4E 47 0D 0A 1A 0A
-        FILE_SIGNATURES.put("png", List.of("89504E47"));
+        FILE_SIGNATURES.put("png", List.of(new FileSignature("89504E47")));
         // GIF: 47 49 46 38
-        FILE_SIGNATURES.put("gif", List.of("47494638"));
+        FILE_SIGNATURES.put("gif", List.of(new FileSignature("47494638")));
         // PDF: 25 50 44 46
-        FILE_SIGNATURES.put("pdf", List.of("25504446"));
-        // MP4: ... various signatures, usually ftyp at offset 4, but checking typical
-        // headers
-        // Common MP4 ftyp markers: 66 74 79 70 ...
+        FILE_SIGNATURES.put("pdf", List.of(new FileSignature("25504446")));
+        // WEBP: WEBP at offset 8 (RIFF is implied but we check specific type)
+        FILE_SIGNATURES.put("webp", List.of(new FileSignature("57454250", 8)));
+
+        // Video Formats
+        // MP4: ftyp at offset 4 (66 74 79 70)
+        FILE_SIGNATURES.put("mp4", List.of(new FileSignature("66747970", 4)));
+        // MOV: ftyp at offset 4
+        FILE_SIGNATURES.put("mov", List.of(new FileSignature("66747970", 4)));
+        // MKV/WebM: 1A 45 DF A3 at offset 0
+        FILE_SIGNATURES.put("mkv", List.of(new FileSignature("1A45DFA3")));
+        FILE_SIGNATURES.put("webm", List.of(new FileSignature("1A45DFA3")));
+        // AVI: AVI at offset 8 (RIFF is implied)
+        FILE_SIGNATURES.put("avi", List.of(new FileSignature("41564920", 8)));
     }
 
     /**
@@ -181,7 +205,7 @@ public class FileValidationService {
 
         if (isVideo) {
             maxFileSizeBytes = fileUploadConfig.getMaxVideoSizeMB() * 1024L * 1024L;
-        } else if (isImageFile(file.getOriginalFilename())) {
+        } else if (isImage) {
             // 1.5 MB limit for images as per requirement (hardcoded or config driven, using
             // 1.5MB as requested)
             maxFileSizeBytes = 1500 * 1024L; // 1.5 MB
@@ -248,7 +272,7 @@ public class FileValidationService {
         String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
         if (FILE_SIGNATURES.containsKey(extension)) {
             try (InputStream is = file.getInputStream()) {
-                byte[] header = new byte[8]; // Check first 8 bytes
+                byte[] header = new byte[32]; // Read first 32 bytes to cover offsets
                 int read = is.read(header);
                 if (read < 4) {
                     return; // Too short to verify
@@ -256,8 +280,39 @@ public class FileValidationService {
 
                 String fileHex = bytesToHex(header).toUpperCase();
                 boolean match = false;
-                for (String signature : FILE_SIGNATURES.get(extension)) {
-                    if (fileHex.startsWith(signature)) {
+                List<FileSignature> signatures = FILE_SIGNATURES.get(extension);
+
+                // Check if ANY of the signatures match (OR logic usually, but here some are
+                // composite?)
+                // Actually my structure implementation above for WebP ("RIFF" ... "WEBP") puts
+                // both in the list.
+                // If I have multiple signatures for an extension, usually it's "OR" (e.g. valid
+                // sig 1 OR valid sig 2).
+                // BUT for WEBP/AVI I used the list to mean "AND" effectively in my thought
+                // process?
+                // Wait, "webp" key has a List.
+                // Using List for OR is standard.
+                // For WEBP, I put two generic signatures: "RIFF" and "WEBP". If I treat as OR,
+                // then any RIFF is valid WEBP? NO.
+                // I need composite signatures or just check the most specific one.
+                // "WEBP" at offset 8 is specific enough for WEBP. "AVI " at 8 is specific for
+                // AVI.
+                // "ftyp" at 4 is specific for MP4/MOV types.
+                // So I will simplify the WEBP/AVI definitions to just the distinguishing part
+                // for now to keep logic Simple "OR".
+
+                // Retrying logic: simple OR match of any defined signature in the list.
+                for (FileSignature signature : signatures) {
+                    int offset = signature.offset;
+                    String requiredHex = signature.hexSignature;
+
+                    if (read < offset + (requiredHex.length() / 2)) {
+                        continue;
+                    }
+
+                    // Extract the bytes at offset
+                    String actualHex = fileHex.substring(offset * 2, (offset * 2) + requiredHex.length());
+                    if (actualHex.equals(requiredHex)) {
                         match = true;
                         break;
                     }
@@ -270,8 +325,6 @@ public class FileValidationService {
                 }
             } catch (IOException e) {
                 log.error("Error reading file for magic number validation", e);
-                // Fail safe - if we can't read, we can't be sure it's safe.
-                // Or we can ignore. Choosing to be strict.
                 throw new SecurityException("Unable to verify file signature");
             }
         }
