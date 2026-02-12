@@ -34,16 +34,22 @@ public class TempFileCleanupService {
         log.info("Starting cleanup of abandoned temporary files...");
 
         LocalDateTime threshold = LocalDateTime.now().minusHours(24);
-        List<TemporaryFile> abandonedFiles = temporaryFileRepository.findByCreatedAtBefore(threshold);
+        // Cleanup TRANSFERRED files (backups) and TEMPORARY files (abandoned)
+        List<com.carselling.oldcar.model.StorageStatus> statuses = List.of(
+                com.carselling.oldcar.model.StorageStatus.TEMPORARY,
+                com.carselling.oldcar.model.StorageStatus.TRANSFERRED);
 
-        if (abandonedFiles.isEmpty()) {
+        List<TemporaryFile> filesToDelete = temporaryFileRepository.findByStorageStatusInAndCreatedAtBefore(
+                statuses, threshold);
+
+        if (filesToDelete.isEmpty()) {
             log.info("No abandoned files found.");
             return;
         }
 
-        log.info("Found {} abandoned files to delete.", abandonedFiles.size());
+        log.info("Found {} temporary files to delete (abandoned or backups).", filesToDelete.size());
 
-        for (TemporaryFile file : abandonedFiles) {
+        for (TemporaryFile file : filesToDelete) {
             try {
                 // Delete from B2
                 log.debug("Deleting file from B2: {} ({})", file.getFileName(), file.getFileId());

@@ -11,6 +11,7 @@ public class B2Properties {
     private String applicationKeyId;
     private String applicationKey;
     private String bucketId;
+    private String bucketName; // Added for fallback download by name
     private String cdnDomain; // e.g. https://files.yoursite.com
 
     public String getApplicationKeyId() {

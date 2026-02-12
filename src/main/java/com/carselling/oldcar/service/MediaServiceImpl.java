@@ -203,11 +203,8 @@ public class MediaServiceImpl implements MediaService {
         }
 
         String folder = request.getFolder();
-        // Auto-redirect videos to correct folder
-        if (request.getContentType() != null && request.getContentType().startsWith("video/")
-                && folder.startsWith("cars/")) {
-            folder = folder.replaceAll("/images/?$", "/videos");
-        }
+        // Note: B2FileService.initDirectUpload handles temp path routing
+        // and preserves subfolders (images/videos) from the request.
 
         fileValidationService.validateFolderName(folder);
         authService.checkFolderAuthorization(folder, user);
@@ -257,8 +254,11 @@ public class MediaServiceImpl implements MediaService {
             }
         }
         if (request.getCarId() != null) {
+            log.info("completeDirectUpload: Received carId in request: {}", request.getCarId());
             resourceType = ResourceType.CAR_IMAGE;
             resourceOwnerId = request.getCarId();
+        } else {
+            log.info("completeDirectUpload: No carId in request");
         }
 
         Object result = b2FileService.completeDirectUpload(

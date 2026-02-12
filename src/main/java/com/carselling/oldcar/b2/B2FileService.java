@@ -142,14 +142,16 @@ public class B2FileService {
                 .build();
     }
 
-    public FileUploadResponse uploadFile(byte[] content, String fileName, String contentType, String folder, User uploader, ResourceType ownerType, Long ownerId) {
+    public FileUploadResponse uploadFile(byte[] content, String fileName, String contentType, String folder,
+            User uploader, ResourceType ownerType, Long ownerId) {
         String fileHash = calculateSha1(content);
 
         // Idempotency check
-        Optional<UploadedFile> existing = uploadedFileRepository.findByFileHashAndUploadedById(fileHash, uploader.getId());
+        Optional<UploadedFile> existing = uploadedFileRepository.findByFileHashAndUploadedById(fileHash,
+                uploader.getId());
         if (existing.isPresent()) {
             UploadedFile existingFile = existing.get();
-             return FileUploadResponse.builder()
+            return FileUploadResponse.builder()
                     .fileName(existingFile.getFileName())
                     .originalFileName(existingFile.getOriginalFileName())
                     .fileUrl(existingFile.getFileUrl())
@@ -182,7 +184,9 @@ public class B2FileService {
         }
         String publicUrl = domain + "/" + fullPath;
 
-        AccessType accessType = (ownerType == ResourceType.CHAT_ATTACHMENT || ownerType == ResourceType.OTHER) ? AccessType.PRIVATE : AccessType.PUBLIC;
+        AccessType accessType = (ownerType == ResourceType.CHAT_ATTACHMENT || ownerType == ResourceType.OTHER)
+                ? AccessType.PRIVATE
+                : AccessType.PUBLIC;
 
         UploadedFile uploadedFile = UploadedFile.builder()
                 .fileUrl(publicUrl)
@@ -242,7 +246,8 @@ public class B2FileService {
             StringBuilder hexString = new StringBuilder();
             for (byte b : hash) {
                 String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
+                if (hex.length() == 1)
+                    hexString.append('0');
                 hexString.append(hex);
             }
             return hexString.toString();
@@ -351,7 +356,13 @@ public class B2FileService {
         } else if (folder != null && folder.startsWith("cars/")) {
             String carId = extractCarIdFromFolder(folder);
             if (carId != null && !carId.isBlank()) {
-                tempFolder = "temp/cars/" + carId + "/images";
+                // Preserve subfolder: cars/{id}/images → temp/cars/{id}/images
+                // cars/{id}/videos → temp/cars/{id}/videos
+                String carPrefix = "cars/" + carId;
+                String suffix = folder.length() > carPrefix.length()
+                        ? folder.substring(carPrefix.length())
+                        : "/images"; // Default to /images if no subfolder specified
+                tempFolder = "temp/cars/" + carId + suffix;
             } else {
                 tempFolder = "temp/cars";
             }
@@ -418,6 +429,8 @@ public class B2FileService {
         }
         String publicUrl = domain + "/" + decodedPath;
 
+        log.info("Completing Direct Upload. Path: {}, OwnerType: {}, OwnerId: {}", decodedPath, ownerType, ownerId);
+
         // DIRECT FINALIZATION: If path is not "temp/", save directly as UploadedFile
         if (!decodedPath.startsWith("temp/")) {
             UploadedFile finalFile = UploadedFile.builder()
@@ -438,6 +451,11 @@ public class B2FileService {
             return uploadedFileRepository.save(finalFile);
         }
 
+        // Set carId when the upload belongs to a car, so the retry runner
+        // can discover these files via findByCarIdAndStorageStatus()
+        Long carId = (ownerType == ResourceType.CAR_IMAGE && ownerId != null) ? ownerId : null;
+        log.info("Saving TemporaryFile. CarId resolved to: {}", carId);
+
         TemporaryFile tempFile = TemporaryFile.builder()
                 .fileUrl(publicUrl)
                 .fileId(fileId) // Store B2 File ID
@@ -447,9 +465,12 @@ public class B2FileService {
                 .fileSize(fileSize != null ? fileSize : 0L)
                 .uploadedBy(uploader)
                 .fileHash(fileHash)
+                .carId(carId)
                 .build();
 
-        return temporaryFileRepository.save(tempFile);
+        TemporaryFile saved = temporaryFileRepository.save(tempFile);
+        log.info("Saved TemporaryFile with ID: {}, CarId: {}", saved.getId(), saved.getCarId());
+        return saved;
     }
 
     private String generateUniqueFileName(String originalFilename, Long userId) {

@@ -39,6 +39,24 @@ public class TemporaryFile {
 
     private String contentType;
 
+    @Column(name = "car_id")
+    private Long carId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "storage_status", length = 20)
+    @Builder.Default
+    private StorageStatus storageStatus = StorageStatus.TEMPORARY;
+
+    @Column(name = "retry_count")
+    @Builder.Default
+    private Integer retryCount = 0;
+
+    @Column(name = "next_retry_at")
+    private LocalDateTime nextRetryAt;
+
+    @Column(name = "last_error", length = 500)
+    private String lastError;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uploaded_by_id", nullable = false)
     private User uploadedBy;

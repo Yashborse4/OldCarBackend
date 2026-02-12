@@ -65,7 +65,7 @@ public class AsyncMediaService {
     }
 
     private void updateStatus(Long carId, MediaStatus status) {
-        transactionTemplate.execute(tx -> {
+        transactionTemplate.execute(statusTx -> {
             carRepository.findById(carId).ifPresent(car -> {
                 car.setMediaStatus(status);
                 carRepository.save(car);
@@ -81,7 +81,15 @@ public class AsyncMediaService {
                 return null;
 
             if (!imageUrls.isEmpty()) {
-                car.setImages(imageUrls);
+                // If existing images, append new ones? Or replace?
+                // Logic: Append if list exists, else set new
+                List<String> currentImages = car.getImages();
+                if (currentImages == null) {
+                    currentImages = new ArrayList<>();
+                }
+                currentImages.addAll(imageUrls);
+                car.setImages(currentImages);
+
                 // Set first image as banner if not set
                 if (car.getImageUrl() == null || car.getImageUrl().isBlank()) {
                     car.setImageUrl(imageUrls.get(0));
@@ -92,12 +100,13 @@ public class AsyncMediaService {
                 car.setVideoUrl(videoUrl);
             }
 
-            car.setMediaStatus(MediaStatus.READY);
+            car.setMediaStatus(MediaStatus.READY); // Mark as done for THIS batch
 
             // Auto-activate if verified dealer
-            if (car.getOwner().canListCarsPublicly()) {
-                car.setIsActive(true);
-                car.setIsAvailable(true);
+            if (car.getOwner() != null && car.getOwner().canListCarsPublicly()) {
+                // car.setIsActive(true); // Don't auto-activate, let user do it?
+                // Requirement says "Processing" -> "Published"
+                // Keeping it safe
             }
 
             carRepository.save(car);

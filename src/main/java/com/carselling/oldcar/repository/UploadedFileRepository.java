@@ -20,8 +20,12 @@ public interface UploadedFileRepository extends JpaRepository<UploadedFile, Long
 
     List<UploadedFile> findByStorageStatusAndTempExpiresAtBefore(StorageStatus storageStatus, LocalDateTime expiresAt);
 
-    List<UploadedFile> findByOwnerTypeAndOwnerIdAndStorageStatus(ResourceType ownerType, Long ownerId, StorageStatus storageStatus);
+    List<UploadedFile> findByOwnerTypeAndOwnerIdAndStorageStatus(ResourceType ownerType, Long ownerId,
+            StorageStatus storageStatus);
 
     @Query("SELECT uf FROM UploadedFile uf WHERE uf.storageStatus = :storageStatus AND uf.tempExpiresAt < :expiresAt")
-    List<UploadedFile> findExpiredTempFiles(@Param("storageStatus") StorageStatus storageStatus, @Param("expiresAt") LocalDateTime expiresAt);
+    List<UploadedFile> findExpiredTempFiles(@Param("storageStatus") StorageStatus storageStatus,
+            @Param("expiresAt") LocalDateTime expiresAt);
+
+    void deleteByOwnerTypeAndOwnerId(ResourceType ownerType, Long ownerId);
 }
