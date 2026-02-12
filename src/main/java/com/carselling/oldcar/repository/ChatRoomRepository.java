@@ -14,11 +14,16 @@ import java.util.Optional;
 @Repository
 public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
 
+       // 1. Fetch IDs for pagination (Fast, no joins)
+       @Query("SELECT DISTINCT r.id FROM ChatRoom r JOIN ChatParticipant p ON p.chatRoom.id = r.id " +
+                     "WHERE p.user.id = :userId ORDER BY r.lastActivityAt DESC")
+       Page<Long> findChatRoomIdsByParticipantUserId(@Param("userId") Long userId, Pageable pageable);
+
+       // 2. Fetch details for specific IDs (Fast, single query with joins)
        @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
                      "car", "car.images" })
-       @Query("SELECT DISTINCT r FROM ChatRoom r JOIN ChatParticipant p ON p.chatRoom.id = r.id " +
-                     "WHERE p.user.id = :userId")
-       Page<ChatRoom> findByParticipantUserId(@Param("userId") Long userId, Pageable pageable);
+       @Query("SELECT DISTINCT r FROM ChatRoom r WHERE r.id IN :ids ORDER BY r.lastActivityAt DESC")
+       java.util.List<ChatRoom> findAllByIdIn(@Param("ids") java.util.List<Long> ids);
 
        @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
                      "car", "car.images" })
@@ -77,8 +82,9 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
        // OR: Use EntityGraph to eagerness loaded participants.
        // Let's use EntityGraph for participants first to solve N+1 on participants
        // loop.
-       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
-                     "car", "car.images" })
+       // Deprecated: Use findChatRoomIdsByParticipantUserId + findAllByIdIn
+       // Keeping for signature compatibility if needed, but implementation should
+       // change
        @Query("SELECT DISTINCT r FROM ChatRoom r JOIN r.participants p WHERE p.user.id = :userId ORDER BY r.lastActivityAt DESC")
        Page<ChatRoom> findChatRoomsWithParticipants(@Param("userId") Long userId, Pageable pageable);
 }

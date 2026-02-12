@@ -125,7 +125,7 @@ public class ChatRoomController {
         /**
          * Get all chat rooms for the current user
          */
-        @GetMapping
+        @GetMapping({ "", "/rooms" })
         @io.swagger.v3.oas.annotations.Operation(summary = "Get user chats", description = "Get all chat rooms for the current user")
         @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Chat rooms retrieved"),
@@ -142,7 +142,7 @@ public class ChatRoomController {
         /**
          * Get specific chat room details
          */
-        @GetMapping("/{roomId}")
+        @GetMapping({ "/{roomId}", "/rooms/{roomId}" })
         @io.swagger.v3.oas.annotations.Operation(summary = "Get chat room", description = "Get details of a specific chat room")
         public ResponseEntity<ApiResponse<ChatRoomDto>> getChatRoom(
                         @PathVariable Long roomId,

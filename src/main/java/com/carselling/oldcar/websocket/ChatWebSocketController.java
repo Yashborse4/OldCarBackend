@@ -34,6 +34,11 @@ public class ChatWebSocketController {
     /**
      * Handle incoming messages from clients
      */
+    @MessageMapping("/ping")
+    public void ping() {
+        // Heartbeat handler - no action needed, just acknowledgment
+    }
+
     @MessageMapping("/chat/{chatRoomId}/send")
     public void sendMessage(@DestinationVariable Long chatRoomId,
             @Payload SendMessageRequest messageRequest,
