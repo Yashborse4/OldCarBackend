@@ -170,6 +170,7 @@ public class RedisConfig {
 
         // User cache - 30 minutes TTL
         cacheConfigurations.put("users", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
+        cacheConfigurations.put("usersById", defaultCacheConfig.entryTtl(Duration.ofMinutes(5)));
         cacheConfigurations.put("userPreferences", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
         cacheConfigurations.put("similarUsers", defaultCacheConfig.entryTtl(Duration.ofHours(2)));
 
@@ -180,6 +181,10 @@ public class RedisConfig {
         cacheConfigurations.put("vehicleStats", defaultCacheConfig.entryTtl(Duration.ofHours(4)));
         cacheConfigurations.put("trendingVehicles", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
         cacheConfigurations.put("trendingSearches", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
+
+        // High-throughput public car endpoints
+        cacheConfigurations.put("publicCars", defaultCacheConfig.entryTtl(Duration.ofMinutes(2)));
+        cacheConfigurations.put("publicCarDetail", defaultCacheConfig.entryTtl(Duration.ofMinutes(5)));
 
         // Chat and messaging
         cacheConfigurations.put("chatMessages", defaultCacheConfig.entryTtl(Duration.ofHours(1)));
@@ -192,6 +197,9 @@ public class RedisConfig {
         // Fraud detection
         cacheConfigurations.put("fraudDetection", defaultCacheConfig.entryTtl(Duration.ofHours(24)));
 
+        // Car Master Data
+        cacheConfigurations.put("models", defaultCacheConfig.entryTtl(Duration.ofHours(24)));
+
         return cacheConfigurations;
     }
 
@@ -201,11 +209,12 @@ public class RedisConfig {
 
         // Pre-configure cache names for consistency
         cacheManager.setCacheNames(java.util.Arrays.asList(
-                "users", "userPreferences", "similarUsers",
+                "users", "usersById", "userPreferences", "similarUsers",
                 "vehicles", "vehicleSearch", "vehicleRecommendations", "vehicleStats",
                 "trendingVehicles", "trendingSearches",
+                "publicCars", "publicCarDetail",
                 "chatMessages", "userActivity", "systemConfig", "fileMetadata",
-                "fraudDetection"));
+                "fraudDetection", "models"));
 
         return cacheManager;
     }

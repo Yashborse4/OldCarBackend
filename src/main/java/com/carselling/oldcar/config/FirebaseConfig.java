@@ -4,6 +4,8 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnResource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
@@ -11,7 +13,15 @@ import org.springframework.core.io.ClassPathResource;
 import java.io.IOException;
 import java.io.InputStream;
 
+/**
+ * Firebase configuration for push notifications.
+ * Only loads when:
+ * 1. app.firebase.enabled=true (property toggle)
+ * 2. serviceAccountKey.json exists on the classpath
+ */
 @Configuration
+@ConditionalOnProperty(name = "app.firebase.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnResource(resources = "classpath:serviceAccountKey.json")
 @Slf4j
 public class FirebaseConfig {
 
@@ -19,11 +29,6 @@ public class FirebaseConfig {
     public FirebaseApp firebaseApp() {
         try {
             ClassPathResource resource = new ClassPathResource("serviceAccountKey.json");
-
-            if (!resource.exists()) {
-                log.warn("serviceAccountKey.json not found. Firebase features will be disabled.");
-                return null;
-            }
 
             try (InputStream serviceAccount = resource.getInputStream()) {
                 FirebaseOptions options = FirebaseOptions.builder()

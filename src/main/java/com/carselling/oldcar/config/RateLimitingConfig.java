@@ -4,7 +4,7 @@ import com.carselling.oldcar.service.InMemoryCacheService;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.BucketConfiguration;
-import io.github.bucket4j.Refill;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -77,8 +77,10 @@ public class RateLimitingConfig {
 
     public BucketConfiguration createBucketConfiguration() {
         return BucketConfiguration.builder()
-                .addLimit(Bandwidth.classic(capacity,
-                        Refill.greedy(refillTokens, Duration.ofMinutes(refillPeriodMinutes))))
+                .addLimit(Bandwidth.builder()
+                        .capacity(capacity)
+                        .refillGreedy(refillTokens, Duration.ofMinutes(refillPeriodMinutes))
+                        .build())
                 .build();
     }
 

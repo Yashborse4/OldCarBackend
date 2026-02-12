@@ -3,7 +3,7 @@ package com.carselling.oldcar.service.impl;
 import com.carselling.oldcar.service.RateLimitingService;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
-import io.github.bucket4j.Refill;
+
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -29,7 +29,10 @@ public class RateLimitingServiceImpl implements RateLimitingService {
     private Bucket resolveBucket(Long userId, Long chatRoomId) {
         String key = userId + ":" + chatRoomId;
         return buckets.computeIfAbsent(key, k -> {
-            Bandwidth limit = Bandwidth.classic(20, Refill.greedy(20, Duration.ofMinutes(1)));
+            Bandwidth limit = Bandwidth.builder()
+                    .capacity(20)
+                    .refillGreedy(20, Duration.ofMinutes(1))
+                    .build();
             return Bucket.builder().addLimit(limit).build();
         });
     }

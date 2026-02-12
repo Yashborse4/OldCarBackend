@@ -61,11 +61,18 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
             // Check if this request is allowed using our custom rate limiting service
             boolean isAllowed;
 
+            // Extract role for rate limiting
+            String role = com.carselling.oldcar.model.Role.ANONYMOUS.name();
+            if (isAuthenticated()) {
+                role = getUserRole();
+            }
+
             if (rateLimitAnnotation != null) {
                 isAllowed = rateLimitService.isAllowed(bucketKey, rateLimitAnnotation.capacity(),
                         rateLimitAnnotation.refill(), rateLimitAnnotation.refillPeriod());
             } else {
-                isAllowed = rateLimitService.isAllowed(bucketKey);
+                // Fix: Pass the role to use correct limits (DEALER/ADMIN vs ANONYMOUS)
+                isAllowed = rateLimitService.isAllowed(bucketKey, role);
             }
 
             if (isAllowed) {
@@ -198,5 +205,28 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
         // Fall back to remote address
         String remoteAddr = request.getRemoteAddr();
         return "ip:" + (remoteAddr != null ? remoteAddr : "unknown");
+    }
+
+    private boolean isAuthenticated() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken);
+    }
+
+    private String getUserRole() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null)
+            return com.carselling.oldcar.model.Role.ANONYMOUS.name();
+
+        Object principal = auth.getPrincipal();
+        if (principal instanceof UserPrincipal) {
+            return ((UserPrincipal) principal).getRole().name();
+        }
+
+        // Fallback to authorities
+        return auth.getAuthorities().stream()
+                .filter(a -> a.getAuthority().startsWith("ROLE_"))
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .findFirst()
+                .orElse(com.carselling.oldcar.model.Role.USER.name());
     }
 }

@@ -3,8 +3,7 @@ package com.carselling.oldcar.config;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
+
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -21,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @Service
 @Slf4j
-public class RedisHealthService implements HealthIndicator {
+public class RedisHealthService {
 
     @Value("${app.redis.enabled:true}")
     private boolean redisEnabled;
@@ -87,39 +86,6 @@ public class RedisHealthService implements HealthIndicator {
     }
 
     /**
-     * Spring Boot Actuator Health Check
-     */
-    @Override
-    public Health health() {
-        if (!redisEnabled) {
-            return Health.up()
-                    .withDetail("status", "disabled")
-                    .withDetail("message", "Redis is disabled in configuration")
-                    .build();
-        }
-
-        RedisStatus status = getDetailedStatus();
-        
-        if (status.isHealthy()) {
-            return Health.up()
-                    .withDetail("status", "connected")
-                    .withDetail("lastCheckTime", status.getLastCheckTime())
-                    .withDetail("connectionFactory", status.isConnectionFactoryAvailable())
-                    .withDetail("redisTemplate", status.isRedisTemplateAvailable())
-                    .build();
-        } else {
-            return Health.down()
-                    .withDetail("status", "disconnected")
-                    .withDetail("lastError", status.getLastError())
-                    .withDetail("lastCheckTime", status.getLastCheckTime())
-                    .withDetail("connectionFactory", status.isConnectionFactoryAvailable())
-                    .withDetail("redisTemplate", status.isRedisTemplateAvailable())
-                    .withDetail("fallbackActive", true)
-                    .build();
-        }
-    }
-
-    /**
      * Force a Redis health check
      */
     public void forceHealthCheck() {
@@ -148,7 +114,8 @@ public class RedisHealthService implements HealthIndicator {
             Object retrievedValue = redisTemplate.opsForValue().get(testKey);
 
             if (!testValue.equals(retrievedValue)) {
-                setUnhealthy("Redis health check failed - value mismatch. Expected: " + testValue + ", Got: " + retrievedValue);
+                setUnhealthy("Redis health check failed - value mismatch. Expected: " + testValue + ", Got: "
+                        + retrievedValue);
                 return;
             }
 
@@ -255,7 +222,7 @@ public class RedisHealthService implements HealthIndicator {
 
         @Override
         public String toString() {
-            return String.format("RedisStatus{enabled=%s, healthy=%s, lastCheck=%s, error='%s'}", 
+            return String.format("RedisStatus{enabled=%s, healthy=%s, lastCheck=%s, error='%s'}",
                     enabled, healthy, lastCheckTime, lastError);
         }
     }
