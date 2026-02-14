@@ -66,8 +66,8 @@ app:
   # JWT Configuration (short expiration for tests)
   jwt:
     secret: testSecretKey1234567890123456789012345678901234567890
-    access-token-expiration: 300000 # 5 minutes for tests
-    refresh-token-expiration: 600000 # 10 minutes for tests
+    expiration-ms: 300000 # 5 minutes for tests
+    refresh-token-expiration-ms: 600000 # 10 minutes for tests
     
   # File Upload Configuration
   upload:
