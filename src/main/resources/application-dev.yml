@@ -79,7 +79,7 @@ management:
 app:
   # JWT Configuration (shorter expiration for development)
   jwt:
-    secret: myDevSecretKey123456789012345678901234567890
+    secret: ${JWT_SECRET:dev-only-change-me-32-chars-minimum}
     # Consistent keys with JwtTokenProvider
     expiration-ms: 86400000 # 24 hours for development
     refresh-token-expiration-ms: 86400000 # 24 hours for development

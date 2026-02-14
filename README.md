@@ -4,7 +4,7 @@ The backend service for the "Sell-the-old-Car" application, a robust marketplace
 
 ## 🚀 Tech Stack
 
-- **Core Framework**: Java 17+, Spring Boot 3.x
+- **Core Framework**: Java 21+, Spring Boot 3.x
 - **API**: 
   - GraphQL (schema defined in `schema.graphqls`)
   - REST Controllers (for file uploads, specific integrations)
@@ -27,7 +27,7 @@ The backend service for the "Sell-the-old-Car" application, a robust marketplace
 
 ### Prerequisites
 
-- JVM (Java 17 or higher)
+- JVM (Java 21 or higher)
 - Docker Desktop (for running dependencies)
 - Git
 
@@ -56,7 +56,7 @@ Validates that PostgreSQL, Redis, and OpenSearch are running.
     ./gradlew bootRun
     ```
 
-The application will start on port `8080` (default).
+The application will start on port `9000` (default).
 
 ### Application Startup Lifecycle
 
