@@ -35,9 +35,10 @@ public class TempFileStorageService {
     private final FileValidationService fileValidationService;
 
     @Transactional
-    public UploadedFile storeTempFile(MultipartFile file, User uploadedBy, ResourceType ownerType, Long ownerId) throws IOException {
-        log.info("Storing temp file: {} for user: {} and owner: {}", 
-                 file.getOriginalFilename(), uploadedBy.getId(), ownerId);
+    public UploadedFile storeTempFile(MultipartFile file, User uploadedBy, ResourceType ownerType, Long ownerId)
+            throws IOException {
+        log.info("Storing temp file: {} for user: {} and owner: {}",
+                file.getOriginalFilename(), uploadedBy.getId(), ownerId);
 
         // Create temp directory if it doesn't exist
         Path tempDirPath = Paths.get(tempDirectory);
@@ -68,9 +69,9 @@ public class TempFileStorageService {
                 .ownerId(ownerId)
                 .storageStatus(StorageStatus.TEMPORARY)
                 .tempExpiresAt(LocalDateTime.now().plusHours(tempExpiryHours))
-                .validationStatus(fileValidationService.validateFile(file, null) ? 
-                    com.carselling.oldcar.model.ValidationStatus.VALIDATED : 
-                    com.carselling.oldcar.model.ValidationStatus.PENDING)
+                .validationStatus(fileValidationService.validateFile(file, null)
+                        ? com.carselling.oldcar.model.ValidationStatus.VALIDATED
+                        : com.carselling.oldcar.model.ValidationStatus.PENDING)
                 .build();
 
         // Validate the file
@@ -134,7 +135,7 @@ public class TempFileStorageService {
 
         LocalDateTime now = LocalDateTime.now();
         List<UploadedFile> expiredFiles = uploadedFileRepository.findByStorageStatusAndTempExpiresAtBefore(
-            StorageStatus.TEMPORARY, now);
+                StorageStatus.TEMPORARY, now);
 
         log.info("Found {} expired temp files to clean up", expiredFiles.size());
 
@@ -161,7 +162,7 @@ public class TempFileStorageService {
 
     public List<UploadedFile> getTempFilesForOwner(ResourceType ownerType, Long ownerId) {
         return uploadedFileRepository.findByOwnerTypeAndOwnerIdAndStorageStatus(
-            ownerType, ownerId, StorageStatus.TEMPORARY);
+                ownerType, ownerId, StorageStatus.TEMPORARY);
     }
 
     public boolean isTempFileExpired(UploadedFile file) {
@@ -176,8 +177,8 @@ public class TempFileStorageService {
             return "";
         }
         int lastDotIndex = filename.lastIndexOf('.');
-        return (lastDotIndex > 0 && lastDotIndex < filename.length() - 1) 
-            ? filename.substring(lastDotIndex + 1).toLowerCase() 
-            : "";
+        return (lastDotIndex > 0 && lastDotIndex < filename.length() - 1)
+                ? filename.substring(lastDotIndex + 1).toLowerCase()
+                : "";
     }
 }

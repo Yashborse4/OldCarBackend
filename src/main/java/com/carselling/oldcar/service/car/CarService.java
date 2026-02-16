@@ -76,4 +76,13 @@ public interface CarService {
     java.util.List<CarResponse> getVehiclesByIds(java.util.List<String> ids);
 
     void activateDealerCars(Long dealerId);
+
+    // Media management operations
+    CarResponse deleteCarImage(String carId, int imageIndex, Long currentUserId);
+
+    CarResponse replaceCarImage(String carId, int imageIndex, String newImageUrl, Long currentUserId);
+
+    CarResponse deleteCarVideo(String carId, Long currentUserId);
+
+    CarResponse updateCarBanner(String carId, int imageIndex, Long currentUserId);
 }

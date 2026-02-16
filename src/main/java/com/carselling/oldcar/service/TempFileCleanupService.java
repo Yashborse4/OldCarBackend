@@ -63,9 +63,12 @@ public class TempFileCleanupService {
                     // Continue to delete from DB to keep metadata clean
                 }
 
-                // Delete from DB
-                temporaryFileRepository.delete(file);
-                log.debug("Deleted temporary file record: {}", file.getId());
+                // Soft Delete in DB
+                file.setStorageStatus(com.carselling.oldcar.model.StorageStatus.DELETED);
+                file.setDeletedAt(LocalDateTime.now());
+                temporaryFileRepository.save(file);
+
+                log.debug("Soft deleted temporary file record: {}", file.getId());
 
             } catch (Exception e) {
                 log.error("Failed to cleanup temporary file {}: {}", file.getId(), e.getMessage());

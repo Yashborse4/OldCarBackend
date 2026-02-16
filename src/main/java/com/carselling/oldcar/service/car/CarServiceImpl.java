@@ -271,7 +271,8 @@ public class CarServiceImpl implements CarService {
     public CarResponse createVehicle(CarRequest request, Long currentUserId, String idempotencyKey) {
         log.debug("Creating new vehicle for user: {} (idempotency: {})", currentUserId, idempotencyKey);
 
-        // Validate request inputs
+        // Validate and Sanitize
+        validateMandatoryFields(request);
         validateCarRequest(request);
 
         // Check for duplicate request using idempotency key
@@ -375,8 +376,8 @@ public class CarServiceImpl implements CarService {
             long imageCount = temporaryFiles.stream()
                     .filter(f -> fileValidationService.isImageFile(f.getOriginalFileName()))
                     .count();
-            if (imageCount > 9) {
-                throw new BusinessException("Maximum 9 images allowed per vehicle");
+            if (imageCount > 8) {
+                throw new BusinessException("Maximum 8 images allowed per vehicle");
             }
 
             // 2. Set Car ID and Save
@@ -429,13 +430,37 @@ public class CarServiceImpl implements CarService {
         Car car = findCarAndEnsureVersion(carId);
         User owner = car.getOwner();
 
-        // Security check
+        // 1. Security check
         if (currentUserId != null && !owner.getId().equals(currentUserId)) {
             throw new SecurityException("You do not own this vehicle");
         }
 
         if (car.getStatus() == CarStatus.ARCHIVED) {
             throw new BusinessException("Cannot update media when vehicle status is ARCHIVED");
+        }
+
+        // 2. Limit Validation (Max 8 Images, 1 Video)
+        List<com.carselling.oldcar.model.TemporaryFile> tempFiles = temporaryFileRepository.findAllById(tempFileIds);
+
+        long newVideos = tempFiles.stream()
+                .filter(f -> fileValidationService.isVideoFile(f.getOriginalFileName()))
+                .count();
+
+        long newImages = tempFiles.stream()
+                .filter(f -> fileValidationService.isImageFile(f.getOriginalFileName()))
+                .count();
+
+        // Check Video Limit
+        boolean hasExistingVideo = car.getVideoUrl() != null && !car.getVideoUrl().isBlank();
+        if (newVideos > 0 && (hasExistingVideo || newVideos > 1)) {
+            throw new BusinessException("Maximum 1 video allowed per vehicle. Please delete the existing video first.");
+        }
+
+        // Check Image Limit
+        int currentImageCount = car.getImages() != null ? car.getImages().size() : 0;
+        if (currentImageCount + newImages > 8) {
+            throw new BusinessException(
+                    String.format("Maximum 8 images allowed. Existing: %d, New: %d", currentImageCount, newImages));
         }
 
         try {
@@ -449,18 +474,40 @@ public class CarServiceImpl implements CarService {
                             ResourceType.CAR_IMAGE, carId, owner);
 
             if (finalizedFiles.isEmpty()) {
-                log.warn("Media finalization returned no files for car {}. Marking as FAILED.", carId);
-                car.setMediaStatus(MediaStatus.FAILED);
-                car.setStatus(CarStatus.DRAFT);
+                log.warn("Media finalization returned no files for car {}.", carId);
+                // If we were expecting files but got none, strictly we might want to error,
+                // but for now we just return the car as is.
             } else {
-                List<String> finalizedUrls = finalizedFiles.stream()
+                // Separate new images and videos
+                List<String> newImageUrls = finalizedFiles.stream()
+                        .filter(f -> fileValidationService.isImageFile(f.getFileName()))
                         .map(UploadedFile::getFileUrl)
                         .collect(Collectors.toList());
 
-                car.setImages(finalizedUrls);
-                if (!finalizedUrls.isEmpty()) {
-                    car.setImageUrl(finalizedUrls.get(0));
+                String newVideoUrl = finalizedFiles.stream()
+                        .filter(f -> fileValidationService.isVideoFile(f.getFileName()))
+                        .map(UploadedFile::getFileUrl)
+                        .findFirst()
+                        .orElse(null);
+
+                // 3. Append Images
+                if (!newImageUrls.isEmpty()) {
+                    List<String> allImages = car.getImages() != null ? new ArrayList<>(car.getImages())
+                            : new ArrayList<>();
+                    allImages.addAll(newImageUrls);
+                    car.setImages(allImages);
+
+                    // Set first image as banner if valid
+                    if (!allImages.isEmpty() && (car.getImageUrl() == null || car.getImageUrl().isBlank())) {
+                        car.setImageUrl(allImages.get(0));
+                    }
                 }
+
+                // 4. Set Video
+                if (newVideoUrl != null) {
+                    car.setVideoUrl(newVideoUrl);
+                }
+
                 car.setMediaStatus(MediaStatus.READY);
                 autoActivateIfEligible(car);
             }
@@ -476,7 +523,6 @@ public class CarServiceImpl implements CarService {
             throw e;
         } catch (Exception e) {
             log.error("Transient error finalizing media for car {}: {}. Will be retried.", carId, e.getMessage());
-            // Do NOT set FAILED status here. Leave as PROCESSING/INIT for retry job.
             throw new BusinessException("Media finalization failed: " + e.getMessage());
         }
     }
@@ -499,8 +545,8 @@ public class CarServiceImpl implements CarService {
             // Upload files using B2 service with correct resource type
 
             // Validate Count and Types
-            if (images.size() > 9) {
-                throw new BusinessException("Maximum 9 images allowed per vehicle");
+            if (images.size() > 8) {
+                throw new BusinessException("Maximum 8 images allowed per vehicle");
             }
 
             // Ensure all are images
@@ -937,6 +983,200 @@ public class CarServiceImpl implements CarService {
                 "Media uploaded for vehicle by user " + currentUserId);
 
         return convertToResponseV2(updatedCar);
+    }
+
+    // ==================== GRANULAR MEDIA MANAGEMENT ====================
+
+    /**
+     * Delete a single image at the given index from a car's image list.
+     * Deletes the file from B2 storage and the DB record.
+     * If the deleted image was the banner, the next image becomes the banner.
+     *
+     * @param carId         Car ID
+     * @param imageIndex    Zero-based index of the image to delete
+     * @param currentUserId ID of the requesting user
+     * @return Updated car response
+     */
+    @Override
+    @Transactional
+    public CarResponse deleteCarImage(String carId, int imageIndex, Long currentUserId) {
+        log.info("Deleting image at index {} from car {} by user {}", imageIndex, carId, currentUserId);
+
+        Car car = findCarAndEnsureVersion(Long.parseLong(carId));
+        assertCanModifyCar(car, currentUserId, "delete image from");
+
+        List<String> images = car.getImages() != null ? new ArrayList<>(car.getImages()) : new ArrayList<>();
+        if (imageIndex < 0 || imageIndex >= images.size()) {
+            throw new BusinessException(
+                    "Image index " + imageIndex + " is out of bounds. Car has " + images.size() + " images.");
+        }
+
+        String deletedUrl = images.remove(imageIndex);
+
+        // Cleanup from B2 storage and DB
+        cleanupMediaFile(deletedUrl);
+
+        car.setImages(images);
+
+        // Update banner: if we deleted the cover (index 0), set next image as banner
+        if (images.isEmpty()) {
+            car.setImageUrl(null);
+        } else {
+            car.setImageUrl(images.get(0));
+        }
+
+        car.setUpdatedAt(LocalDateTime.now());
+        Car updatedCar = carRepository.save(car);
+        auditLogService.logDataAccess("Car", updatedCar.getId(), "IMAGE_DELETE", getUsername(currentUserId),
+                "Deleted image at index " + imageIndex + " by user " + currentUserId);
+
+        return convertToResponseV2(updatedCar);
+    }
+
+    /**
+     * Replace a single image at the given index with a new image URL.
+     * The old image is deleted from B2 storage and the DB record.
+     *
+     * @param carId         Car ID
+     * @param imageIndex    Zero-based index of the image to replace
+     * @param newImageUrl   URL of the new image (must already be uploaded)
+     * @param currentUserId ID of the requesting user
+     * @return Updated car response
+     */
+    @Override
+    @Transactional
+    public CarResponse replaceCarImage(String carId, int imageIndex, String newImageUrl, Long currentUserId) {
+        log.info("Replacing image at index {} for car {} by user {}", imageIndex, carId, currentUserId);
+
+        Car car = findCarAndEnsureVersion(Long.parseLong(carId));
+        assertCanModifyCar(car, currentUserId, "replace image on");
+
+        List<String> images = car.getImages() != null ? new ArrayList<>(car.getImages()) : new ArrayList<>();
+        if (imageIndex < 0 || imageIndex >= images.size()) {
+            throw new BusinessException(
+                    "Image index " + imageIndex + " is out of bounds. Car has " + images.size() + " images.");
+        }
+
+        fileValidationService.validateFileUrl(newImageUrl);
+
+        String oldUrl = images.get(imageIndex);
+        images.set(imageIndex, newImageUrl);
+
+        // Cleanup the replaced image from B2 and DB
+        cleanupMediaFile(oldUrl);
+
+        car.setImages(images);
+
+        // Update banner if we replaced the cover image (index 0)
+        if (imageIndex == 0) {
+            car.setImageUrl(newImageUrl);
+        }
+
+        car.setUpdatedAt(LocalDateTime.now());
+        Car updatedCar = carRepository.save(car);
+        auditLogService.logDataAccess("Car", updatedCar.getId(), "IMAGE_REPLACE", getUsername(currentUserId),
+                "Replaced image at index " + imageIndex + " by user " + currentUserId);
+
+        return convertToResponseV2(updatedCar);
+    }
+
+    /**
+     * Delete the video from a car listing.
+     * Removes the file from B2 storage and clears the videoUrl field.
+     *
+     * @param carId         Car ID
+     * @param currentUserId ID of the requesting user
+     * @return Updated car response
+     */
+    @Override
+    @Transactional
+    public CarResponse deleteCarVideo(String carId, Long currentUserId) {
+        log.info("Deleting video from car {} by user {}", carId, currentUserId);
+
+        Car car = findCarAndEnsureVersion(Long.parseLong(carId));
+        assertCanModifyCar(car, currentUserId, "delete video from");
+
+        String oldVideoUrl = car.getVideoUrl();
+        if (oldVideoUrl == null || oldVideoUrl.isBlank()) {
+            throw new BusinessException("Car has no video to delete.");
+        }
+
+        // Cleanup from B2 and DB
+        cleanupMediaFile(oldVideoUrl);
+
+        car.setVideoUrl(null);
+        car.setUpdatedAt(LocalDateTime.now());
+        Car updatedCar = carRepository.save(car);
+        auditLogService.logDataAccess("Car", updatedCar.getId(), "VIDEO_DELETE", getUsername(currentUserId),
+                "Deleted video by user " + currentUserId);
+
+        return convertToResponseV2(updatedCar);
+    }
+
+    /**
+     * Set the image at the given index as the banner (cover) image.
+     * Moves the image to position 0 in the list and updates imageUrl.
+     *
+     * @param carId         Car ID
+     * @param imageIndex    Zero-based index of the image to promote
+     * @param currentUserId ID of the requesting user
+     * @return Updated car response
+     */
+    @Override
+    @Transactional
+    public CarResponse updateCarBanner(String carId, int imageIndex, Long currentUserId) {
+        log.info("Setting image at index {} as banner for car {} by user {}", imageIndex, carId, currentUserId);
+
+        Car car = findCarAndEnsureVersion(Long.parseLong(carId));
+        assertCanModifyCar(car, currentUserId, "update banner of");
+
+        List<String> images = car.getImages() != null ? new ArrayList<>(car.getImages()) : new ArrayList<>();
+        if (imageIndex < 0 || imageIndex >= images.size()) {
+            throw new BusinessException(
+                    "Image index " + imageIndex + " is out of bounds. Car has " + images.size() + " images.");
+        }
+
+        if (imageIndex == 0) {
+            // Already the banner, no-op
+            return convertToResponseV2(car);
+        }
+
+        // Move image to front
+        String promoted = images.remove(imageIndex);
+        images.add(0, promoted);
+
+        car.setImages(images);
+        car.setImageUrl(promoted);
+
+        car.setUpdatedAt(LocalDateTime.now());
+        Car updatedCar = carRepository.save(car);
+        auditLogService.logDataAccess("Car", updatedCar.getId(), "BANNER_UPDATE", getUsername(currentUserId),
+                "Set image at index " + imageIndex + " as banner by user " + currentUserId);
+
+        return convertToResponseV2(updatedCar);
+    }
+
+    /**
+     * Helper: Cleanup a media file from B2 storage and the UploadedFile DB record.
+     * Logs warnings but does not throw on cleanup failure.
+     *
+     * @param fileUrl The URL of the file to delete
+     */
+    private void cleanupMediaFile(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank())
+            return;
+        try {
+            b2FileService.deleteFile(fileUrl);
+            log.debug("Deleted media file from B2: {}", fileUrl);
+        } catch (Exception e) {
+            log.warn("Failed to delete media file from B2: {} - {}", fileUrl, e.getMessage());
+        }
+        try {
+            uploadedFileRepository.findByFileUrl(fileUrl)
+                    .ifPresent(uploadedFileRepository::delete);
+        } catch (Exception e) {
+            log.warn("Failed to delete UploadedFile record for: {} - {}", fileUrl, e.getMessage());
+        }
     }
 
     /**
@@ -1566,6 +1806,15 @@ public class CarServiceImpl implements CarService {
             if (request.getMileage() < 0 || request.getMileage() > 9999999) {
                 throw new BusinessException("Invalid mileage. Must be between 0 and 9,999,999 km");
             }
+        }
+    }
+
+    /**
+     * Validate mandatory fields for creation.
+     */
+    private void validateMandatoryFields(CarRequest request) {
+        if (request == null) {
+            throw new BusinessException("Vehicle data is required");
         }
 
         // Make validation
