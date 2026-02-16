@@ -132,6 +132,7 @@ public class AuthServiceImpl implements AuthService {
                 .location(user.getLocation())
                 .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                 .verifiedDealer(Boolean.TRUE.equals(user.getDealerStatus() == DealerStatus.VERIFIED))
+                .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
                 .expiresAt(null)
                 .refreshExpiresAt(null)
                 .expiresIn(900L)
@@ -329,6 +330,7 @@ public class AuthServiceImpl implements AuthService {
                 .location(user.getLocation())
                 .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                 .verifiedDealer(user.getDealerStatus() == DealerStatus.VERIFIED)
+                .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
                 .expiresAt(expiresAt)
                 .refreshExpiresAt(refreshExpiresAt)
                 .expiresIn(900L)
@@ -416,6 +418,7 @@ public class AuthServiceImpl implements AuthService {
                     .location(user.getLocation())
                     .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                     .verifiedDealer(user.getDealerStatus() == DealerStatus.VERIFIED)
+                    .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
                     .build();
 
             return TokenValidationResponse.builder()

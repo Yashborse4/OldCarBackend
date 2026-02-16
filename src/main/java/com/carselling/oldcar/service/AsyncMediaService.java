@@ -65,53 +65,75 @@ public class AsyncMediaService {
     }
 
     private void updateStatus(Long carId, MediaStatus status) {
-        transactionTemplate.execute(statusTx -> {
-            carRepository.findById(carId).ifPresent(car -> {
-                car.setMediaStatus(status);
-                carRepository.save(car);
+        executeWithRetry(() -> {
+            transactionTemplate.execute(statusTx -> {
+                carRepository.findById(carId).ifPresent(car -> {
+                    car.setMediaStatus(status);
+                    carRepository.save(car);
+                });
+                return null;
             });
-            return null;
         });
     }
 
     private void updateCarMedia(Long carId, List<String> imageUrls, String videoUrl) {
-        transactionTemplate.execute(tx -> {
-            Car car = carRepository.findById(carId).orElse(null);
-            if (car == null)
+        executeWithRetry(() -> {
+            transactionTemplate.execute(tx -> {
+                Car car = carRepository.findById(carId).orElse(null);
+                if (car == null)
+                    return null;
+
+                if (!imageUrls.isEmpty()) {
+                    List<String> currentImages = car.getImages();
+                    if (currentImages == null) {
+                        currentImages = new ArrayList<>();
+                    }
+                    currentImages.addAll(imageUrls);
+                    car.setImages(currentImages);
+
+                    if (car.getImageUrl() == null || car.getImageUrl().isBlank()) {
+                        car.setImageUrl(imageUrls.get(0));
+                    }
+                }
+
+                if (videoUrl != null) {
+                    car.setVideoUrl(videoUrl);
+                }
+
+                car.setMediaStatus(MediaStatus.READY);
+
+                if (car.getOwner() != null && car.getOwner().canListCarsPublicly()) {
+                    // car.setIsActive(true); // Don't auto-activate, let user do it?
+                }
+
+                carRepository.save(car);
                 return null;
-
-            if (!imageUrls.isEmpty()) {
-                // If existing images, append new ones? Or replace?
-                // Logic: Append if list exists, else set new
-                List<String> currentImages = car.getImages();
-                if (currentImages == null) {
-                    currentImages = new ArrayList<>();
-                }
-                currentImages.addAll(imageUrls);
-                car.setImages(currentImages);
-
-                // Set first image as banner if not set
-                if (car.getImageUrl() == null || car.getImageUrl().isBlank()) {
-                    car.setImageUrl(imageUrls.get(0));
-                }
-            }
-
-            if (videoUrl != null) {
-                car.setVideoUrl(videoUrl);
-            }
-
-            car.setMediaStatus(MediaStatus.READY); // Mark as done for THIS batch
-
-            // Auto-activate if verified dealer
-            if (car.getOwner() != null && car.getOwner().canListCarsPublicly()) {
-                // car.setIsActive(true); // Don't auto-activate, let user do it?
-                // Requirement says "Processing" -> "Published"
-                // Keeping it safe
-            }
-
-            carRepository.save(car);
-            return null;
+            });
         });
+    }
+
+    private void executeWithRetry(Runnable action) {
+        int maxRetries = 3;
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                action.run();
+                return;
+            } catch (org.springframework.orm.ObjectOptimisticLockingFailureException
+                    | org.hibernate.StaleObjectStateException e) {
+                log.warn("Optimistic locking failure in AsyncMediaService, retrying operation (attempt {}/{})", i + 1,
+                        maxRetries);
+                if (i == maxRetries - 1) {
+                    log.error("Max retries reached for optimistic locking failure", e);
+                    throw e;
+                }
+                try {
+                    Thread.sleep(100 + (long) (Math.random() * 200)); // Jittered backoff
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted during retry backoff", ie);
+                }
+            }
+        }
     }
 
     private boolean isSuspicious(String url) {

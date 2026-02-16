@@ -290,10 +290,16 @@ public class MediaServiceImpl implements MediaService {
             throw new RuntimeException("Unknown upload result type");
         }
 
+        // NOTE: Do NOT trigger per-file async processing or status updates here.
+        // With concurrent uploads (e.g. 4 images), each completeDirectUpload call would
+        // spawn its own async thread, all racing to update the same Car entity and
+        // causing
+        // ObjectOptimisticLockingFailureException. Instead, the frontend calls
+        // finalizeVehicleMedia after ALL files are uploaded, which is the single
+        // correct
+        // trigger point for bulk media processing.
         if (resourceType == ResourceType.CAR_IMAGE) {
-            carService.updateMediaStatus(resourceOwnerId.toString(), MediaStatus.PROCESSING, user.getId());
-            // Trigger async processing for this single file
-            asyncMediaService.processMedia(resourceOwnerId, List.of(responseFileUrl));
+            log.info("File registered for car {} — bulk processing deferred to finalizeVehicleMedia", resourceOwnerId);
         }
 
         return DirectUploadDTOs.CompleteResponse.builder()

@@ -25,13 +25,13 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class JwtTokenProvider {
 
-    @Value("${app.jwt.secret}")
+    @Value("${app.jwt.secret:defaultSecretKeyForDevelopmentOnlyDoNotUseInProduction1234567890}")
     private String jwtSecret;
 
-    @Value("${app.jwt.expiration-ms}")
+    @Value("${app.jwt.expiration-ms:86400000}")
     private long jwtExpirationMs;
 
-    @Value("${app.jwt.refresh-token-expiration-ms}")
+    @Value("${app.jwt.refresh-token-expiration-ms:604800000}")
     private long refreshTokenExpirationMs;
 
     private javax.crypto.SecretKey key;
