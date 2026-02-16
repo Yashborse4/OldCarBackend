@@ -35,10 +35,10 @@ public class NotificationProcessor {
     private int maxRetries;
 
     /**
-     * Process pending notifications every 30 seconds.
+     * Process pending notifications every 5 minutes.
      * Uses a lock to prevent concurrent execution.
      */
-    @Scheduled(fixedDelay = 90000) // Run every 90 seconds
+    @Scheduled(fixedDelay = 300_000) // Run every 5 minutes
     public void processQueue() {
         // Prevent concurrent execution
         if (!isProcessing.compareAndSet(false, true)) {
