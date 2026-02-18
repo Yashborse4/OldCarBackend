@@ -33,8 +33,10 @@ public class ChatParticipantDto {
         private String email;
         private String displayName;
         private String profileImage;
+        private String systemRole; // DEALER, USER, ADMIN etc.
+        private String phoneNumber;
     }
-    
+
     // Convenience method for ChatWebSocketController
     public Long getUserId() {
         return this.user != null ? this.user.getId() : null;

@@ -85,6 +85,30 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
        // Deprecated: Use findChatRoomIdsByParticipantUserId + findAllByIdIn
        // Keeping for signature compatibility if needed, but implementation should
        // change
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
+                     "car", "car.images" })
        @Query("SELECT DISTINCT r FROM ChatRoom r JOIN r.participants p WHERE p.user.id = :userId ORDER BY r.lastActivityAt DESC")
        Page<ChatRoom> findChatRoomsWithParticipants(@Param("userId") Long userId, Pageable pageable);
+
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
+                     "car", "car.images" })
+       @Query("SELECT DISTINCT r FROM ChatRoom r " +
+                     "JOIN r.participants p " +
+                     "WHERE p.user.id = :userId " +
+                     "AND (LOWER(r.name) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR EXISTS (SELECT 1 FROM ChatParticipant p2 WHERE p2.chatRoom = r " +
+                     "AND (LOWER(p2.user.firstName) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR LOWER(p2.user.lastName) LIKE LOWER(CONCAT('%', :query, '%')) " +
+                     "OR LOWER(p2.user.username) LIKE LOWER(CONCAT('%', :query, '%'))))) " +
+                     "ORDER BY r.lastActivityAt DESC")
+       Page<ChatRoom> searchRooms(@Param("query") String query, @Param("userId") Long userId, Pageable pageable);
+
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
+                     "car", "car.images" })
+       @Query("SELECT DISTINCT r FROM ChatRoom r " +
+                     "JOIN ChatParticipant p ON p.chatRoom.id = r.id " +
+                     "WHERE p.user.id = :userId " +
+                     "AND r.car.id = :carId " +
+                     "ORDER BY r.lastActivityAt DESC")
+       java.util.List<ChatRoom> findByCarIdAndUserId(@Param("carId") Long carId, @Param("userId") Long userId);
 }

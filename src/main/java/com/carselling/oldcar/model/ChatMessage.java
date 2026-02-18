@@ -11,10 +11,13 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "chat_messages_v2",
-       uniqueConstraints = {
-               @UniqueConstraint(columnNames = {"sender_id", "client_message_id"})
-       })
+@Table(name = "chat_messages_v2", uniqueConstraints = {
+        @UniqueConstraint(columnNames = { "sender_id", "client_message_id" })
+}, indexes = {
+        @Index(name = "idx_chatmessage_chatroom", columnList = "chat_room_id"),
+        @Index(name = "idx_chatmessage_created_at", columnList = "created_at"),
+        @Index(name = "idx_chatmessage_room_created", columnList = "chat_room_id, created_at")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

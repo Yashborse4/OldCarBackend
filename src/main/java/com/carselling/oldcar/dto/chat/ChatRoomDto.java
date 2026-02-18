@@ -19,6 +19,7 @@ public class ChatRoomDto {
     private String name;
     private String description;
     private String type;
+    private String imageUrl;
     private CreatedBy createdBy;
     private boolean isActive;
     private Long carId;
@@ -28,6 +29,7 @@ public class ChatRoomDto {
     private int participantCount;
     private LastMessage lastMessage;
     private Integer maxParticipants;
+    private Long unreadCount;
 
     // Inquiry specific fields
     private String status;

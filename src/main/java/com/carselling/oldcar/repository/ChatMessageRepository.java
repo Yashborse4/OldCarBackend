@@ -41,6 +41,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
                      "FROM ChatParticipant p " +
                      "JOIN ChatMessage m ON m.chatRoom.id = p.chatRoom.id " +
                      "WHERE p.user.id = :userId " +
+                     "AND p.isActive = true " +
                      "AND m.id > COALESCE(p.lastReadMessageId, 0) " +
                      "AND m.isDeleted = false " +
                      "GROUP BY p.chatRoom.id")
@@ -58,4 +59,23 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
                      "   GROUP BY m2.chatRoom.id" +
                      ")")
        List<ChatMessage> findLatestMessagesByChatRoomIds(@Param("chatRoomIds") List<Long> chatRoomIds);
+
+       @Query("SELECT m.chatRoom.id, COUNT(m) " +
+                     "FROM ChatParticipant p " +
+                     "JOIN ChatMessage m ON m.chatRoom.id = p.chatRoom.id " +
+                     "WHERE p.user.id = :userId " +
+                     "AND m.chatRoom.id IN :chatRoomIds " +
+                     "AND m.id > COALESCE(p.lastReadMessageId, 0) " +
+                     "AND m.isDeleted = false " +
+                     "GROUP BY m.chatRoom.id")
+       List<Object[]> countUnreadMessages(@Param("userId") Long userId, @Param("chatRoomIds") List<Long> chatRoomIds);
+
+       @Query("SELECT m FROM ChatMessage m " +
+                     "WHERE m.chatRoom.id = :chatId " +
+                     "AND m.isDeleted = false " +
+                     "AND m.messageType IN ('IMAGE', 'FILE', 'VIDEO') " +
+                     "ORDER BY m.createdAt DESC")
+       Page<ChatMessage> findMediaMessages(@Param("chatId") Long chatId, Pageable pageable);
+
+       Optional<ChatMessage> findByFileUrl(String fileUrl);
 }

@@ -11,7 +11,13 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "chat_rooms_v2")
+@Table(name = "chat_rooms_v2", indexes = {
+        @Index(name = "idx_chatroom_created_by", columnList = "created_by"),
+        @Index(name = "idx_chatroom_car", columnList = "car_id"),
+        @Index(name = "idx_chatroom_status", columnList = "status"),
+        @Index(name = "idx_chatroom_type", columnList = "type"),
+        @Index(name = "idx_chatroom_updated_at", columnList = "updated_at")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -28,13 +34,28 @@ public class ChatRoom {
     @Column(length = 1000)
     private String description;
 
+    @Column(name = "image_url")
+    private String imageUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private ChatType type;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by_id", nullable = false)
+    @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
+
+    // Explicitly map the legacy column as writable to satisfy the NOT NULL
+    // constraint
+    @Column(name = "created_by_id", insertable = true, updatable = false)
+    private Long createdById;
+
+    @PrePersist
+    public void prePersist() {
+        if (this.createdBy != null) {
+            this.createdById = this.createdBy.getId();
+        }
+    }
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "car_id")
