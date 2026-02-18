@@ -171,8 +171,11 @@ public class NotificationService {
                 cleanupInvalidTokens(tokens, response.getResponses());
             }
             return response.getSuccessCount() > 0 || response.getFailureCount() < validTokens.size();
+        } catch (FirebaseMessagingException e) {
+            log.error("Firebase error sending notification to user {}: {}", userId, e.getMessage());
+            return false;
         } catch (Exception e) {
-            log.error("Failed to send notification to user {}", userId, e);
+            log.error("Unexpected error sending notification to user {}", userId, e);
             return false;
         }
     }
@@ -213,8 +216,10 @@ public class NotificationService {
         try {
             String response = FirebaseMessaging.getInstance().send(message);
             log.info("Sent broadcast notification: {}", response);
+        } catch (FirebaseMessagingException e) {
+            log.error("Firebase error sending broadcast: {}", e.getMessage());
         } catch (Exception e) {
-            log.error("Failed to send broadcast", e);
+            log.error("Unexpected error sending broadcast", e);
         }
     }
 

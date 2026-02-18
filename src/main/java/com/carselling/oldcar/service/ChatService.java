@@ -5,6 +5,7 @@ import com.carselling.oldcar.dto.file.FileUploadResponse;
 import com.carselling.oldcar.exception.ResourceNotFoundException;
 import com.carselling.oldcar.exception.BusinessException;
 import com.carselling.oldcar.model.*;
+import com.carselling.oldcar.repository.ChatInviteLinkRepository;
 import com.carselling.oldcar.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +45,7 @@ public class ChatService {
     private final MediaFinalizationService mediaFinalizationService;
     private final ChatAuthorizationService chatAuthorizationService;
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+    private final ChatInviteLinkRepository chatInviteLinkRepository;
 
     @Value("${app.chat.max-participants:50}")
     private int maxGroupParticipants;
@@ -83,14 +85,22 @@ public class ChatService {
                         msg -> msg,
                         (existing, replacement) -> existing)); // Handle potential duplicates safely
 
-        // 4. Map to DTOs using the pre-fetched map
-        return chatRoomsPage.map(chatRoom -> convertToRoomDto(chatRoom, latestMessageMap.get(chatRoom.getId())));
+        // 4. Batch Fetch Unread Counts
+        List<Object[]> unreadCounts = chatMessageRepository.countUnreadMessages(userId, chatRoomIds);
+        Map<Long, Long> unreadCountMap = unreadCounts.stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]));
+
+        // 5. Map to DTOs
+        return chatRoomsPage.map(chatRoom -> convertToRoomDto(chatRoom, latestMessageMap.get(chatRoom.getId()),
+                unreadCountMap.getOrDefault(chatRoom.getId(), 0L)));
     }
 
     /**
-     * Internal conversion with pre-fetched last message
+     * Internal conversion with pre-fetched last message and unread count
      */
-    private ChatRoomDto convertToRoomDto(ChatRoom chatRoom, ChatMessage lastMessage) {
+    private ChatRoomDto convertToRoomDto(ChatRoom chatRoom, ChatMessage lastMessage, Long unreadCount) {
         // Optimization: Filter participants in memory to avoid N+1 DB calls
         // findChatRoomsWithParticipants already eagerly fetches participants via
         // EntityGraph
@@ -118,6 +128,7 @@ public class ChatService {
                 .updatedAt(chatRoom.getUpdatedAt())
                 .lastActivityAt(chatRoom.getLastActivityAt())
                 .participantCount(participants.size())
+                .unreadCount(unreadCount)
                 .lastMessage(lastMessage != null ? ChatRoomDto.LastMessage.builder()
                         .id(lastMessage.getId())
                         .content(lastMessage.getContent())
@@ -165,7 +176,7 @@ public class ChatService {
             throw new AccessDeniedException("Access denied to chat room");
         }
 
-        return convertToRoomDto(chatRoom);
+        return convertToRoomDto(chatRoom, userId);
     }
 
     /**
@@ -193,7 +204,7 @@ public class ChatService {
 
         if (existingChat != null) {
             log.info("Returning existing private chat ID: {}", existingChat.getId());
-            return convertToRoomDto(existingChat);
+            return convertToRoomDto(existingChat, currentUserId);
         }
 
         User currentUser = getUserById(currentUserId);
@@ -204,6 +215,7 @@ public class ChatService {
                 .name(generatePrivateChatName(currentUser, otherUser))
                 .type(ChatRoom.ChatType.PRIVATE)
                 .createdBy(currentUser)
+                .createdById(currentUser.getId()) // Explicitly set to avoid null constraint violation
                 .isActive(true)
                 .build();
 
@@ -214,7 +226,7 @@ public class ChatService {
         addParticipant(chatRoom, otherUser, ChatParticipant.ParticipantRole.MEMBER);
 
         log.info("Created private chat ID: {}", chatRoom.getId());
-        return convertToRoomDto(chatRoom);
+        return convertToRoomDto(chatRoom, currentUserId);
     }
 
     /**
@@ -230,6 +242,7 @@ public class ChatService {
                 .description(request.getDescription())
                 .type(ChatRoom.ChatType.valueOf(request.getType().toUpperCase()))
                 .createdBy(creator)
+                .createdById(creator.getId()) // Explicitly set to avoid null constraint violation
                 .isActive(true)
                 .maxParticipants(request.getMaxParticipants())
                 .build();
@@ -250,7 +263,7 @@ public class ChatService {
         }
 
         log.info("Created group chat ID: {}", chatRoom.getId());
-        return convertToRoomDto(chatRoom);
+        return convertToRoomDto(chatRoom, creatorId);
     }
 
     /**
@@ -311,7 +324,7 @@ public class ChatService {
                         .build();
                 sendMessage(msgRequest, buyerId);
             }
-            return convertToRoomDto(existingChat);
+            return convertToRoomDto(existingChat, buyerId);
         }
 
         // Calculate initial lead score
@@ -346,7 +359,7 @@ public class ChatService {
         }
 
         log.info("Created car inquiry chat ID: {}", chatRoom.getId());
-        return convertToRoomDto(chatRoom);
+        return convertToRoomDto(chatRoom, buyerId);
     }
 
     /**
@@ -377,7 +390,7 @@ public class ChatService {
             inquiries = chatRoomRepository.findDealerInquiries(dealerId, pageable);
         }
 
-        return inquiries.map(this::convertToRoomDto);
+        return inquiries.map(chatRoom -> convertToRoomDto(chatRoom, dealerId));
     }
 
     /**
@@ -405,7 +418,7 @@ public class ChatService {
             }
 
             chatRoom = chatRoomRepository.save(chatRoom);
-            return convertToRoomDto(chatRoom);
+            return convertToRoomDto(chatRoom, dealerId);
         } catch (IllegalArgumentException e) {
             throw new BusinessException("Invalid inquiry status");
         }
@@ -516,7 +529,7 @@ public class ChatService {
                     }
                 }
             } catch (Exception e) {
-                log.error("Failed to finalize chat file: {}", e.getMessage());
+                log.error("Unexpected error finalizing chat file: {}", e.getMessage());
                 throw new BusinessException("Failed to process attached file");
             }
         }
@@ -930,19 +943,16 @@ public class ChatService {
      */
     @Transactional(readOnly = true)
     public List<ChatParticipantDto> searchDealers(String query) {
-        // This relies on a new repository method or filtering existing one
-        // For simplicity, reusing searchUsers and filtering in stream ifrepo support
-        // missing
-        // But better to add specific query in UserRepository.
-        // Falling back to searchUsers for now and filtering by role
-        return userRepository.searchUsers(query).stream()
-                .filter(u -> u.getRole() == Role.DEALER)
+        log.info("Searching dealers for query: '{}'", query);
+        return userRepository.searchDealers(query).stream()
                 .map(user -> ChatParticipantDto.builder()
                         .user(ChatParticipantDto.UserInfo.builder()
                                 .id(user.getId())
                                 .username(user.getUsername())
                                 .email(user.getEmail())
                                 .displayName(user.getDisplayName())
+                                .systemRole(user.getRole().name())
+                                .phoneNumber(user.getPhoneNumber())
                                 .build())
                         .role(ChatParticipant.ParticipantRole.MEMBER.name())
                         .isActive(true)
@@ -1030,12 +1040,20 @@ public class ChatService {
 
     // DTO conversion methods
 
-    private ChatRoomDto convertToRoomDto(ChatRoom chatRoom) {
+    private ChatRoomDto convertToRoomDto(ChatRoom chatRoom, Long userId) {
         // Fallback to DB fetch for single item (legacy behavior for single fetches)
         ChatMessage lastMessage = chatMessageRepository
                 .findFirstByChatRoomIdOrderByCreatedAtDesc(chatRoom.getId())
                 .orElse(null);
-        return convertToRoomDto(chatRoom, lastMessage);
+
+        Long unreadCount = 0L;
+        if (userId != null) {
+            List<Object[]> counts = chatMessageRepository.countUnreadMessages(userId, List.of(chatRoom.getId()));
+            if (!counts.isEmpty()) {
+                unreadCount = (Long) counts.get(0)[1];
+            }
+        }
+        return convertToRoomDto(chatRoom, lastMessage, unreadCount);
     }
 
     private ChatMessageDto convertToMessageDto(ChatMessage message) {
@@ -1092,6 +1110,8 @@ public class ChatService {
                         .username(participant.getUser().getUsername())
                         .email(participant.getUser().getEmail())
                         .displayName(participant.getUser().getDisplayName())
+                        .systemRole(participant.getUser().getRole().name())
+                        .phoneNumber(participant.getUser().getPhoneNumber())
                         .build())
                 .role(participant.getRole().name())
                 .joinedAt(participant.getJoinedAt())
@@ -1132,7 +1152,7 @@ public class ChatService {
         }
 
         chatRoom = chatRoomRepository.save(chatRoom);
-        return convertToRoomDto(chatRoom);
+        return convertToRoomDto(chatRoom, userId);
     }
 
     /**
@@ -1212,7 +1232,7 @@ public class ChatService {
         Page<ChatRoom> dealerGroups = chatRoomRepository
                 .findByParticipantUserIdAndType(userId, ChatRoom.ChatType.GROUP, pageable);
 
-        return dealerGroups.map(this::convertToRoomDto);
+        return dealerGroups.map(chatRoom -> convertToRoomDto(chatRoom, userId));
     }
 
     /**
@@ -1293,4 +1313,195 @@ public class ChatService {
 
         return searchMessagesInChat(chatId, query, userId, pageable);
     }
+
+    /**
+     * Get media messages in chat
+     */
+    @Transactional(readOnly = true)
+    public Page<ChatMessageDto> getMediaMessages(Long chatId, Long userId, Pageable pageable) {
+        log.info("Getting media messages for chat ID: {} by user ID: {}", chatId, userId);
+
+        ChatRoom chatRoom = getChatRoomById(chatId);
+        if (!hasAccessToChat(chatRoom, userId)) {
+            throw new AccessDeniedException("Access denied to chat room");
+        }
+
+        Page<ChatMessage> messages = chatMessageRepository.findMediaMessages(chatId, pageable);
+        return messages.map(this::convertToMessageDto);
+    }
+
+    /**
+     * Search chats by name or participant
+     */
+    @Transactional(readOnly = true)
+    public Page<ChatRoomDto> searchChats(String query, Long userId, Pageable pageable) {
+        log.info("Searching chat rooms for query: '{}' by user ID: {}", query, userId);
+        Page<ChatRoom> chatRooms = chatRoomRepository.searchRooms(query, userId, pageable);
+        return chatRooms.map(chatRoom -> convertToRoomDto(chatRoom, userId));
+    }
+
+    /**
+     * Get chats related to a specific car
+     */
+    @Transactional(readOnly = true)
+    public List<ChatRoomDto> getCarChats(Long carId, Long userId) {
+        log.info("Getting chats for car ID: {} by user ID: {}", carId, userId);
+        java.util.List<ChatRoom> chatRooms = chatRoomRepository.findByCarIdAndUserId(carId, userId);
+        return chatRooms.stream()
+                .map(chatRoom -> convertToRoomDto(chatRoom, userId))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Mark message as delivered
+     */
+    @Transactional
+    public void markAsDelivered(Long messageId, Long userId) {
+        // userId here is the recipient who received the message
+        log.info("Marking message ID: {} as delivered to user ID: {}", messageId, userId);
+
+        ChatMessage message = chatMessageRepository.findById(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found"));
+
+        if (message.getSender().getId().equals(userId)) {
+            // Sender cannot mark their own message as delivered to themselves in this
+            // context
+            return;
+        }
+
+        // Only mark if not already read/delivered
+        if (message.getDeliveryStatus() == ChatMessage.DeliveryStatus.SENT) {
+            message.setDeliveryStatus(ChatMessage.DeliveryStatus.DELIVERED);
+            chatMessageRepository.save(message);
+
+            // Send real-time update to sender
+            sendRealTimeMessageUpdate(message.getChatRoom(), convertToMessageDto(message), "DELIVERED");
+        }
+    }
+
+    /**
+     * Search users (broad search)
+     */
+    @Transactional(readOnly = true)
+    public List<ChatParticipantDto> searchUsers(String query) {
+        log.info("Searching users for query: '{}'", query);
+        List<User> users = userRepository.searchUsers(query);
+        return users.stream()
+                .map(user -> ChatParticipantDto.builder()
+                        .user(ChatParticipantDto.UserInfo.builder()
+                                .id(user.getId())
+                                .username(user.getUsername())
+                                .email(user.getEmail())
+                                .displayName(user.getDisplayName())
+                                .systemRole(user.getRole().name())
+                                .phoneNumber(user.getPhoneNumber())
+                                .build())
+                        .role("MEMBER") // Default role for search results
+                        .isActive(true)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    // ========================= INVITE LINKS =========================
+
+    /**
+     * Create or retrieve invite link for a chat room
+     */
+    @Transactional
+    public String createInviteLink(Long chatId, Long userId) {
+        log.info("Creating invite link for chat ID: {} by user ID: {}", chatId, userId);
+
+        ChatRoom chatRoom = getChatRoomById(chatId);
+
+        // Only allow admins to create invite links for group chats
+        if (chatRoom.getType() == ChatRoom.ChatType.GROUP) {
+            ChatParticipant participant = chatParticipantRepository.findByChatRoomIdAndUserId(chatId, userId)
+                    .orElseThrow(() -> new AccessDeniedException("Access denied to chat room"));
+
+            if (participant.getRole() != ChatParticipant.ParticipantRole.ADMIN) {
+                throw new AccessDeniedException("Only admins can create invite links");
+            }
+        } else {
+            throw new IllegalArgumentException("Invite links are only supported for group chats");
+        }
+
+        // Check if active link exists
+        java.util.Optional<ChatInviteLink> existingLink = chatInviteLinkRepository.findByChatRoomId(chatId);
+        if (existingLink.isPresent()) {
+            ChatInviteLink link = existingLink.get();
+            if (!link.isExpired()) {
+                return link.getToken();
+            } else {
+                // Remove expired link
+                chatInviteLinkRepository.delete(link);
+            }
+        }
+
+        // Create new link
+        String token = java.util.UUID.randomUUID().toString();
+        ChatInviteLink newLink = ChatInviteLink.builder()
+                .chatRoom(chatRoom)
+                .creator(userRepository.findById(userId).orElseThrow())
+                .token(token)
+                .expiresAt(LocalDateTime.now().plusDays(7)) // Valid for 7 days
+                .build();
+
+        chatInviteLinkRepository.save(newLink);
+        return token;
+    }
+
+    /**
+     * Get chat info from invite token
+     */
+    @Transactional(readOnly = true)
+    public ChatRoomDto getInviteInfo(String token) {
+        ChatInviteLink inviteLink = chatInviteLinkRepository.findByToken(token)
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid or expired invite link"));
+
+        if (inviteLink.isExpired()) {
+            throw new ResourceNotFoundException("Invite link has expired");
+        }
+
+        return convertToRoomDto(inviteLink.getChatRoom(), null);
+    }
+
+    /**
+     * Join chat via invite link
+     */
+    @Transactional
+    public ChatRoomDto joinChatByLink(String token, Long userId) {
+        log.info("User ID: {} joining chat via link: {}", userId, token);
+
+        ChatInviteLink inviteLink = chatInviteLinkRepository.findByToken(token)
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid or expired invite link"));
+
+        if (inviteLink.isExpired()) {
+            throw new ResourceNotFoundException("Invite link has expired");
+        }
+
+        ChatRoom chatRoom = inviteLink.getChatRoom();
+
+        // Check if user is already a member
+        if (chatParticipantRepository.findByChatRoomIdAndUserId(chatRoom.getId(), userId).isPresent()) {
+            return convertToRoomDto(chatRoom, userId);
+        }
+
+        // Add user to chat
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        ChatParticipant participant = ChatParticipant.builder()
+                .chatRoom(chatRoom)
+                .user(user)
+                .role(ChatParticipant.ParticipantRole.MEMBER)
+                .build();
+
+        chatParticipantRepository.save(participant);
+
+        // Send system message
+        sendSystemMessage(chatRoom, user.getDisplayName() + " joined via invite link");
+
+        return convertToRoomDto(chatRoom, userId);
+    }
+
 }

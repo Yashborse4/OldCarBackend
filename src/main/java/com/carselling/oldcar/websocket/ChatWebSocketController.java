@@ -63,11 +63,17 @@ public class ChatWebSocketController {
             // Send real-time notification for unread count updates
             updateUnreadCountsForParticipants(chatRoomId, message.getSender().getId());
 
-        } catch (Exception e) {
-            log.error("Error sending WebSocket message: {}", e.getMessage(), e);
+        } catch (org.springframework.messaging.MessagingException e) {
+            log.error("Messaging error sending WebSocket message: {}", e.getMessage(), e);
             UserPrincipal userPrincipal = resolveUser(authentication);
             if (userPrincipal != null) {
                 sendErrorToUser(userPrincipal.getUsername(), "Failed to send message: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            log.error("Unexpected error sending WebSocket message: {}", e.getMessage(), e);
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal != null) {
+                sendErrorToUser(userPrincipal.getUsername(), "An unexpected error occurred while sending message.");
             }
         }
     }
@@ -99,11 +105,17 @@ public class ChatWebSocketController {
             // Broadcast edit to all participants in the chat room
             broadcastMessageUpdateToChatRoom(updatedMessage.getChatRoomId(), updateDto);
 
-        } catch (Exception e) {
-            log.error("Error editing WebSocket message: {}", e.getMessage(), e);
+        } catch (org.springframework.messaging.MessagingException e) {
+            log.error("Messaging error editing WebSocket message: {}", e.getMessage(), e);
             UserPrincipal userPrincipal = resolveUser(authentication);
             if (userPrincipal != null) {
                 sendErrorToUser(userPrincipal.getUsername(), "Failed to edit message: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            log.error("Unexpected error editing WebSocket message: {}", e.getMessage(), e);
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal != null) {
+                sendErrorToUser(userPrincipal.getUsername(), "An unexpected error occurred while editing message.");
             }
         }
     }
@@ -139,8 +151,22 @@ public class ChatWebSocketController {
             // Broadcast deletion to all participants in the chat room
             broadcastMessageUpdateToChatRoom(chatRoomId, updateDto);
 
+        } catch (com.carselling.oldcar.exception.ResourceNotFoundException e) {
+            log.warn("Message not found during deletion: {}", e.getMessage());
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal != null) {
+                sendErrorToUser(userPrincipal.getUsername(), "Message not found or already deleted.");
+            }
+        } catch (SecurityException e) {
+            log.warn("Unauthorized deletion attempt by user {}: {}",
+                    resolveUser(authentication) != null ? resolveUser(authentication).getId() : "unknown",
+                    e.getMessage());
+            UserPrincipal userPrincipal = resolveUser(authentication);
+            if (userPrincipal != null) {
+                sendErrorToUser(userPrincipal.getUsername(), "You are not authorized to delete this message.");
+            }
         } catch (Exception e) {
-            log.error("Error deleting WebSocket message: {}", e.getMessage(), e);
+            log.error("Unexpected error deleting WebSocket message: {}", e.getMessage(), e);
             UserPrincipal userPrincipal = resolveUser(authentication);
             if (userPrincipal != null) {
                 sendErrorToUser(userPrincipal.getUsername(), "Failed to delete message: " + e.getMessage());

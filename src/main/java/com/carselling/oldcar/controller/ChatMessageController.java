@@ -231,4 +231,30 @@ public class ChatMessageController {
                 return ResponseEntity.ok(ApiResponse.success("Typing indicator sent",
                                 Map.of("message", "Typing indicator sent")));
         }
+
+        /**
+         * Get media messages in a chat room
+         */
+        @GetMapping("/rooms/{chatRoomId}/media")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Get media messages", description = "Get all media messages (images, files, videos) in a chat room")
+        public ResponseEntity<ApiResponse<Page<ChatMessageDto>>> getMediaMessages(
+                        @PathVariable Long chatRoomId,
+                        @PageableDefault(size = 20) Pageable pageable,
+                        @org.springframework.security.core.annotation.AuthenticationPrincipal com.carselling.oldcar.security.UserPrincipal currentUser) {
+                Page<ChatMessageDto> messages = chatService.getMediaMessages(chatRoomId, currentUser.getId(), pageable);
+                return ResponseEntity.ok(ApiResponse.success("Media messages retrieved successfully", messages));
+        }
+
+        /**
+         * Mark message as delivered
+         */
+        @PostMapping("/messages/{messageId}/delivered")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Mark message as delivered", description = "Mark a specific message as delivered")
+        public ResponseEntity<ApiResponse<Map<String, String>>> markAsDelivered(
+                        @PathVariable Long messageId,
+                        @org.springframework.security.core.annotation.AuthenticationPrincipal com.carselling.oldcar.security.UserPrincipal currentUser) {
+                chatService.markAsDelivered(messageId, currentUser.getId());
+                return ResponseEntity.ok(ApiResponse.success("Message marked as delivered",
+                                Map.of("message", "Message marked as delivered")));
+        }
 }

@@ -31,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ChatRoomController {
 
         private final ChatService chatService;
+        private final com.carselling.oldcar.service.GroupChatService groupChatService;
 
         // ========================= CHAT ROOM MANAGEMENT =========================
 
@@ -254,6 +255,34 @@ public class ChatRoomController {
                                 .body(ApiResponse.success("Dealer group created successfully", dealerGroup));
         }
 
+        // ========================= GROUP EDITING =========================
+
+        /**
+         * Update group details (Name, Description)
+         */
+        @PatchMapping("/groups/{chatId}/details")
+        public ResponseEntity<ApiResponse<ChatRoomDto>> updateGroupDetails(
+                        @PathVariable Long chatId,
+                        @Valid @RequestBody UpdateGroupDetailsRequest request,
+                        Authentication authentication) {
+                UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
+                ChatRoomDto updatedRoom = groupChatService.updateGroupDetails(chatId, request, currentUser.getId());
+                return ResponseEntity.ok(ApiResponse.success("Group details updated successfully", updatedRoom));
+        }
+
+        /**
+         * Update group profile image
+         */
+        @PostMapping(value = "/groups/{chatId}/image", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+        public ResponseEntity<ApiResponse<ChatRoomDto>> updateGroupImage(
+                        @PathVariable Long chatId,
+                        @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+                        Authentication authentication) {
+                UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
+                ChatRoomDto updatedRoom = groupChatService.updateGroupImage(chatId, file, currentUser.getId());
+                return ResponseEntity.ok(ApiResponse.success("Group image updated successfully", updatedRoom));
+        }
+
         // ========================= GROUP INVITES & SEARCH =========================
 
         /**
@@ -312,5 +341,80 @@ public class ChatRoomController {
                         Authentication authentication) {
                 List<ChatParticipantDto> dealers = chatService.searchDealers(query);
                 return ResponseEntity.ok(ApiResponse.success("Dealers found", dealers));
+        }
+
+        /**
+         * Search users (broad search)
+         */
+        @GetMapping("/users/search")
+        public ResponseEntity<ApiResponse<List<ChatParticipantDto>>> searchUsers(
+                        @RequestParam String query,
+                        Authentication authentication) {
+                List<ChatParticipantDto> users = chatService.searchUsers(query);
+                return ResponseEntity.ok(ApiResponse.success("Users found", users));
+        }
+
+        /**
+         * Search chat rooms
+         */
+        @GetMapping("/search")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Search chats", description = "Search for chat rooms by name or participant")
+        public ResponseEntity<ApiResponse<Page<ChatRoomDto>>> searchChats(
+                        @RequestParam String query,
+                        @PageableDefault(size = 20) Pageable pageable,
+                        Authentication authentication) {
+                UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
+                Page<ChatRoomDto> chatRooms = chatService.searchChats(query, currentUser.getId(), pageable);
+                return ResponseEntity.ok(ApiResponse.success("Chats found successfully", chatRooms));
+        }
+
+        /**
+         * Get chats for a specific car
+         */
+        @GetMapping("/car/{carId}")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Get car chats", description = "Get all chats related to a specific car")
+        public ResponseEntity<ApiResponse<java.util.List<ChatRoomDto>>> getCarChats(
+                        @PathVariable Long carId,
+                        Authentication authentication) {
+                UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
+                java.util.List<ChatRoomDto> chatRooms = chatService.getCarChats(carId, currentUser.getId());
+                return ResponseEntity.ok(ApiResponse.success("Car chats retrieved successfully", chatRooms));
+        }
+
+        // ========================= INVITE LINKS =========================
+
+        /**
+         * Create invite link
+         */
+        @PostMapping("/rooms/{chatId}/invite-link")
+        public ResponseEntity<ApiResponse<Map<String, String>>> createInviteLink(
+                        @PathVariable Long chatId,
+                        Authentication authentication) {
+                UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
+                String token = chatService.createInviteLink(chatId, currentUser.getId());
+                return ResponseEntity.ok(ApiResponse.success("Invite link created", Map.of("token", token)));
+        }
+
+        /**
+         * Get invite info
+         */
+        @GetMapping("/invites/{token}")
+        public ResponseEntity<ApiResponse<ChatRoomDto>> getInviteInfo(
+                        @PathVariable String token,
+                        Authentication authentication) {
+                ChatRoomDto chatRoom = chatService.getInviteInfo(token);
+                return ResponseEntity.ok(ApiResponse.success("Invite info retrieved", chatRoom));
+        }
+
+        /**
+         * Join chat by invite link
+         */
+        @PostMapping("/invites/{token}/join")
+        public ResponseEntity<ApiResponse<ChatRoomDto>> joinChatByLink(
+                        @PathVariable String token,
+                        Authentication authentication) {
+                UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
+                ChatRoomDto chatRoom = chatService.joinChatByLink(token, currentUser.getId());
+                return ResponseEntity.ok(ApiResponse.success("Joined chat successfully", chatRoom));
         }
 }
