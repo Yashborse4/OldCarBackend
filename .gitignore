@@ -199,3 +199,8 @@ compilation_log*.txt
 compile_error.txt
 status_full.txt
 compile_errors.txt
+
+
+*.yml
+*.yaml
+*.properties

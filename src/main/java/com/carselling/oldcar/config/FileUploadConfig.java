@@ -20,6 +20,10 @@ public class FileUploadConfig {
     @Min(1)
     private int maxFileSizeMB = 3; // Updated to 3MB
 
+    @Max(20)
+    @Min(1)
+    private int maxImageSizeMB = 5; // Default 5MB for images
+
     @Max(500)
     @Min(1)
     private int maxVideoSizeMB = 250; // Updated to 300MB
@@ -61,6 +65,14 @@ public class FileUploadConfig {
 
     public void setMaxFileSizeMB(int maxFileSizeMB) {
         this.maxFileSizeMB = maxFileSizeMB;
+    }
+
+    public int getMaxImageSizeMB() {
+        return maxImageSizeMB;
+    }
+
+    public void setMaxImageSizeMB(int maxImageSizeMB) {
+        this.maxImageSizeMB = maxImageSizeMB;
     }
 
     public int getMaxVideoSizeMB() {
