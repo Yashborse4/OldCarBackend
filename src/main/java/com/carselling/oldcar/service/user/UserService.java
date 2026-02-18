@@ -326,10 +326,7 @@ public class UserService {
 
         User currentUser = authService.getCurrentUser();
 
-        // Validate file is an image
-        if (!isImageFile(file)) {
-            throw new IllegalArgumentException("Invalid file type. Only image files are allowed.");
-        }
+        // Validation handled by FileUploadService
 
         return uploadProfileImageForUser(currentUser.getId(), file);
     }
@@ -343,10 +340,7 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-        // Validate file is an image
-        if (!isImageFile(file)) {
-            throw new IllegalArgumentException("Invalid file type. Only image files are allowed.");
-        }
+        // Validation handled by FileUploadService
 
         // Check permission
         User currentUser = authService.getCurrentUser();
@@ -457,8 +451,4 @@ public class UserService {
         return currentUser.getId().equals(targetUser.getId());
     }
 
-    private boolean isImageFile(org.springframework.web.multipart.MultipartFile file) {
-        String contentType = file.getContentType();
-        return contentType != null && contentType.startsWith("image/");
-    }
 }

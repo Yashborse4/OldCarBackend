@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 public class TokenValidationResponse {
     private boolean valid;
     private UserDetails userDetails;
-    
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -36,5 +36,6 @@ public class TokenValidationResponse {
          * Whether the user has been verified as a dealer.
          */
         private Boolean verifiedDealer;
+        private String dealerStatus; // Added to support granular status display
     }
 }

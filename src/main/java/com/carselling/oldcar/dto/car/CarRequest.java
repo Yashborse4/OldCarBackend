@@ -68,12 +68,18 @@ public class CarRequest {
     private Boolean engineIssues;
     private Boolean floodDamage;
     private Boolean insuranceClaims;
+    @Size(max = 100, message = "Variant must not exceed 100 characters")
     private String variant;
+
+    @Pattern(regexp = "^(PROCESSING|ACTIVE|SOLD|DELETED|ARCHIVED)$", message = "Invalid status")
     private String status;
 
     @Size(max = 20, message = "Registration number must not exceed 20 characters")
     private String registrationNumber;
+    @Size(max = 50, message = "Usage must not exceed 50 characters")
     private String usage;
+
+    @Size(max = 200, message = "Condition description must not exceed 200 characters")
     private String condition;
 
     private Double latitude;

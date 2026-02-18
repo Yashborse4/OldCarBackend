@@ -214,4 +214,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
        @Query("UPDATE User u SET u.dealerStatus = :status, u.dealerStatusReason = :reason, u.dealerStatusUpdatedAt = CURRENT_TIMESTAMP WHERE u.id = :userId")
        int updateDealerStatus(@Param("userId") Long userId, @Param("status") DealerStatus status,
                      @Param("reason") String reason);
+
+       // Search dealers by name or showroom
+       @Query("SELECT u FROM User u WHERE " +
+                     "(LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                     "LOWER(u.dealerName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+                     "LOWER(u.showroomName) LIKE LOWER(CONCAT('%', :query, '%'))) " +
+                     "AND u.role = com.carselling.oldcar.model.Role.DEALER " +
+                     "AND u.isActive = true")
+       List<User> searchDealers(@Param("query") String query);
 }

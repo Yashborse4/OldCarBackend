@@ -26,6 +26,7 @@ public class JwtAuthResponse {
     private String location;
     private Boolean emailVerified;
     private Boolean verifiedDealer;
+    private String dealerStatus; // Added to support granular status display
     private LocalDateTime expiresAt;
     private LocalDateTime refreshExpiresAt;
     private Long expiresIn; // in seconds

@@ -80,6 +80,9 @@ public class CarServiceImpl implements CarService {
     private final ViewCountService viewCountService;
     private final PlatformTransactionManager transactionManager;
 
+    private static final int MAX_VIDEO_COUNT = 1;
+    private static final int MAX_IMAGE_COUNT = 8;
+
     /**
      * Get all vehicles with pagination
      */
@@ -369,16 +372,13 @@ public class CarServiceImpl implements CarService {
             long videoCount = temporaryFiles.stream()
                     .filter(f -> fileValidationService.isVideoFile(f.getOriginalFileName()))
                     .count();
-            if (videoCount > 1) {
-                throw new BusinessException("Maximum 1 video allowed per vehicle");
-            }
 
             long imageCount = temporaryFiles.stream()
                     .filter(f -> fileValidationService.isImageFile(f.getOriginalFileName()))
                     .count();
-            if (imageCount > 8) {
-                throw new BusinessException("Maximum 8 images allowed per vehicle");
-            }
+
+            // Validate using shared helper (no existing media for new car)
+            validateMediaLimits(videoCount, imageCount, false, 0);
 
             // 2. Set Car ID and Save
             for (com.carselling.oldcar.model.TemporaryFile tf : temporaryFiles) {
@@ -450,18 +450,11 @@ public class CarServiceImpl implements CarService {
                 .filter(f -> fileValidationService.isImageFile(f.getOriginalFileName()))
                 .count();
 
-        // Check Video Limit
+        // Check Limits using shared helper
         boolean hasExistingVideo = car.getVideoUrl() != null && !car.getVideoUrl().isBlank();
-        if (newVideos > 0 && (hasExistingVideo || newVideos > 1)) {
-            throw new BusinessException("Maximum 1 video allowed per vehicle. Please delete the existing video first.");
-        }
-
-        // Check Image Limit
         int currentImageCount = car.getImages() != null ? car.getImages().size() : 0;
-        if (currentImageCount + newImages > 8) {
-            throw new BusinessException(
-                    String.format("Maximum 8 images allowed. Existing: %d, New: %d", currentImageCount, newImages));
-        }
+
+        validateMediaLimits(newVideos, newImages, hasExistingVideo, currentImageCount);
 
         try {
             log.info("Finalizing media for car {}", carId);
@@ -1877,5 +1870,23 @@ public class CarServiceImpl implements CarService {
             }
         }
         return car;
+    }
+
+    /**
+     * Helper method to validate media limits.
+     * Centralizes logic for both creation and updates.
+     */
+    private void validateMediaLimits(long newVideos, long newImages, boolean hasExistingVideo, int currentImageCount) {
+        long totalVideos = newVideos + (hasExistingVideo ? 1 : 0);
+        if (totalVideos > MAX_VIDEO_COUNT) {
+            throw new BusinessException("Maximum " + MAX_VIDEO_COUNT + " video allowed per vehicle"
+                    + (hasExistingVideo ? ". Please delete the existing video first." : ""));
+        }
+
+        if (currentImageCount + newImages > MAX_IMAGE_COUNT) {
+            throw new BusinessException(
+                    String.format("Maximum %d images allowed. Existing: %d, New: %d", MAX_IMAGE_COUNT,
+                            currentImageCount, newImages));
+        }
     }
 }
