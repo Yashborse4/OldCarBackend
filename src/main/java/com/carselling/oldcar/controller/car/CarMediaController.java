@@ -149,4 +149,97 @@ public class CarMediaController {
                                 "Media files have been securely processed and linked",
                                 updatedCar));
         }
+
+        // ==================== GRANULAR MEDIA MANAGEMENT ====================
+
+        /**
+         * Delete a specific image by index
+         * DELETE /api/cars/{id}/media/images/{index}
+         */
+        @DeleteMapping("/{id}/media/images/{index}")
+        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Delete image", description = "Delete a specific image by index")
+        public ResponseEntity<ApiResponse<CarResponse>> deleteImage(
+                        @PathVariable String id,
+                        @PathVariable int index) {
+
+                log.info("Deleting image at index {} from car {}", index, id);
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                CarResponse updatedCar = carService.deleteCarImage(id, index, currentUserId);
+
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Image deleted successfully",
+                                "Image has been removed from your vehicle",
+                                updatedCar));
+        }
+
+        /**
+         * Replace a specific image by index (new image URL in body)
+         * PUT /api/cars/{id}/media/images/{index}
+         */
+        @PutMapping("/{id}/media/images/{index}")
+        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Replace image", description = "Replace a specific image by index with a new URL")
+        public ResponseEntity<ApiResponse<CarResponse>> replaceImage(
+                        @PathVariable String id,
+                        @PathVariable int index,
+                        @RequestBody java.util.Map<String, String> body) {
+
+                String newImageUrl = body.get("imageUrl");
+                if (newImageUrl == null || newImageUrl.isBlank()) {
+                        return ResponseEntity.badRequest().body(ApiResponse.error(
+                                        "Missing imageUrl",
+                                        "Request body must contain 'imageUrl' field"));
+                }
+
+                log.info("Replacing image at index {} for car {}", index, id);
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                CarResponse updatedCar = carService.replaceCarImage(id, index, newImageUrl, currentUserId);
+
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Image replaced successfully",
+                                "Image has been updated on your vehicle",
+                                updatedCar));
+        }
+
+        /**
+         * Delete the video from a car
+         * DELETE /api/cars/{id}/media/video
+         */
+        @DeleteMapping("/{id}/media/video")
+        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Delete video", description = "Delete the video from a vehicle")
+        public ResponseEntity<ApiResponse<CarResponse>> deleteVideo(
+                        @PathVariable String id) {
+
+                log.info("Deleting video from car {}", id);
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                CarResponse updatedCar = carService.deleteCarVideo(id, currentUserId);
+
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Video deleted successfully",
+                                "Video has been removed from your vehicle",
+                                updatedCar));
+        }
+
+        /**
+         * Set an image as the banner (cover) by index
+         * PUT /api/cars/{id}/media/banner/{index}
+         */
+        @PutMapping("/{id}/media/banner/{index}")
+        @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
+        @io.swagger.v3.oas.annotations.Operation(summary = "Set banner image", description = "Set an image as the banner/cover by index")
+        public ResponseEntity<ApiResponse<CarResponse>> setBanner(
+                        @PathVariable String id,
+                        @PathVariable int index) {
+
+                log.info("Setting image at index {} as banner for car {}", index, id);
+                Long currentUserId = SecurityUtils.getCurrentUserId();
+                CarResponse updatedCar = carService.updateCarBanner(id, index, currentUserId);
+
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Banner updated successfully",
+                                "Cover image has been changed",
+                                updatedCar));
+        }
 }

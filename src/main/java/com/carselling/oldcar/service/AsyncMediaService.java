@@ -58,8 +58,11 @@ public class AsyncMediaService {
 
             log.info("Media processing completed for car: {}", carId);
 
+        } catch (org.springframework.dao.DataAccessException e) {
+            log.error("Database error during media processing for car {}: {}", carId, e.getMessage());
+            updateStatus(carId, MediaStatus.FAILED);
         } catch (Exception e) {
-            log.error("Media processing failed for car: {}", carId, e);
+            log.error("Unexpected error during media processing for car: {}", carId, e);
             updateStatus(carId, MediaStatus.FAILED);
         }
     }

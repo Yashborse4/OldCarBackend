@@ -71,7 +71,7 @@ class MediaFinalizationServiceTest {
     }
 
     @Test
-    void finalizeUploads_segregatesImagesAndVideos() {
+    void finalizeUploads_segregatesImagesAndVideos() throws Exception {
         // Arrange
         when(temporaryFileRepository.findById(101L)).thenReturn(Optional.of(imageFile));
         when(temporaryFileRepository.findById(102L)).thenReturn(Optional.of(videoFile));

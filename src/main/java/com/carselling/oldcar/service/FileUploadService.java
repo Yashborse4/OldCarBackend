@@ -25,6 +25,7 @@ public class FileUploadService {
 
     private final com.carselling.oldcar.b2.B2FileService b2FileService;
     private final UserRepository userRepository;
+    private final FileValidationService fileValidationService;
 
     // Validation constants moved to FileUploadConfig/FileValidationService
 
@@ -33,11 +34,15 @@ public class FileUploadService {
      */
     public FileUploadResponse uploadFile(MultipartFile file, String folder, User uploader,
             ResourceType ownerType, Long ownerId) throws IOException {
+        // Enforce validation
+        fileValidationService.validateFile(file);
+
         // Delegate to B2
         return b2FileService.uploadFile(file, folder, uploader, ownerType, ownerId);
     }
 
-    public FileUploadResponse uploadFile(byte[] content, String fileName, String contentType, String folder, User uploader, ResourceType ownerType, Long ownerId) {
+    public FileUploadResponse uploadFile(byte[] content, String fileName, String contentType, String folder,
+            User uploader, ResourceType ownerType, Long ownerId) {
         return b2FileService.uploadFile(content, fileName, contentType, folder, uploader, ownerType, ownerId);
     }
 
@@ -59,6 +64,9 @@ public class FileUploadService {
             User uploader,
             ResourceType ownerType,
             Long ownerId) throws IOException {
+        // Enforce validation
+        fileValidationService.validateFiles(files);
+
         return b2FileService.uploadMultipleFiles(files, folder, uploader, ownerType, ownerId);
     }
 

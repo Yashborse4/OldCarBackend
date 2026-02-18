@@ -105,7 +105,27 @@ public class MediaFinalizationService {
                     try {
                         newFileId = b2Client.copyFile(tempFile.getFileId(), targetPath);
                         log.info("B2 copyFile SUCCESS for tempId: {} (newFileId: {})", tempId, newFileId);
+                    } catch (com.backblaze.b2.client.exceptions.B2Exception b2Exception) {
+                        // Source missing (404) — file may have already been moved in a prior attempt
+                        if (b2Exception.getStatus() == 404 || (b2Exception.getMessage() != null
+                                && b2Exception.getMessage().contains("not_found"))) {
+                            log.warn("Source not found (404): {}. Checking if target exists...", tempFile.getFileId());
+                            if (b2Client.fileExists(targetPath)) {
+                                log.info("Target exists — treating as recovered success.");
+                                alreadyExists = true;
+                            } else {
+                                throw b2Exception; // Real failure: neither source nor target exist
+                            }
+                        } else if (b2Exception.getStatus() == 429 || b2Exception.getStatus() >= 500) {
+                            log.warn("Transient B2 error ({}): {}. Retrying via @Retryable...",
+                                    b2Exception.getStatus(), b2Exception.getMessage());
+                            throw b2Exception;
+                        } else {
+                            throw b2Exception;
+                        }
                     } catch (Exception copyException) {
+                        // TODO: [ERROR_HANDLING] CRITICAL: Verify if B2 specific exceptions need
+                        // specific recovery logic.
                         // Source missing (404) — file may have already been moved in a prior attempt
                         if (copyException.getMessage() != null && copyException.getMessage().contains("not_found")) {
                             log.warn("Source not found (404): {}. Checking if target exists...", tempFile.getFileId());
@@ -143,17 +163,6 @@ public class MediaFinalizationService {
 
                 // 2. Delete source file (temp) from B2
                 // Use the full B2 key extracted from the CDN URL, not just the basename
-                /*
-                 * try {
-                 * String b2TempKey = extractB2Key(tempFile.getFileUrl());
-                 * b2Client.deleteFileVersion(b2TempKey, tempFile.getFileId());
-                 * log.debug("Deleted temp B2 file: {}", b2TempKey);
-                 * } catch (Exception e) {
-                 * log.warn("Failed to delete temp B2 file {}: {}", tempFile.getFileUrl(),
-                 * e.getMessage());
-                 * // Non-critical: file will be cleaned up by expiry job
-                 * }
-                 */
 
                 // 3. Build permanent URL from CDN domain + target path
                 String domain = properties.getCdnDomain();
@@ -187,7 +196,8 @@ public class MediaFinalizationService {
                 log.info("Retained TemporaryFile record (TRANSFERRED): {}", tempId);
 
             } catch (Exception e) {
-                log.error("FAILED to finalize file {}: {} (Exception: {})",
+                // Persistent failure after retries
+                log.error("ALERT: FAILED to finalize file {}: {} (Exception: {})",
                         tempId, e.getMessage(), e.getClass().getSimpleName(), e);
                 // Mark as FAILED with error details for per-file retry
                 tempFile.setStorageStatus(StorageStatus.FAILED);
@@ -195,7 +205,8 @@ public class MediaFinalizationService {
                 if (errorMsg != null && errorMsg.length() > 500) {
                     errorMsg = errorMsg.substring(0, 497) + "...";
                 }
-                tempFile.setLastError(errorMsg);
+                // Record the specific exception type for better debugging
+                tempFile.setLastError(String.format("[%s] %s", e.getClass().getSimpleName(), errorMsg));
                 int retryCount = (tempFile.getRetryCount() != null ? tempFile.getRetryCount() : 0) + 1;
                 tempFile.setRetryCount(retryCount);
                 // Exponential backoff: 1m, 2m, 4m
@@ -259,23 +270,6 @@ public class MediaFinalizationService {
         String cleanBase = baseFolder.endsWith("/") ? baseFolder.substring(0, baseFolder.length() - 1) : baseFolder;
 
         return cleanBase + "/" + subType + "/" + tempFile.getFileName();
-    }
-
-    /**
-     * Extract the B2 object key from a full CDN URL.
-     * e.g. "https://cdn.example.com/temp/cars/123/images/file.jpg" →
-     * "temp/cars/123/images/file.jpg"
-     */
-    private String extractB2Key(String fileUrl) {
-        String domain = properties.getCdnDomain();
-        if (domain.endsWith("/")) {
-            domain = domain.substring(0, domain.length() - 1);
-        }
-        String key = fileUrl.replace(domain + "/", "");
-        if (key.startsWith("/")) {
-            key = key.substring(1);
-        }
-        return key;
     }
 
     /**

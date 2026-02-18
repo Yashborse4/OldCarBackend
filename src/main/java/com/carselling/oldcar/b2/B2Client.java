@@ -65,7 +65,7 @@ public class B2Client implements InitializingBean {
         private Map<String, String> fileInfo;
     }
 
-    public UploadFileResponse uploadFile(String fileName, byte[] content, String contentType) {
+    public UploadFileResponse uploadFile(String fileName, byte[] content, String contentType) throws B2Exception {
         return uploadFile(fileName, content, contentType, Map.of());
     }
 
@@ -73,7 +73,7 @@ public class B2Client implements InitializingBean {
      * Upload file with custom metadata (ownership tagging).
      */
     public UploadFileResponse uploadFile(String fileName, byte[] content, String contentType,
-            Map<String, String> fileInfo) {
+            Map<String, String> fileInfo) throws B2Exception {
         try {
             String bucketId = getCachedBucketId();
 
@@ -103,6 +103,8 @@ public class B2Client implements InitializingBean {
 
             return response;
 
+        } catch (B2Exception e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error in B2 upload (SDK)", e);
             throw new RuntimeException("B2 Upload Error", e);
@@ -110,7 +112,7 @@ public class B2Client implements InitializingBean {
     }
 
     public UploadFileResponse uploadFile(String fileName, java.io.File file, String contentType,
-            Map<String, String> fileInfo) {
+            Map<String, String> fileInfo) throws B2Exception {
         try {
             String bucketId = getCachedBucketId();
 
@@ -127,21 +129,7 @@ public class B2Client implements InitializingBean {
             }
 
             com.backblaze.b2.client.structures.B2UploadFileRequest request = requestBuilder.build();
-            com.backblaze.b2.client.structures.B2FileVersion fileVersion = client.uploadSmallFile(request); // Autodetects?
-                                                                                                            // Or use
-                                                                                                            // uploadLargeFile?
-                                                                                                            // SDK
-                                                                                                            // usually
-                                                                                                            // handles
-                                                                                                            // it or we
-                                                                                                            // use
-                                                                                                            // uploadFile.
-            // Note: client.uploadSmallFile is specific. The SDK typically has 'uploadFile'
-            // which selects.
-            // Checking imports... standard B2 SDK 'uploadSmallFile' is for < 5GB.
-            // If backup > 5GB, using 'uploadLargeFile' is better, but 'B2StorageClient'
-            // usually has a unified method or we stick to small file for now.
-            // Using uploadSmallFile is safe for most daily backups < 5GB.
+            com.backblaze.b2.client.structures.B2FileVersion fileVersion = client.uploadSmallFile(request);
 
             UploadFileResponse response = new UploadFileResponse();
             response.setFileId(fileVersion.getFileId());
@@ -152,6 +140,8 @@ public class B2Client implements InitializingBean {
             response.setFileInfo(fileInfo);
 
             return response;
+        } catch (B2Exception e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error in B2 file upload", e);
             throw new RuntimeException("B2 Upload Error", e);
@@ -171,6 +161,51 @@ public class B2Client implements InitializingBean {
             }
         } catch (Exception e) {
             log.error("Error deleting file from B2", e);
+        }
+    }
+
+    /**
+     * Delete a file by its public URL (extracts key and deletes all versions).
+     * Useful when we don't have the fileId from the database.
+     */
+    public void deleteFileByUrl(String fileUrl) {
+        try {
+            String domain = properties.getCdnDomain();
+            String b2Key = fileUrl.replace(domain + "/", "");
+            if (b2Key.startsWith("/")) {
+                b2Key = b2Key.substring(1);
+            }
+            // Decode in case of URL encoding
+            final String fileName = java.net.URLDecoder.decode(b2Key, java.nio.charset.StandardCharsets.UTF_8);
+
+            log.info("Attempting to delete file by URL: {} -> Key: {}", fileUrl, fileName);
+
+            String bucketId = getCachedBucketId();
+            // List versions with this name and delete them
+            B2ListFileVersionsRequest request = B2ListFileVersionsRequest
+                    .builder(bucketId)
+                    .setPrefix(fileName) // optimization: prefix match
+                    .build();
+
+            boolean found = false;
+            for (B2FileVersion version : client.fileVersions(request)) {
+                if (version.getFileName().equals(fileName)) {
+                    try {
+                        client.deleteFileVersion(version.getFileName(), version.getFileId());
+                        log.info("Deleted file version: {} ({})", version.getFileName(), version.getFileId());
+                        found = true;
+                    } catch (Exception e) {
+                        log.warn("Failed to delete file version: {}", version.getFileName(), e);
+                    }
+                }
+            }
+
+            if (!found) {
+                log.warn("No file versions found in B2 for key: {}", fileName);
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to delete file by URL: {}", fileUrl, e);
         }
     }
 
@@ -236,7 +271,16 @@ public class B2Client implements InitializingBean {
         private String bucketType;
     }
 
-    public GetUploadUrlResponse getUploadUrl() {
+    private GetUploadUrlResponse cachedUploadUrlResponse;
+    private long cachedUploadUrlTime;
+
+    public synchronized GetUploadUrlResponse getUploadUrl() {
+        // Return cached response if valid (token lasts 24h, we cache for 23h to be
+        // safe)
+        if (cachedUploadUrlResponse != null && (System.currentTimeMillis() - cachedUploadUrlTime) < 23 * 3600 * 1000L) {
+            return cachedUploadUrlResponse;
+        }
+
         try {
             String bucketId = getCachedBucketId();
 
@@ -249,6 +293,11 @@ public class B2Client implements InitializingBean {
             response.setBucketId(bucketId);
             response.setUploadUrl(sdkResponse.getUploadUrl());
             response.setAuthorizationToken(sdkResponse.getAuthorizationToken());
+
+            this.cachedUploadUrlResponse = response;
+            this.cachedUploadUrlTime = System.currentTimeMillis();
+            log.info("Refreshed and cached B2 Upload URL");
+
             return response;
         } catch (Exception e) {
             log.error("Error getting upload URL (SDK)", e);
@@ -274,6 +323,8 @@ public class B2Client implements InitializingBean {
         private String fileId;
         private String fileName;
         private String contentSha1;
+        private Long contentLength;
+        private String contentType;
         private Map<String, String> fileInfo;
     }
 
@@ -284,7 +335,10 @@ public class B2Client implements InitializingBean {
             B2FileInfo info = new B2FileInfo();
             info.setFileId(fileVersion.getFileId());
             info.setFileName(fileVersion.getFileName());
+            info.setFileName(fileVersion.getFileName());
             info.setContentSha1(fileVersion.getContentSha1());
+            info.setContentLength(fileVersion.getContentLength());
+            info.setContentType(fileVersion.getContentType());
             info.setFileInfo(fileVersion.getFileInfo());
 
             return info;
@@ -303,7 +357,7 @@ public class B2Client implements InitializingBean {
      * @param targetFileName The full B2 key/path for the destination file
      * @return The new B2 file ID of the re-uploaded file at the target location
      */
-    public String copyFile(String sourceFileId, String targetFileName) {
+    public String copyFile(String sourceFileId, String targetFileName) throws B2Exception {
         log.info("Starting file move (Download -> Upload) for sourceId: {} to target: {}", sourceFileId,
                 targetFileName);
         try {
@@ -345,6 +399,8 @@ public class B2Client implements InitializingBean {
 
             return newFileId;
 
+        } catch (B2Exception e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to move/copy file {} to {}: {}", sourceFileId, targetFileName, e.getMessage());
             throw new RuntimeException("Media move failed: " + e.getMessage(), e);

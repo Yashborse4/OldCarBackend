@@ -145,6 +145,43 @@ public class FileValidationService {
     }
 
     /**
+     * Validate file metadata (for direct uploads where we don't have the file yet)
+     */
+    public void validateFileMetadata(String fileName, long size, String contentType) {
+        // 1. Validate File Name & Extension
+        String extension = getFileExtension(fileName);
+        if (fileUploadConfig.isValidateFileExtension()) {
+            if (!fileUploadConfig.getAllowedExtensions().contains(extension.toLowerCase())) {
+                throw new SecurityException("Invalid file type (extension not allowed): " + extension);
+            }
+        }
+
+        // 2. Validate Content Type
+        if (contentType != null && fileUploadConfig.isValidateContentType()) {
+            if (!isAllowedContentType(contentType)) {
+                throw new SecurityException("Invalid content type: " + contentType);
+            }
+        }
+
+        // 3. Validate Size
+        boolean isVideo = fileUploadConfig.getAllowedVideoExtensions().contains(extension.toLowerCase());
+        boolean isImage = fileUploadConfig.getAllowedImageExtensions().contains(extension.toLowerCase());
+        long maxFileSizeBytes;
+
+        if (isVideo) {
+            maxFileSizeBytes = fileUploadConfig.getMaxVideoSizeMB() * 1024L * 1024L;
+        } else if (isImage) {
+            maxFileSizeBytes = fileUploadConfig.getMaxImageSizeMB() * 1024L * 1024L;
+        } else {
+            maxFileSizeBytes = fileUploadConfig.getMaxFileSizeMB() * 1024L * 1024L;
+        }
+
+        if (size > maxFileSizeBytes) {
+            throw new SecurityException("File size exceeds limit of " + (maxFileSizeBytes / 1024 / 1024) + "MB");
+        }
+    }
+
+    /**
      * Re-validate an existing uploaded file (e.g. during temp-to-perm transfer)
      * Used by TempFileTransferService
      */
@@ -161,7 +198,7 @@ public class FileValidationService {
             if (isVideo) {
                 maxFileSizeBytes = fileUploadConfig.getMaxVideoSizeMB() * 1024L * 1024L;
             } else if (isImageFile(filename)) {
-                maxFileSizeBytes = fileUploadConfig.getMaxFileSizeMB() * 1024L * 1024L;
+                maxFileSizeBytes = fileUploadConfig.getMaxImageSizeMB() * 1024L * 1024L;
             } else {
                 maxFileSizeBytes = fileUploadConfig.getMaxFileSizeMB() * 1024L * 1024L;
             }
@@ -206,9 +243,8 @@ public class FileValidationService {
         if (isVideo) {
             maxFileSizeBytes = fileUploadConfig.getMaxVideoSizeMB() * 1024L * 1024L;
         } else if (isImage) {
-            // 1.5 MB limit for images as per requirement (hardcoded or config driven, using
-            // 1.5MB as requested)
-            maxFileSizeBytes = 1500 * 1024L; // 1.5 MB
+            // Use configured max image size
+            maxFileSizeBytes = fileUploadConfig.getMaxImageSizeMB() * 1024L * 1024L;
         } else {
             maxFileSizeBytes = fileUploadConfig.getMaxFileSizeMB() * 1024L * 1024L;
         }

@@ -14,18 +14,22 @@ import java.util.List;
 @Repository
 public interface UploadedFileRepository extends JpaRepository<UploadedFile, Long> {
 
-    java.util.Optional<UploadedFile> findByFileHashAndUploadedById(String fileHash, Long uploadedById);
+        java.util.Optional<UploadedFile> findByFileHashAndUploadedById(String fileHash, Long uploadedById);
 
-    java.util.Optional<UploadedFile> findByFileUrl(String fileUrl);
+        java.util.Optional<UploadedFile> findByFileUrl(String fileUrl);
 
-    List<UploadedFile> findByStorageStatusAndTempExpiresAtBefore(StorageStatus storageStatus, LocalDateTime expiresAt);
+        List<UploadedFile> findByStorageStatusAndTempExpiresAtBefore(StorageStatus storageStatus,
+                        LocalDateTime expiresAt);
 
-    List<UploadedFile> findByOwnerTypeAndOwnerIdAndStorageStatus(ResourceType ownerType, Long ownerId,
-            StorageStatus storageStatus);
+        List<UploadedFile> findByOwnerTypeAndOwnerIdAndStorageStatus(ResourceType ownerType, Long ownerId,
+                        StorageStatus storageStatus);
 
-    @Query("SELECT uf FROM UploadedFile uf WHERE uf.storageStatus = :storageStatus AND uf.tempExpiresAt < :expiresAt")
-    List<UploadedFile> findExpiredTempFiles(@Param("storageStatus") StorageStatus storageStatus,
-            @Param("expiresAt") LocalDateTime expiresAt);
+        @Query("SELECT uf FROM UploadedFile uf WHERE uf.storageStatus = :storageStatus AND uf.tempExpiresAt < :expiresAt")
+        List<UploadedFile> findExpiredTempFiles(@Param("storageStatus") StorageStatus storageStatus,
+                        @Param("expiresAt") LocalDateTime expiresAt);
 
-    void deleteByOwnerTypeAndOwnerId(ResourceType ownerType, Long ownerId);
+        void deleteByOwnerTypeAndOwnerId(ResourceType ownerType, Long ownerId);
+
+        List<UploadedFile> findByOwnerTypeAndCreatedAtBeforeAndStorageStatusNot(ResourceType ownerType,
+                        LocalDateTime createdAt, StorageStatus storageStatus);
 }

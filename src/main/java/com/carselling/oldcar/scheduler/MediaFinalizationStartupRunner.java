@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -53,6 +54,7 @@ public class MediaFinalizationStartupRunner implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         log.info("Startup: Triggering initial media finalization check...");
+        processOrphanedTempFiles();
         processCarRetries();
     }
 
@@ -61,7 +63,12 @@ public class MediaFinalizationStartupRunner implements CommandLineRunner {
      * Indexes used: idx_car_retry (status, next_retry_at)
      * Runs every minute to pick up due car-level retries.
      */
-    @Scheduled(fixedDelay = 60_000)
+    /**
+     * Periodic car-level retry job.
+     * Indexes used: idx_car_retry (status, next_retry_at)
+     * Runs every 5 minutes to pick up due car-level retries.
+     */
+    @Scheduled(fixedDelay = 300_000)
     public void scheduleCarProcessing() {
         processCarRetries();
     }
@@ -69,9 +76,9 @@ public class MediaFinalizationStartupRunner implements CommandLineRunner {
     /**
      * Periodic per-file retry job.
      * Picks up individual FAILED temp files that are due for retry.
-     * Runs every 2 minutes, offset from car-level retries.
+     * Runs every 10 minutes, offset from car-level retries.
      */
-    @Scheduled(fixedDelay = 120_000, initialDelay = 30_000)
+    @Scheduled(fixedDelay = 600_000, initialDelay = 60_000)
     public void scheduleFileRetries() {
         processFailedFileRetries();
     }
@@ -249,5 +256,65 @@ public class MediaFinalizationStartupRunner implements CommandLineRunner {
             log.info("Reset FAILED temp file {} to TEMPORARY for retry #{} (carId: {})",
                     file.getId(), newRetryCount, file.getCarId());
         }
+    }
+
+    // ========================================================================
+    // Startup: Process Orphaned TEMPORARY Files
+    // ========================================================================
+
+    /**
+     * Finds all TemporaryFile records with StorageStatus.TEMPORARY,
+     * groups them by carId, and triggers finalization for each car.
+     *
+     * This handles the case where files were uploaded successfully but the
+     * server crashed or restarted before finalization could complete.
+     * Called once on startup before the normal car-level retry logic.
+     */
+    @Transactional
+    public void processOrphanedTempFiles() {
+        List<TemporaryFile> allTempFiles = temporaryFileRepository.findByStorageStatus(StorageStatus.TEMPORARY);
+
+        if (allTempFiles.isEmpty()) {
+            log.info("Startup: No orphaned TEMPORARY files found.");
+            return;
+        }
+
+        // Group by carId (skip files with null carId — they're not car media)
+        Map<Long, List<TemporaryFile>> byCarId = allTempFiles.stream()
+                .filter(f -> f.getCarId() != null)
+                .collect(Collectors.groupingBy(TemporaryFile::getCarId));
+
+        int orphanedWithoutCar = (int) allTempFiles.stream().filter(f -> f.getCarId() == null).count();
+        if (orphanedWithoutCar > 0) {
+            log.warn("Startup: {} TEMPORARY files have no carId — skipping (manual cleanup may be needed).",
+                    orphanedWithoutCar);
+        }
+
+        log.info("Startup: Found {} orphaned TEMPORARY files across {} cars. Processing...",
+                allTempFiles.size() - orphanedWithoutCar, byCarId.size());
+
+        int successCount = 0;
+        int failCount = 0;
+
+        for (Map.Entry<Long, List<TemporaryFile>> entry : byCarId.entrySet()) {
+            Long carId = entry.getKey();
+            List<Long> tempFileIds = entry.getValue().stream()
+                    .map(TemporaryFile::getId)
+                    .collect(Collectors.toList());
+
+            try {
+                log.info("Startup: Finalizing {} temp files for car {}", tempFileIds.size(), carId);
+                // Pass null for userId — startup runner is a system process, not user-initiated
+                carService.finalizeMedia(String.valueOf(carId), tempFileIds, null);
+                successCount++;
+            } catch (Exception e) {
+                failCount++;
+                log.error("Startup: Failed to finalize temp files for car {}: {}. Will be retried by scheduled job.",
+                        carId, e.getMessage());
+            }
+        }
+
+        log.info("Startup: Orphaned temp file processing complete. Success: {}, Failed: {} (will be retried)",
+                successCount, failCount);
     }
 }

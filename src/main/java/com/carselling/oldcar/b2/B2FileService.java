@@ -65,12 +65,36 @@ public class B2FileService {
 
         String originalFileName = file.getOriginalFilename();
         String uniqueFileName = generateUniqueFileName(originalFileName, uploader.getId());
-        String fullPath = folder + "/" + uniqueFileName;
+        String fullPath;
+        String b2FileName;
 
-        // B2 SDK handles the logical path (including folders) correctly.
-        // encoding here would cause B2 to treat it as a flat filename with %2F instead
-        // of folders.
-        String b2FileName = fullPath;
+        if (folder != null && folder.startsWith("chat/")) {
+            // Special handling for chat files: Structured Naming
+            // folder is "chat/{chatId}"
+            String chatIdStr = folder.substring(5); // remove "chat/"
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String year = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy"));
+            String month = LocalDateTime.now().format(DateTimeFormatter.ofPattern("MM"));
+
+            // chat/{chatId}/{year}/{month}/chat_{chatId}_user_{userId}_{timestamp}_{originalName}
+            // I'll stick to a safe version of originalName or uuid to ensure uniqueness and
+            // safety
+            String safeOriginalName = originalFileName != null ? originalFileName.replaceAll("[^a-zA-Z0-9.-]", "_")
+                    : "file";
+
+            uniqueFileName = String.format("chat_%s_user_%d_%s_%s", chatIdStr, uploader.getId(), timestamp,
+                    safeOriginalName);
+
+            // Construct path: chat/{chatId}/{year}/{month}/{fileName}
+            fullPath = String.format("chat/%s/%s/%s/%s", chatIdStr, year, month, uniqueFileName);
+            b2FileName = fullPath;
+
+        } else {
+            // Default behavior
+            uniqueFileName = generateUniqueFileName(originalFileName, uploader.getId());
+            fullPath = folder + "/" + uniqueFileName;
+            b2FileName = fullPath;
+        }
 
         log.info("Uploading file to B2: {}", fullPath);
 
@@ -83,8 +107,13 @@ public class B2FileService {
         }
         fileMetadata.put("upload-timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
 
-        B2Client.UploadFileResponse b2Response = b2Client.uploadFile(b2FileName, file.getBytes(),
-                file.getContentType(), fileMetadata);
+        B2Client.UploadFileResponse b2Response;
+        try {
+            b2Response = b2Client.uploadFile(b2FileName, file.getBytes(),
+                    file.getContentType(), fileMetadata);
+        } catch (com.backblaze.b2.client.exceptions.B2Exception e) {
+            throw new RuntimeException("Failed to upload file to B2", e);
+        }
 
         // Construct CDN URL
         // User Requirement: "domain name + file name" directly hit Cloudflare.
@@ -176,7 +205,12 @@ public class B2FileService {
         }
         fileMetadata.put("upload-timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
 
-        B2Client.UploadFileResponse b2Response = b2Client.uploadFile(b2FileName, content, contentType, fileMetadata);
+        B2Client.UploadFileResponse b2Response;
+        try {
+            b2Response = b2Client.uploadFile(b2FileName, content, contentType, fileMetadata);
+        } catch (com.backblaze.b2.client.exceptions.B2Exception e) {
+            throw new RuntimeException("Failed to upload file to B2", e);
+        }
 
         String domain = properties.getCdnDomain();
         if (domain.endsWith("/")) {
@@ -306,10 +340,10 @@ public class B2FileService {
                         b2Client.deleteFileVersion(b2Key, file.getFileId());
                     } catch (Exception e) {
                         log.warn("Failed to delete from B2: {} due to {}", b2Key, e.getMessage());
-                        // Continue to delete from DB
                     }
                 } else {
-                    log.warn("No B2 fileId for {}, skipping storage deletion.", file.getFileName());
+                    log.warn("No B2 fileId for {}, attempting fallback deletion by name.", file.getFileName());
+                    b2Client.deleteFileByUrl(fileUrl);
                 }
 
                 uploadedFileRepository.delete(file);
@@ -318,8 +352,17 @@ public class B2FileService {
                 log.error("Failed to delete file: {}", fileUrl, e);
                 return false;
             }
+        } else {
+            // FALLBACK: File not in DB, but might still be in B2 (orphaned)
+            log.info("File not found in DB, attempting direct B2 deletion: {}", fileUrl);
+            try {
+                b2Client.deleteFileByUrl(fileUrl);
+                return true;
+            } catch (Exception e) {
+                log.error("Failed to delete orphaned file from B2: {}", fileUrl, e);
+                return false;
+            }
         }
-        return false;
     }
 
     /**
@@ -428,6 +471,19 @@ public class B2FileService {
             domain = domain.substring(0, domain.length() - 1);
         }
         String publicUrl = domain + "/" + decodedPath;
+
+        // 3. SECURITY VALIDATION
+        // Use B2's actual size and type to prevent client spoofing
+        long actualSize = fileInfo.getContentLength() != null ? fileInfo.getContentLength()
+                : (fileSize != null ? fileSize : 0L);
+        String actualType = fileInfo.getContentType();
+        // Fallback to client-provided type if B2 has generic/missing type
+        if (actualType == null || "application/octet-stream".equals(actualType)) {
+            actualType = contentType;
+        }
+
+        // Validate against policies
+        fileValidationService.validateFileMetadata(fileName, actualSize, actualType);
 
         log.info("Completing Direct Upload. Path: {}, OwnerType: {}, OwnerId: {}", decodedPath, ownerType, ownerId);
 

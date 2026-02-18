@@ -120,10 +120,16 @@ public class TempFileStorageService {
             log.info("Successfully transferred temp file {} to permanent storage", tempFile.getId());
             return true;
 
-        } catch (Exception e) {
-            log.error("Error transferring temp file {} to permanent storage", tempFile.getId(), e);
+        } catch (IOException e) {
+            log.error("IO Error transferring temp file {} to permanent storage", tempFile.getId(), e);
             tempFile.setStorageStatus(StorageStatus.FAILED);
-            tempFile.setValidationErrors("Transfer failed: " + e.getMessage());
+            tempFile.setValidationErrors("Transfer failed (IO): " + e.getMessage());
+            uploadedFileRepository.save(tempFile);
+            return false;
+        } catch (Exception e) {
+            log.error("Unexpected error transferring temp file {} to permanent storage", tempFile.getId(), e);
+            tempFile.setStorageStatus(StorageStatus.FAILED);
+            tempFile.setValidationErrors("Transfer failed (Unexpected): " + e.getMessage());
             uploadedFileRepository.save(tempFile);
             return false;
         }
@@ -152,8 +158,10 @@ public class TempFileStorageService {
                 uploadedFileRepository.delete(file);
                 log.info("Deleted expired temp file record: {}", file.getId());
 
+            } catch (IOException e) {
+                log.error("IO Error cleaning up expired temp file: {}", file.getId(), e);
             } catch (Exception e) {
-                log.error("Error cleaning up expired temp file: {}", file.getId(), e);
+                log.error("Unexpected error cleaning up expired temp file: {}", file.getId(), e);
             }
         }
 

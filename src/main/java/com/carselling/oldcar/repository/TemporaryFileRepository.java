@@ -35,4 +35,7 @@ public interface TemporaryFileRepository extends JpaRepository<TemporaryFile, Lo
         // Find stale temp files for cleanup (uploaded but never finalized)
         java.util.List<TemporaryFile> findByStorageStatusAndCreatedAtBefore(
                         com.carselling.oldcar.model.StorageStatus status, java.time.LocalDateTime threshold);
+
+        // Find all files with a given storage status (used by startup runner)
+        java.util.List<TemporaryFile> findByStorageStatus(com.carselling.oldcar.model.StorageStatus status);
 }

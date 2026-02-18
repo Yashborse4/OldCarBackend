@@ -5,5 +5,6 @@ public enum StorageStatus {
     PERMANENT,
     TRANSFERRING,
     TRANSFERRED,
-    FAILED
+    FAILED,
+    DELETED
 }
