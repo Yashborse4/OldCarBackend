@@ -26,11 +26,11 @@ import com.carselling.oldcar.model.UploadedFile;
 import com.carselling.oldcar.model.ResourceType;
 import com.carselling.oldcar.specification.CarSpecification;
 import com.carselling.oldcar.service.auth.AuthService;
-import com.carselling.oldcar.service.FileValidationService;
-import com.carselling.oldcar.service.MediaFinalizationService;
+import com.carselling.oldcar.service.file.FileValidationService;
+import com.carselling.oldcar.service.media.MediaFinalizationService;
 
 import com.carselling.oldcar.service.AuditLogService;
-import com.carselling.oldcar.service.ViewCountService;
+import com.carselling.oldcar.service.file.ViewCountService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
