@@ -65,6 +65,7 @@ public class TempFileCleanupService {
 
                 // Soft Delete in DB
                 file.setStorageStatus(com.carselling.oldcar.model.StorageStatus.DELETED);
+                // Trigger re-compile for Lombok generated setters
                 file.setDeletedAt(LocalDateTime.now());
                 temporaryFileRepository.save(file);
 

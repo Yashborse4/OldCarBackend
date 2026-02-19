@@ -5,6 +5,7 @@ import com.carselling.oldcar.model.StorageStatus;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.model.ResourceType;
 import com.carselling.oldcar.repository.UploadedFileRepository;
+import com.carselling.oldcar.service.file.FileValidationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

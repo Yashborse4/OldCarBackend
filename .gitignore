@@ -204,3 +204,4 @@ compile_errors.txt
 *.yml
 *.yaml
 *.properties
+.env
