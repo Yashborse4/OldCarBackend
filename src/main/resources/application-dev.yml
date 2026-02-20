@@ -3,22 +3,21 @@
 spring:
   # Database Configuration for Development
   datasource:
-    url: jdbc:postgresql://localhost:5432/carselling # Override if needed, but defaulting to main yaml allows consistency
-#    url: jdbc:mysql://localhost:3306/car_selling_dev?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-#    username: ${DB_USERNAME:car_user}
-#    password: ${DB_PASSWORD:car_password}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/carselling}
+    username: ${DB_USERNAME:postgres}
+    password: 12345
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
       connection-timeout: 20000
       leak-detection-threshold: 30000
-      auto-commit: false
+      auto-commit: true
 
   # JPA Configuration for Development
   jpa:
     hibernate:
-      ddl-auto: create-drop # Recreate schema on startup for development
-    show-sql: false
+      ddl-auto: update # Update schema on startup to persist data
+    show-sql: true
     properties:
       hibernate:
         format_sql: true
@@ -29,6 +28,19 @@ spring:
     console:
       enabled: false # Enable if using H2
       path: /h2-console
+
+  # Mail Configuration for Development
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${DEV_EMAIL_USERNAME:yashborse432005@gmail.com}
+    password: ${DEV_EMAIL_PASSWORD:rzcsmqskprrfkolb}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
   # DevTools Configuration
   devtools:
@@ -48,7 +60,7 @@ spring:
 
 # Server Configuration for Development
 server:
-  port: 8080
+  port: 9000
   error:
     include-stacktrace: always
 
@@ -74,9 +86,23 @@ management:
   endpoint:
     health:
       show-details: always
+  health:
+    mail:
+      enabled: true # Disable mail health check in dev (avoids auth errors)
+    redis:
+      enabled: false # Disable redis health check in dev
 
 # Application Specific Configuration for Development
 app:
+  # Firebase Push Notifications
+  firebase:
+    enabled: true
+    service-account-file: carwalanotfication-firebase-adminsdk-fbsvc-6ca72dc5fe.json
+
+  # Redis Configuration
+  redis:
+    enabled: false # Explicitly disable Redis to use in-memory fallback without errors
+
   # JWT Configuration (shorter expiration for development)
   jwt:
     secret: ${JWT_SECRET:dev-only-change-me-32-chars-minimum}
@@ -88,12 +114,20 @@ app:
   upload:
     path: ./uploads/dev
     
-  # Email Configuration (disable in development)
+  # Email Configuration
   email:
-    enabled: false # Disable email sending in development
+    enabled: true
     
   # Rate Limiting (relaxed for development)
   rate-limit:
     login-attempts: 10 # More lenient for development
     lockout-duration: 60000 # 1 minute
     otp-requests: 10
+    
+# Backblaze B2 Configuration
+b2:
+  applicationKeyId: ${B2_APPLICATION_KEY_ID}
+  applicationKey: ${B2_APPLICATION_KEY}
+  bucketId: ${B2_BUCKET_ID}
+  bucketName: ${B2_BUCKET_NAME}
+  cdnDomain: ${B2_CDN_DOMAIN}

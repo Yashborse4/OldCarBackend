@@ -1,12 +1,13 @@
 package com.carselling.oldcar.service.auth;
 
-import com.carselling.oldcar.service.EmailService;
+import com.carselling.oldcar.service.mail.EmailService;
 
 import com.carselling.oldcar.exception.ResourceNotFoundException;
 import com.carselling.oldcar.model.Otp;
 import com.carselling.oldcar.model.OtpPurpose;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.OtpRepository;
+import com.carselling.oldcar.service.mail.MobileOtpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,7 +26,7 @@ public class OtpService {
 
     private final OtpRepository otpRepository;
     private final EmailService emailService;
-    private final com.carselling.oldcar.service.MobileOtpService mobileOtpService;
+    private final MobileOtpService mobileOtpService;
     private final com.carselling.oldcar.repository.UserRepository userRepository;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
@@ -59,7 +60,7 @@ public class OtpService {
             long secondsSinceLast = java.time.Duration.between(latestOtp.get().getCreatedAt(), LocalDateTime.now())
                     .getSeconds();
             if (secondsSinceLast < 60) {
-                throw new RuntimeException(
+                throw new com.carselling.oldcar.exception.RateLimitExceededException(
                         "Please wait " + (60 - secondsSinceLast) + " seconds before requesting a new OTP");
             }
         }
@@ -68,7 +69,8 @@ public class OtpService {
         LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
         long count = otpRepository.countByEmailAndPurposeAndCreatedAtAfter(email, purpose.name(), oneHourAgo);
         if (count >= 5) {
-            throw new RuntimeException("Too many OTP requests. Please try again after 1 hour.");
+            throw new com.carselling.oldcar.exception.RateLimitExceededException(
+                    "Too many OTP requests. Please try again after 1 hour.");
         }
 
         // 3. Generate plain 6-digit code

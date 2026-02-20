@@ -3,6 +3,7 @@ package com.carselling.oldcar.service.auth;
 import com.carselling.oldcar.dto.auth.*;
 import com.carselling.oldcar.exception.AuthenticationFailedException;
 import com.carselling.oldcar.exception.InvalidInputException;
+import com.carselling.oldcar.exception.ResourceAlreadyExistsException;
 import com.carselling.oldcar.exception.ResourceNotFoundException;
 
 import com.carselling.oldcar.model.User;
@@ -74,12 +75,12 @@ public class AuthServiceImpl implements AuthService {
 
         // Check if username already exists
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new IllegalArgumentException("Username already exists: " + request.getUsername());
+            throw new ResourceAlreadyExistsException("Username already exists");
         }
 
         // Check if email already exists
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email already registered");
+            throw new ResourceAlreadyExistsException("Email already registered");
         }
 
         String requestedRole = request.getRole();
@@ -135,6 +136,7 @@ public class AuthServiceImpl implements AuthService {
                 .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
                 .expiresAt(null)
                 .refreshExpiresAt(null)
+                // Trigger re-compile for dealerStatus field
                 .expiresIn(900L)
                 .refreshExpiresIn(604800L)
                 .build();
