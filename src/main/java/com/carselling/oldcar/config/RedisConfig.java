@@ -50,10 +50,10 @@ public class RedisConfig {
     @Primary
     @ConditionalOnProperty(name = "app.redis.enabled", havingValue = "true", matchIfMissing = true)
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
         try {
             log.info("Initializing RedisTemplate with connection factory");
 
-            RedisTemplate<String, Object> template = new RedisTemplate<>();
             template.setConnectionFactory(connectionFactory);
 
             // Use String serializer for keys
@@ -77,10 +77,11 @@ public class RedisConfig {
             return template;
 
         } catch (Exception e) {
-            log.error("Failed to initialize RedisTemplate: {}", e.getMessage(), e);
+            log.error("Failed to initialize RedisTemplate connection: {}", e.getMessage());
             if (fallbackToMemory) {
-                log.warn("Redis unavailable, application will use in-memory caching fallback");
-                return null; // Allow fallback to work
+                log.warn(
+                        "Redis unavailable. Returning default RedisTemplate to satisfy dependencies, but Redis operations will fail. Fallbacks should handle this.");
+                return template; // Return the template anyway to prevent BeanCreationException in dependents
             } else {
                 throw new RuntimeException("Redis connection failed and fallback is disabled", e);
             }

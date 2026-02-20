@@ -4,8 +4,8 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnResource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
@@ -21,14 +21,16 @@ import java.io.InputStream;
  */
 @Configuration
 @ConditionalOnProperty(name = "app.firebase.enabled", havingValue = "true", matchIfMissing = false)
-@ConditionalOnResource(resources = "classpath:serviceAccountKey.json")
 @Slf4j
 public class FirebaseConfig {
+
+    @Value("${app.firebase.service-account-file:carwalanotfication-firebase-adminsdk-fbsvc-6ca72dc5fe.json}")
+    private String serviceAccountFile;
 
     @Bean
     public FirebaseApp firebaseApp() {
         try {
-            ClassPathResource resource = new ClassPathResource("serviceAccountKey.json");
+            ClassPathResource resource = new ClassPathResource(serviceAccountFile);
 
             try (InputStream serviceAccount = resource.getInputStream()) {
                 FirebaseOptions options = FirebaseOptions.builder()
