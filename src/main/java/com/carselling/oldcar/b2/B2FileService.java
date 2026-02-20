@@ -1,7 +1,8 @@
 package com.carselling.oldcar.b2;
 
-import com.carselling.oldcar.service.FileValidationService;
+import com.carselling.oldcar.service.file.FileValidationService;
 import com.carselling.oldcar.dto.file.FileUploadResponse;
+import com.carselling.oldcar.dto.file.FileMetadata;
 import com.carselling.oldcar.model.ResourceType;
 import com.carselling.oldcar.model.AccessType;
 import com.carselling.oldcar.model.UploadedFile;
@@ -273,6 +274,56 @@ public class B2FileService {
                 .collect(java.util.stream.Collectors.toList());
     }
 
+    public TemporaryFile uploadTempFile(MultipartFile file, User uploader, Long carId) throws IOException {
+        fileValidationService.validateFile(file);
+
+        String originalFileName = file.getOriginalFilename();
+        String fileHash = calculateSha1(file);
+
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        String uuid = UUID.randomUUID().toString().substring(0, 8);
+        String extension = "";
+        if (originalFileName != null && originalFileName.contains(".")) {
+            extension = originalFileName.substring(originalFileName.lastIndexOf(".") + 1);
+        }
+        String uniqueFileName = String.format("%d_%s_%s.%s", uploader.getId(), timestamp, uuid, extension);
+
+        String b2FileName = "temp/" + uniqueFileName;
+
+        java.util.Map<String, String> fileMetadata = new java.util.HashMap<>();
+        fileMetadata.put("uploaded-by-user-id", String.valueOf(uploader.getId()));
+        if (carId != null) {
+            fileMetadata.put("car-id", String.valueOf(carId));
+        }
+
+        B2Client.UploadFileResponse b2Response;
+        try {
+            b2Response = b2Client.uploadFile(b2FileName, file.getBytes(), file.getContentType(), fileMetadata);
+        } catch (com.backblaze.b2.client.exceptions.B2Exception e) {
+            throw new RuntimeException("Failed to upload temp file to B2", e);
+        }
+
+        String domain = properties.getCdnDomain();
+        if (domain.endsWith("/")) {
+            domain = domain.substring(0, domain.length() - 1);
+        }
+        String publicUrl = domain + "/" + b2FileName;
+
+        TemporaryFile tempFile = TemporaryFile.builder()
+                .fileUrl(publicUrl)
+                .fileId(b2Response.getFileId())
+                .fileName(uniqueFileName)
+                .originalFileName(originalFileName)
+                .contentType(file.getContentType())
+                .fileSize(file.getSize())
+                .uploadedBy(uploader)
+                .fileHash(fileHash)
+                .carId(carId)
+                .build();
+
+        return temporaryFileRepository.save(tempFile);
+    }
+
     private String calculateSha1(byte[] content) {
         try {
             java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-1");
@@ -312,6 +363,10 @@ public class B2FileService {
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-1 algorithm not found", e);
         }
+    }
+
+    public boolean deleteFileByUrl(String fileUrl) {
+        return deleteFile(fileUrl);
     }
 
     public boolean deleteFile(String fileUrl) {
@@ -549,5 +604,98 @@ public class B2FileService {
             return path.substring(0, slashIndex);
         }
         return path.isEmpty() ? null : path;
+
+    }
+
+    public String generatePresignedUrl(String fileUrl, int expirationMinutes) {
+        if (fileUrl == null || fileUrl.isEmpty()) {
+            throw new IllegalArgumentException("File URL cannot be empty");
+        }
+
+        // Get file info from DB to find the B2 file name (key)
+        Optional<UploadedFile> fileOpt = uploadedFileRepository.findByFileUrl(fileUrl);
+        if (fileOpt.isEmpty()) {
+            // Also try finding by temp file if needed, but usually persistent files
+            // For now, if not in DB, we can't easily get the key unless we parse URL
+            // Parse URL
+            String domain = properties.getCdnDomain();
+            String b2Key = fileUrl.replace(domain + "/", "");
+            if (b2Key.startsWith("/")) {
+                b2Key = b2Key.substring(1);
+            }
+            // Decode
+            b2Key = java.net.URLDecoder.decode(b2Key, StandardCharsets.UTF_8);
+
+            // Generate auth token
+            String token = b2Client.getDownloadAuthorization(b2Key, expirationMinutes * 60);
+            return fileUrl + "?Authorization=" + token;
+        }
+
+        // UploadedFile file = fileOpt.get(); // Unused after removing b2Key
+        // Use filename from DB which is the key (or close to it)
+        // Use filename from DB which is the key (or close to it)
+        // Note: in uploadFile, b2FileName = fullPath = folder + "/" + uniqueFileName
+        // but file.fileName is just uniqueFileName?
+        // Let's check uploadFile implementation.
+        // uniqueFileName = ...
+        // fullPath = folder + "/" + uniqueFileName
+        // b2FileName = fullPath
+        // uploadedFile.fileName = uniqueFileName
+        // So we need full path.
+        // We can reconstruct it or extracting from URL is safer.
+
+        String domain = properties.getCdnDomain();
+        String fullPath = fileUrl.replace(domain + "/", "");
+        if (fullPath.startsWith("/"))
+            fullPath = fullPath.substring(1);
+        fullPath = java.net.URLDecoder.decode(fullPath, StandardCharsets.UTF_8);
+
+        String token = b2Client.getDownloadAuthorization(fullPath, expirationMinutes * 60);
+        return fileUrl + "?Authorization=" + token;
+    }
+
+    public FileMetadata getFileMetadata(String fileUrl) {
+        if (fileUrl == null || fileUrl.isEmpty()) {
+            return null;
+        }
+
+        try {
+            Optional<UploadedFile> fileOpt = uploadedFileRepository.findByFileUrl(fileUrl);
+            String fileId;
+            if (fileOpt.isPresent()) {
+                fileId = fileOpt.get().getFileId();
+            } else {
+                // Try to resolve fileId via B2 list check?
+                // Or just fail?
+                // MediaServiceImpl expects metadata.
+                // Let's try to list versions if we have key
+                String domain = properties.getCdnDomain();
+                String b2Key = fileUrl.replace(domain + "/", "");
+                if (b2Key.startsWith("/"))
+                    b2Key = b2Key.substring(1);
+                b2Key = java.net.URLDecoder.decode(b2Key, StandardCharsets.UTF_8);
+
+                // This is expensive but necessary if not in DB
+                // B2Client doesn't expose getFileAction but has listFiles
+                // Let's skip for now and return null or basic info if possible
+                return null;
+            }
+
+            if (fileId == null)
+                return null;
+
+            B2Client.B2FileInfo info = b2Client.getFileInfo(fileId);
+
+            return FileMetadata.builder()
+                    .contentType(info.getContentType())
+                    .contentLength(info.getContentLength())
+                    .lastModified(null) // B2 doesn't easily give this in standard info unless in fileInfo map
+                    .userMetadata(info.getFileInfo())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Failed to get file metadata for {}", fileUrl, e);
+            return null;
+        }
     }
 }

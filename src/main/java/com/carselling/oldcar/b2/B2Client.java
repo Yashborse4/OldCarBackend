@@ -27,9 +27,16 @@ public class B2Client implements InitializingBean {
     private final B2Properties properties;
     private B2StorageClient client;
     private String cachedBucketId;
+    private boolean initialized = false;
 
     @Override
     public void afterPropertiesSet() {
+        if (!properties.isEnabled()) {
+            log.warn("Backblaze B2 is disabled in configuration. File uploads will be unavailable.");
+            this.initialized = false;
+            return;
+        }
+
         try {
             log.info("Initializing B2 SDK Client...");
             client = B2StorageClientFactory
@@ -40,9 +47,19 @@ public class B2Client implements InitializingBean {
             // Pre-cache bucket ID to avoid ~3s resolution delay on every upload
             this.cachedBucketId = resolveBucketIdInternal(properties.getBucketId());
             log.info("Cached B2 bucket ID: {}", cachedBucketId);
+            this.initialized = true;
         } catch (Exception e) {
-            log.error("Failed to initialize B2 SDK Client", e);
-            throw new RuntimeException("B2 Initialization Failed", e);
+            log.error("Failed to initialize B2 SDK Client - File uploads will be unavailable. Error: {}",
+                    e.getMessage());
+            // Do NOT throw exception here to allow app to start
+            this.initialized = false;
+        }
+    }
+
+    private void checkInitialized() {
+        if (!initialized) {
+            throw new RuntimeException(
+                    "B2 Service is not initialized. Check your configuration (Application Key/ID/Bucket).");
         }
     }
 
@@ -74,6 +91,7 @@ public class B2Client implements InitializingBean {
      */
     public UploadFileResponse uploadFile(String fileName, byte[] content, String contentType,
             Map<String, String> fileInfo) throws B2Exception {
+        checkInitialized();
         try {
             String bucketId = getCachedBucketId();
 
@@ -113,6 +131,7 @@ public class B2Client implements InitializingBean {
 
     public UploadFileResponse uploadFile(String fileName, java.io.File file, String contentType,
             Map<String, String> fileInfo) throws B2Exception {
+        checkInitialized();
         try {
             String bucketId = getCachedBucketId();
 
@@ -150,6 +169,7 @@ public class B2Client implements InitializingBean {
 
     // Deletion support
     public void deleteFileVersion(String fileName, String fileId) {
+        checkInitialized();
         try {
             client.deleteFileVersion(fileName, fileId);
             log.info("Deleted file version {} from B2", fileName);
@@ -169,6 +189,7 @@ public class B2Client implements InitializingBean {
      * Useful when we don't have the fileId from the database.
      */
     public void deleteFileByUrl(String fileUrl) {
+        checkInitialized();
         try {
             String domain = properties.getCdnDomain();
             String b2Key = fileUrl.replace(domain + "/", "");
@@ -210,6 +231,7 @@ public class B2Client implements InitializingBean {
     }
 
     public void deleteFilesWithPrefix(String prefix) {
+        checkInitialized();
         try {
             String bucketId = getCachedBucketId();
             log.info("Deleting files with prefix: {}", prefix);
@@ -237,6 +259,7 @@ public class B2Client implements InitializingBean {
     }
 
     public java.util.List<B2FileVersion> listFiles(String prefix) {
+        checkInitialized();
         try {
             String bucketId = getCachedBucketId();
             B2ListFileVersionsRequest request = B2ListFileVersionsRequest
@@ -275,6 +298,7 @@ public class B2Client implements InitializingBean {
     private long cachedUploadUrlTime;
 
     public synchronized GetUploadUrlResponse getUploadUrl() {
+        checkInitialized();
         // Return cached response if valid (token lasts 24h, we cache for 23h to be
         // safe)
         if (cachedUploadUrlResponse != null && (System.currentTimeMillis() - cachedUploadUrlTime) < 23 * 3600 * 1000L) {
@@ -329,6 +353,7 @@ public class B2Client implements InitializingBean {
     }
 
     public B2FileInfo getFileInfo(String fileId) {
+        checkInitialized();
         try {
             com.backblaze.b2.client.structures.B2FileVersion fileVersion = client.getFileInfo(fileId);
 
@@ -358,6 +383,7 @@ public class B2Client implements InitializingBean {
      * @return The new B2 file ID of the re-uploaded file at the target location
      */
     public String copyFile(String sourceFileId, String targetFileName) throws B2Exception {
+        checkInitialized();
         log.info("Starting file move (Download -> Upload) for sourceId: {} to target: {}", sourceFileId,
                 targetFileName);
         try {
@@ -413,6 +439,7 @@ public class B2Client implements InitializingBean {
      * intent.
      */
     public void ensureFolderExists(String prefix) {
+        checkInitialized();
         try {
             String bucketId = getCachedBucketId();
             // Perform a lightweight check (e.g., list 1 file) to ensure connectivity and
@@ -436,6 +463,8 @@ public class B2Client implements InitializingBean {
      * Check if a file exists in B2
      */
     public boolean fileExists(String fileName) {
+        if (!initialized)
+            return false;
         try {
             String bucketId = getCachedBucketId();
             // Prefix search with max count 1 to check existence efficiently
@@ -472,6 +501,24 @@ public class B2Client implements InitializingBean {
         } catch (Exception e) {
             log.error("Failed to resolve bucket ID for name: {}", bucketNameOrId, e);
             throw new RuntimeException("Bucket not found: " + bucketNameOrId, e);
+        }
+    }
+
+    /**
+     * Get download authorization token for a file prefix
+     */
+    public String getDownloadAuthorization(String fileNamePrefix, int validDurationInSeconds) {
+        checkInitialized();
+        try {
+            String bucketId = getCachedBucketId();
+            com.backblaze.b2.client.structures.B2GetDownloadAuthorizationRequest request = com.backblaze.b2.client.structures.B2GetDownloadAuthorizationRequest
+                    .builder(bucketId, fileNamePrefix, validDurationInSeconds)
+                    .build();
+
+            return client.getDownloadAuthorization(request).getAuthorizationToken();
+        } catch (Exception e) {
+            log.error("Failed to get download authorization", e);
+            throw new RuntimeException("Failed to get download authorization", e);
         }
     }
 }

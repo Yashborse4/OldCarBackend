@@ -13,6 +13,7 @@ public class B2Properties {
     private String bucketId;
     private String bucketName; // Added for fallback download by name
     private String cdnDomain; // e.g. https://files.yoursite.com
+    private boolean enabled = true; // Default to true for backward compatibility
 
     public String getApplicationKeyId() {
         return applicationKeyId;
