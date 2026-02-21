@@ -1,7 +1,8 @@
-package com.carselling.oldcar.service;
+package com.carselling.oldcar.service.notification;
 
 import com.carselling.oldcar.model.NotificationQueue;
 import com.carselling.oldcar.repository.NotificationQueueRepository;
+import com.carselling.oldcar.service.IdempotencyService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.carselling.oldcar.event.NotificationEvent;
