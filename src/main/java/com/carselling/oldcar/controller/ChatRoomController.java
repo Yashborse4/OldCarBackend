@@ -3,7 +3,8 @@ package com.carselling.oldcar.controller;
 import com.carselling.oldcar.dto.chat.*;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.security.UserPrincipal;
-import com.carselling.oldcar.service.ChatService;
+import com.carselling.oldcar.service.chat.ChatService;
+import com.carselling.oldcar.service.chat.GroupChatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ChatRoomController {
 
         private final ChatService chatService;
-        private final com.carselling.oldcar.service.GroupChatService groupChatService;
+        private final GroupChatService groupChatService;
 
         // ========================= CHAT ROOM MANAGEMENT =========================
 
