@@ -14,6 +14,8 @@ import com.carselling.oldcar.repository.UserRepository;
 import com.carselling.oldcar.service.auth.AuthService;
 import com.carselling.oldcar.service.car.CarServiceImpl;
 
+import com.carselling.oldcar.service.file.FileValidationService;
+import com.carselling.oldcar.service.media.MediaFinalizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

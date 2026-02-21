@@ -1,18 +1,18 @@
 package com.carselling.oldcar.service;
 
-import com.carselling.oldcar.dto.ChatRoomDto;
+import com.carselling.oldcar.dto.chat.ChatRoomDto;
 import com.carselling.oldcar.exception.BusinessException;
 import com.carselling.oldcar.model.ChatInviteLink;
 import com.carselling.oldcar.model.ChatParticipant;
 import com.carselling.oldcar.model.ChatRoom;
 import com.carselling.oldcar.model.ChatRoom.ChatType;
-import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.ChatInviteLinkRepository;
 import com.carselling.oldcar.repository.ChatParticipantRepository;
 import com.carselling.oldcar.repository.ChatRoomRepository;
 import com.carselling.oldcar.repository.UserRepository;
 import com.carselling.oldcar.model.ChatParticipant.ParticipantRole;
+import com.carselling.oldcar.service.chat.ChatService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,7 +26,6 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
