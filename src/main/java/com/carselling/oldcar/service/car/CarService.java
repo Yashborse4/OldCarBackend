@@ -80,9 +80,11 @@ public interface CarService {
     // Media management operations
     CarResponse deleteCarImage(String carId, int imageIndex, Long currentUserId);
 
-    CarResponse replaceCarImage(String carId, int imageIndex, String newImageUrl, Long currentUserId);
+    CarResponse replaceCarImage(String carId, int imageIndex, Long tempFileId, String newImageUrl, Long currentUserId);
 
     CarResponse deleteCarVideo(String carId, Long currentUserId);
+
+    CarResponse replaceCarVideo(String carId, Long tempFileId, String newVideoUrl, Long currentUserId);
 
     CarResponse updateCarBanner(String carId, int imageIndex, Long currentUserId);
 }

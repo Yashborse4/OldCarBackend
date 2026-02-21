@@ -425,17 +425,18 @@ public class CarServiceImpl implements CarService {
      * Finalizes media for a car.
      * Designed to be idempotent and resumable.
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CarResponse finalizeMedia(String carIdStr, List<Long> tempFileIds, Long currentUserId) {
         Long carId = parseCarId(carIdStr);
-        Car car = findCarAndEnsureVersion(carId);
-        User owner = car.getOwner();
+        Car initialCar = findCarAndEnsureVersion(carId);
+        User owner = initialCar.getOwner();
 
         // 1. Security check
         if (currentUserId != null && !owner.getId().equals(currentUserId)) {
             throw new SecurityException("You do not own this vehicle");
         }
 
-        if (car.getStatus() == CarStatus.ARCHIVED) {
+        if (initialCar.getStatus() == CarStatus.ARCHIVED) {
             throw new BusinessException("Cannot update media when vehicle status is ARCHIVED");
         }
 
@@ -450,69 +451,75 @@ public class CarServiceImpl implements CarService {
                 .filter(f -> fileValidationService.isImageFile(f.getOriginalFileName()))
                 .count();
 
-        // Check Limits using shared helper
-        boolean hasExistingVideo = car.getVideoUrl() != null && !car.getVideoUrl().isBlank();
-        int currentImageCount = car.getImages() != null ? car.getImages().size() : 0;
+        // Check Limits using shared helper against initial snapshot
+        boolean hasExistingVideo = initialCar.getVideoUrl() != null && !initialCar.getVideoUrl().isBlank();
+        int currentImageCount = initialCar.getImages() != null ? initialCar.getImages().size() : 0;
 
         validateMediaLimits(newVideos, newImages, hasExistingVideo, currentImageCount);
 
         try {
             log.info("Finalizing media for car {}", carId);
-            // Change: Pass base folder only. MediaFinalizationService will append /images
-            // or /videos
             String targetFolder = "cars/" + carId;
 
+            // EXECUTING OUTSIDE DB TRANSACTION -> Avoids OptimisticLocking and connection
+            // pool exhaustion
             List<UploadedFile> finalizedFiles = mediaFinalizationService
                     .finalizeUploads(tempFileIds, targetFolder,
                             ResourceType.CAR_IMAGE, carId, owner);
 
-            if (finalizedFiles.isEmpty()) {
-                log.warn("Media finalization returned no files for car {}.", carId);
-                // If we were expecting files but got none, strictly we might want to error,
-                // but for now we just return the car as is.
-            } else {
-                // Separate new images and videos
-                List<String> newImageUrls = finalizedFiles.stream()
-                        .filter(f -> fileValidationService.isImageFile(f.getFileName()))
-                        .map(UploadedFile::getFileUrl)
-                        .collect(Collectors.toList());
+            // Fetch a fresh Car entity in a new transaction to apply changes
+            TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+            return transactionTemplate.execute(status -> {
+                Car freshCar = findCarAndEnsureVersion(carId);
 
-                String newVideoUrl = finalizedFiles.stream()
-                        .filter(f -> fileValidationService.isVideoFile(f.getFileName()))
-                        .map(UploadedFile::getFileUrl)
-                        .findFirst()
-                        .orElse(null);
+                if (finalizedFiles.isEmpty()) {
+                    log.warn("Media finalization returned no files for car {}.", carId);
+                } else {
+                    List<String> newImageUrls = finalizedFiles.stream()
+                            .filter(f -> fileValidationService.isImageFile(f.getFileName()))
+                            .map(UploadedFile::getFileUrl)
+                            .collect(Collectors.toList());
 
-                // 3. Append Images
-                if (!newImageUrls.isEmpty()) {
-                    List<String> allImages = car.getImages() != null ? new ArrayList<>(car.getImages())
-                            : new ArrayList<>();
-                    allImages.addAll(newImageUrls);
-                    car.setImages(allImages);
+                    String newVideoUrl = finalizedFiles.stream()
+                            .filter(f -> fileValidationService.isVideoFile(f.getFileName()))
+                            .map(UploadedFile::getFileUrl)
+                            .findFirst()
+                            .orElse(null);
 
-                    // Set first image as banner if valid
-                    if (!allImages.isEmpty() && (car.getImageUrl() == null || car.getImageUrl().isBlank())) {
-                        car.setImageUrl(allImages.get(0));
+                    if (!newImageUrls.isEmpty()) {
+                        List<String> allImages = freshCar.getImages() != null ? new ArrayList<>(freshCar.getImages())
+                                : new ArrayList<>();
+                        allImages.addAll(newImageUrls);
+                        freshCar.setImages(allImages);
+
+                        if (!allImages.isEmpty()
+                                && (freshCar.getImageUrl() == null || freshCar.getImageUrl().isBlank())) {
+                            freshCar.setImageUrl(allImages.get(0));
+                        }
                     }
+
+                    if (newVideoUrl != null) {
+                        freshCar.setVideoUrl(newVideoUrl);
+                    }
+
+                    freshCar.setMediaStatus(MediaStatus.READY);
+                    autoActivateIfEligible(freshCar);
                 }
 
-                // 4. Set Video
-                if (newVideoUrl != null) {
-                    car.setVideoUrl(newVideoUrl);
-                }
-
-                car.setMediaStatus(MediaStatus.READY);
-                autoActivateIfEligible(car);
-            }
-
-            Car savedCar = carRepository.save(car);
-            return convertToResponseV2(savedCar);
+                Car savedCar = carRepository.save(freshCar);
+                return convertToResponseV2(savedCar);
+            });
 
         } catch (SecurityException e) {
             log.error("Security violation during media finalization for car {}: {}", carId, e.getMessage());
-            car.setMediaStatus(MediaStatus.FAILED);
-            car.setStatus(CarStatus.DRAFT);
-            carRepository.save(car);
+            TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+            transactionTemplate.execute(status -> {
+                Car freshCar = findCarAndEnsureVersion(carId);
+                freshCar.setMediaStatus(MediaStatus.FAILED);
+                freshCar.setStatus(CarStatus.DRAFT);
+                carRepository.save(freshCar);
+                return null;
+            });
             throw e;
         } catch (Exception e) {
             log.error("Transient error finalizing media for car {}: {}. Will be retried.", carId, e.getMessage());
@@ -1038,7 +1045,8 @@ public class CarServiceImpl implements CarService {
      */
     @Override
     @Transactional
-    public CarResponse replaceCarImage(String carId, int imageIndex, String newImageUrl, Long currentUserId) {
+    public CarResponse replaceCarImage(String carId, int imageIndex, Long tempFileId, String newImageUrl,
+            Long currentUserId) {
         log.info("Replacing image at index {} for car {} by user {}", imageIndex, carId, currentUserId);
 
         Car car = findCarAndEnsureVersion(Long.parseLong(carId));
@@ -1050,7 +1058,19 @@ public class CarServiceImpl implements CarService {
                     "Image index " + imageIndex + " is out of bounds. Car has " + images.size() + " images.");
         }
 
-        fileValidationService.validateFileUrl(newImageUrl);
+        if (tempFileId != null) {
+            String targetFolder = "cars/" + carId;
+            List<com.carselling.oldcar.model.UploadedFile> finalized = mediaFinalizationService.finalizeUploads(
+                    List.of(tempFileId), targetFolder, com.carselling.oldcar.model.ResourceType.CAR_IMAGE,
+                    Long.parseLong(carId), car.getOwner());
+            if (!finalized.isEmpty()) {
+                newImageUrl = finalized.get(0).getFileUrl();
+            } else {
+                throw new BusinessException("Failed to finalize uploaded image");
+            }
+        } else {
+            fileValidationService.validateFileUrl(newImageUrl);
+        }
 
         String oldUrl = images.get(imageIndex);
         images.set(imageIndex, newImageUrl);
@@ -1102,6 +1122,56 @@ public class CarServiceImpl implements CarService {
         Car updatedCar = carRepository.save(car);
         auditLogService.logDataAccess("Car", updatedCar.getId(), "VIDEO_DELETE", getUsername(currentUserId),
                 "Deleted video by user " + currentUserId);
+
+        return convertToResponseV2(updatedCar);
+    }
+
+    /**
+     * Replace or set the video for a car listing.
+     * Removes the old video file from B2 storage if it exists, and assigns the new
+     * one.
+     *
+     * @param carId         Car ID
+     * @param tempFileId    Optional ID of the newly uploaded temp file in B2
+     * @param newVideoUrl   Optional direct URL of the new video (if bypassing temp)
+     * @param currentUserId ID of the requesting user
+     * @return Updated car response
+     */
+    @Override
+    @Transactional
+    public CarResponse replaceCarVideo(String carId, Long tempFileId, String newVideoUrl, Long currentUserId) {
+        log.info("Replacing video for car {} by user {}", carId, currentUserId);
+
+        Car car = findCarAndEnsureVersion(Long.parseLong(carId));
+        assertCanModifyCar(car, currentUserId, "replace video on");
+
+        if (tempFileId != null) {
+            String targetFolder = "cars/" + carId;
+            List<com.carselling.oldcar.model.UploadedFile> finalized = mediaFinalizationService.finalizeUploads(
+                    List.of(tempFileId), targetFolder, com.carselling.oldcar.model.ResourceType.CAR_IMAGE,
+                    Long.parseLong(carId), car.getOwner());
+            if (!finalized.isEmpty()) {
+                newVideoUrl = finalized.get(0).getFileUrl();
+            } else {
+                throw new BusinessException("Failed to finalize uploaded video");
+            }
+        } else {
+            fileValidationService.validateFileUrl(newVideoUrl);
+        }
+
+        String oldVideoUrl = car.getVideoUrl();
+
+        // Cleanup the old video from B2 and DB if replacing
+        if (oldVideoUrl != null && !oldVideoUrl.isBlank()) {
+            cleanupMediaFile(oldVideoUrl);
+        }
+
+        car.setVideoUrl(newVideoUrl);
+        car.setUpdatedAt(LocalDateTime.now());
+
+        Car updatedCar = carRepository.save(car);
+        auditLogService.logDataAccess("Car", updatedCar.getId(), "VIDEO_REPLACE", getUsername(currentUserId),
+                "Replaced video by user " + currentUserId);
 
         return convertToResponseV2(updatedCar);
     }
