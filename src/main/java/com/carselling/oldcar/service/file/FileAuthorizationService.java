@@ -1,9 +1,10 @@
-package com.carselling.oldcar.service;
+package com.carselling.oldcar.service.file;
 
 import com.carselling.oldcar.dto.car.CarResponse;
 import com.carselling.oldcar.exception.ResourceNotFoundException;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.model.Role;
+import com.carselling.oldcar.service.chat.ChatAuthorizationService;
 import com.carselling.oldcar.service.car.CarService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
