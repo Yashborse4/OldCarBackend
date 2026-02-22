@@ -10,8 +10,8 @@ import com.carselling.oldcar.model.ChatParticipant;
 import com.carselling.oldcar.model.ChatRoom;
 import com.carselling.oldcar.repository.ChatParticipantRepository;
 import com.carselling.oldcar.repository.ChatRoomRepository;
-import com.carselling.oldcar.service.ChatService;
-import com.carselling.oldcar.service.GroupChatService;
+import com.carselling.oldcar.service.chat.ChatService;
+import com.carselling.oldcar.service.chat.GroupChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.carselling.oldcar.model.ResourceType;
@@ -31,7 +31,7 @@ public class GroupChatServiceImpl implements GroupChatService {
     private final UserRepository userRepository;
     private final B2FileService b2FileService;
     private final ChatService chatService;
-    private final com.carselling.oldcar.service.ChatAuthorizationService chatAuthorizationService;
+    private final com.carselling.oldcar.service.chat.ChatAuthorizationService chatAuthorizationService;
 
     @Override
     @Transactional

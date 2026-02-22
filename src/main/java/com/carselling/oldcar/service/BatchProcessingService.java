@@ -3,6 +3,7 @@ package com.carselling.oldcar.service;
 import com.carselling.oldcar.model.Car;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.VehicleRepository;
+import com.carselling.oldcar.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -32,7 +33,7 @@ import java.util.stream.Collectors;
 public class BatchProcessingService {
 
     private final VehicleRepository vehicleRepository;
-    private final FileUploadService fileUploadService;
+    private final com.carselling.oldcar.b2.B2FileService b2FileService;
     private final NotificationService notificationService;
 
     // Track batch job status
@@ -148,7 +149,7 @@ public class BatchProcessingService {
             byte[] csvBytes = csvContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
             String fileName = "vehicles_export_" + jobId + ".csv";
             
-            com.carselling.oldcar.dto.file.FileUploadResponse uploadResponse = fileUploadService.uploadFile(
+            com.carselling.oldcar.dto.file.FileUploadResponse uploadResponse = b2FileService.uploadFile(
                     csvBytes, 
                     fileName, 
                     "text/csv", 
@@ -193,6 +194,14 @@ public class BatchProcessingService {
         try {
             log.info("Starting async image processing for vehicle ID: {}", vehicleId);
 
+            Optional<Car> vehicleOpt = vehicleRepository.findById(vehicleId);
+            if (vehicleOpt.isEmpty()) {
+                log.error("Vehicle not found for ID: {}", vehicleId);
+                return CompletableFuture.completedFuture(null);
+            }
+
+            User user = vehicleOpt.get().getOwner();
+
             List<String> processedImageUrls = new ArrayList<>();
 
             for (MultipartFile image : images) {
@@ -201,12 +210,12 @@ public class BatchProcessingService {
                 MultipartFile thumbnailImage = resizeImage(image, 300, 200);
 
                 // Upload original, resized, and thumbnail versions
-                String originalUrl = fileUploadService.uploadFile(image, "vehicles/" + vehicleId + "/original/", 1L)
+                String originalUrl = b2FileService.uploadFile(image, "vehicles/" + vehicleId + "/original/", user, com.carselling.oldcar.model.ResourceType.CAR_IMAGE, vehicleId)
                         .getFileUrl();
-                String resizedUrl = fileUploadService
-                        .uploadFile(resizedImage, "vehicles/" + vehicleId + "/resized/", 1L).getFileUrl();
-                String thumbnailUrl = fileUploadService
-                        .uploadFile(thumbnailImage, "vehicles/" + vehicleId + "/thumbnails/", 1L).getFileUrl();
+                String resizedUrl = b2FileService
+                        .uploadFile(resizedImage, "vehicles/" + vehicleId + "/resized/", user, com.carselling.oldcar.model.ResourceType.CAR_IMAGE, vehicleId).getFileUrl();
+                String thumbnailUrl = b2FileService
+                        .uploadFile(thumbnailImage, "vehicles/" + vehicleId + "/thumbnails/", user, com.carselling.oldcar.model.ResourceType.CAR_IMAGE, vehicleId).getFileUrl();
 
                 processedImageUrls.add(originalUrl);
 

@@ -194,7 +194,7 @@ public class CarMediaController {
 
                 log.info("Replacing image at index {} for car {}", index, id);
                 Long currentUserId = SecurityUtils.getCurrentUserId();
-                CarResponse updatedCar = carService.replaceCarImage(id, index, newImageUrl, currentUserId);
+                CarResponse updatedCar = carService.replaceCarImage(id, index, null, newImageUrl, currentUserId);
 
                 return ResponseEntity.ok(ApiResponse.success(
                                 "Image replaced successfully",

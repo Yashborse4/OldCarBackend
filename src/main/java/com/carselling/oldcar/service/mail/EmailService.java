@@ -1,4 +1,4 @@
-package com.carselling.oldcar.service;
+package com.carselling.oldcar.service.mail;
 
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;

@@ -1,4 +1,4 @@
-package com.carselling.oldcar.service;
+package com.carselling.oldcar.service.file;
 
 import org.springframework.web.multipart.MultipartFile;
 

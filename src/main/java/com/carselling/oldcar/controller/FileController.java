@@ -6,7 +6,7 @@ import com.carselling.oldcar.dto.file.FileUploadResponse;
 import com.carselling.oldcar.exception.ResourceNotFoundException;
 
 import com.carselling.oldcar.security.UserPrincipal;
-import com.carselling.oldcar.service.MediaService;
+import com.carselling.oldcar.service.media.MediaService;
 import com.carselling.oldcar.annotation.RateLimit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

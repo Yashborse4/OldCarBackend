@@ -4,7 +4,7 @@ import com.carselling.oldcar.annotation.RateLimit;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.dto.mobile.RegisterDeviceRequest;
 import com.carselling.oldcar.security.UserPrincipal;
-import com.carselling.oldcar.service.NotificationService;
+import com.carselling.oldcar.service.notification.NotificationService;
 import com.carselling.oldcar.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

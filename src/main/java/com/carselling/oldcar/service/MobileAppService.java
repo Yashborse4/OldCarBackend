@@ -2,6 +2,7 @@ package com.carselling.oldcar.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import com.carselling.oldcar.service.notification.NotificationService;
 
 import java.util.List;
 import java.util.Locale;

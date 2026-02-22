@@ -1,4 +1,4 @@
-package com.carselling.oldcar.service;
+package com.carselling.oldcar.service.chat;
 
 import com.carselling.oldcar.dto.chat.ChatRoomDto;
 import com.carselling.oldcar.dto.chat.UpdateGroupDetailsRequest;

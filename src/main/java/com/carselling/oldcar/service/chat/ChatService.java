@@ -1,4 +1,4 @@
-package com.carselling.oldcar.service;
+package com.carselling.oldcar.service.chat;
 
 import com.carselling.oldcar.dto.chat.*;
 import com.carselling.oldcar.dto.file.FileUploadResponse;
@@ -7,7 +7,7 @@ import com.carselling.oldcar.exception.BusinessException;
 import com.carselling.oldcar.model.*;
 import com.carselling.oldcar.repository.ChatInviteLinkRepository;
 import com.carselling.oldcar.repository.*;
-import com.carselling.oldcar.service.file.FileUploadService;
+import com.carselling.oldcar.b2.B2FileService;
 import com.carselling.oldcar.service.media.MediaFinalizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,7 +43,7 @@ public class ChatService {
     private final UserRepository userRepository;
     private final CarRepository carRepository;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
-    private final FileUploadService fileUploadService;
+    private final B2FileService b2FileService;
     private final MediaFinalizationService mediaFinalizationService;
     private final ChatAuthorizationService chatAuthorizationService;
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
@@ -837,7 +837,7 @@ public class ChatService {
         try {
             // Upload file using the file upload service
             // Use strict upload method with ResourceType.CHAT_ATTACHMENT
-            FileUploadResponse response = fileUploadService.uploadFile(file, "chat/" + chatRoom.getId(), uploader,
+            FileUploadResponse response = b2FileService.uploadFile(file, "chat/" + chatRoom.getId(), uploader,
                     ResourceType.CHAT_ATTACHMENT, userId);
 
             log.info("File uploaded successfully: {}", response.getFileName());

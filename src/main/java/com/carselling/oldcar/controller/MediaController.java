@@ -1,7 +1,7 @@
 package com.carselling.oldcar.controller;
 
 import com.carselling.oldcar.dto.common.ApiResponse;
-import com.carselling.oldcar.service.MediaService;
+import com.carselling.oldcar.service.media.MediaService;
 import com.carselling.oldcar.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

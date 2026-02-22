@@ -2,7 +2,7 @@ package com.carselling.oldcar.websocket;
 
 import com.carselling.oldcar.dto.chat.*;
 import com.carselling.oldcar.model.User;
-import com.carselling.oldcar.service.ChatService;
+import com.carselling.oldcar.service.chat.ChatService;
 import com.carselling.oldcar.service.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

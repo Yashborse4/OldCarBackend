@@ -10,7 +10,7 @@ import com.carselling.oldcar.service.car.CarService;
 import com.carselling.oldcar.service.analytics.UserAnalyticsService;
 import com.carselling.oldcar.util.PageableUtils;
 import com.carselling.oldcar.util.SecurityUtils;
-import com.carselling.oldcar.service.FileUploadService;
+import com.carselling.oldcar.b2.B2FileService;
 import com.carselling.oldcar.model.MediaStatus;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
@@ -47,7 +47,7 @@ public class CarController {
 
         private final CarService carService;
         private final UserAnalyticsService userAnalyticsService;
-        private final FileUploadService fileUploadService;
+        private final B2FileService b2FileService;
 
         /**
          * Get All Vehicles with Enhanced Features
@@ -229,31 +229,14 @@ public class CarController {
 
         @PutMapping("/{id}")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
-        // @Operation(summary = "Update vehicle with images", description = "Update
-        // vehicle details and upload new images")
         public ResponseEntity<ApiResponse<CarResponse>> updateCar(
-                        @PathVariable String id,
-                        @Valid @RequestPart("car") CarRequest carRequest,
-                        @RequestPart(value = "images", required = false) List<MultipartFile> images) {
+                @PathVariable String id,
+                @Valid @RequestPart("car") CarRequest carRequest,
+                @RequestPart(value = "images", required = false) List<MultipartFile> images) {
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
 
-                // Ownership check is enforced by Service
-
-                CarResponse updatedCar = carService.updateVehicle(id, carRequest, currentUserId);
-
-                if (images != null && !images.isEmpty()) {
-                        try {
-                                List<FileUploadResponse> uploads = fileUploadService.uploadMultipleFiles(images,
-                                                "cars/" + updatedCar.getId() + "/images", currentUserId);
-                                List<String> imageUrls = uploads.stream().map(FileUploadResponse::getFileUrl)
-                                                .collect(Collectors.toList());
-                                updatedCar = carService.uploadMedia(updatedCar.getId(), imageUrls, null, currentUserId);
-                        } catch (java.io.IOException e) {
-                                log.error("Failed to upload images for car {}: {}", id, e.getMessage());
-                                // Non-blocking, return car as is but maybe warn?
-                        }
-                }
+                CarResponse updatedCar = carService.updateVehicleWithMedia(id, carRequest, images, currentUserId);
 
                 return ResponseEntity.ok(ApiResponse.success("Vehicle updated successfully", updatedCar));
         }

@@ -1,7 +1,7 @@
 package com.carselling.oldcar.event.listener;
 
 import com.carselling.oldcar.event.NotificationEvent;
-import com.carselling.oldcar.service.EmailService;
+import com.carselling.oldcar.service.mail.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 public class NotificationEventListener {
 
     private final EmailService emailService;
-    private final com.carselling.oldcar.service.NotificationService notificationService;
+    private final com.carselling.oldcar.service.notification.NotificationService notificationService;
 
     @Async
     @EventListener

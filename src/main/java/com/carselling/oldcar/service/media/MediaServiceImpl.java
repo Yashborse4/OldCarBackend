@@ -1,4 +1,8 @@
-package com.carselling.oldcar.service;
+package com.carselling.oldcar.service.media;
+import com.carselling.oldcar.service.file.FileValidationService;
+import com.carselling.oldcar.service.file.FileAuthorizationService;
+import com.carselling.oldcar.service.ChecksumService;
+import com.carselling.oldcar.service.AsyncMediaService;
 
 import com.carselling.oldcar.b2.B2FileService;
 import com.carselling.oldcar.dto.file.DirectUploadDTOs;
@@ -34,8 +38,7 @@ public class MediaServiceImpl implements MediaService {
     private final ChecksumService checksumService;
     private final CarService carService;
     private final AsyncMediaService asyncMediaService;
-    private final FileUploadService fileUploadService; // Keeps legacy FileUploadService for some methods if needed, or
-                                                       // we explicitly use B2
+
     private final com.carselling.oldcar.repository.UserRepository userRepository;
     private final com.carselling.oldcar.repository.UploadedFileRepository uploadedFileRepository;
     private final com.carselling.oldcar.repository.ChatParticipantRepository chatParticipantRepository;
@@ -320,7 +323,7 @@ public class MediaServiceImpl implements MediaService {
         // STRICT AUTHORIZATION for deletion
         authService.checkDeletionAuthorization(fileUrl, user);
 
-        boolean deleted = fileUploadService.deleteFile(fileUrl);
+        boolean deleted = b2FileService.deleteFile(fileUrl);
 
         if (!deleted) {
             // Try B2 direct delete if fileUploadService (legacy?) fails or just wrapper
@@ -353,7 +356,7 @@ public class MediaServiceImpl implements MediaService {
 
         // Using fileUploadService as it seems to handle this logic (maybe delegating to
         // B2)
-        return fileUploadService.generatePresignedUrl(fileUrl, expirationMinutes);
+        return b2FileService.generatePresignedUrl(fileUrl, expirationMinutes);
     }
 
     @Override
@@ -372,7 +375,7 @@ public class MediaServiceImpl implements MediaService {
         // STRICT AUTHORIZATION CHECK
         authService.checkDeletionAuthorization(fileUrl, user);
 
-        FileMetadata metadata = fileUploadService.getFileMetadata(fileUrl);
+        FileMetadata metadata = b2FileService.getFileMetadata(fileUrl);
 
         if (metadata != null) {
             return Map.of(
@@ -403,7 +406,7 @@ public class MediaServiceImpl implements MediaService {
         }
 
         // Generate Presigned URL for Private File (1 hour expiration)
-        return fileUploadService.generatePresignedUrl(file.getFileUrl(), 60);
+        return b2FileService.generatePresignedUrl(file.getFileUrl(), 60);
     }
 
     /**

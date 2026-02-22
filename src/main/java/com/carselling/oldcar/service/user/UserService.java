@@ -10,7 +10,7 @@ import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.model.ResourceType;
 import com.carselling.oldcar.repository.UserRepository;
 import com.carselling.oldcar.service.auth.AuthService;
-import com.carselling.oldcar.service.FileUploadService;
+import com.carselling.oldcar.b2.B2FileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -34,7 +34,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final AuthService authService;
-    private final FileUploadService fileUploadService;
+    private final B2FileService b2FileService;
 
     /**
      * Get user profile by ID
@@ -351,7 +351,7 @@ public class UserService {
         try {
             String folder = "users/" + userId + "/profile";
 
-            com.carselling.oldcar.dto.file.FileUploadResponse response = fileUploadService.uploadFile(
+            com.carselling.oldcar.dto.file.FileUploadResponse response = b2FileService.uploadFile(
                     file, folder, currentUser, ResourceType.USER_PROFILE, userId);
 
             // Store URL in database
@@ -376,7 +376,7 @@ public class UserService {
         User currentUser = authService.getCurrentUser();
 
         // Optionally delete from storage if needed, but for now just clear DB reference
-        // fileUploadService.deleteFile(currentUser.getProfileImageUrl());
+        // b2FileService.deleteFile(currentUser.getProfileImageUrl());
 
         currentUser.setProfileImageUrl(null);
         userRepository.save(currentUser);

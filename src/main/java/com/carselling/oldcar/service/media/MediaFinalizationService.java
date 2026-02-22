@@ -1,4 +1,4 @@
-package com.carselling.oldcar.service;
+package com.carselling.oldcar.service.media;
 
 import com.carselling.oldcar.b2.B2Client;
 import com.carselling.oldcar.b2.B2Properties;
