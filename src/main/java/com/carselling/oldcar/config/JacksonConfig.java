@@ -1,3 +1,4 @@
+// synced
 package com.carselling.oldcar.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
