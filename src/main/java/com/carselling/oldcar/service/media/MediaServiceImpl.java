@@ -1,8 +1,9 @@
 package com.carselling.oldcar.service.media;
+
 import com.carselling.oldcar.service.file.FileValidationService;
 import com.carselling.oldcar.service.file.FileAuthorizationService;
 import com.carselling.oldcar.service.ChecksumService;
-import com.carselling.oldcar.service.AsyncMediaService;
+import com.carselling.oldcar.service.media.AsyncMediaService;
 
 import com.carselling.oldcar.b2.B2FileService;
 import com.carselling.oldcar.dto.file.DirectUploadDTOs;

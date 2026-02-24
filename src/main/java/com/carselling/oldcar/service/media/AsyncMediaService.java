@@ -1,4 +1,4 @@
-package com.carselling.oldcar.service;
+package com.carselling.oldcar.service.media;
 
 import com.carselling.oldcar.model.Car;
 import com.carselling.oldcar.model.MediaStatus;
