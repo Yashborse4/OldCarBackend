@@ -289,7 +289,17 @@ public class B2FileService {
         }
         String uniqueFileName = String.format("%d_%s_%s.%s", uploader.getId(), timestamp, uuid, extension);
 
-        String b2FileName = "temp/" + uniqueFileName;
+        // Structured folder: temp/cars/{carId}/{subType}/{filename}
+        String subType = "images";
+        if (file.getContentType() != null && file.getContentType().startsWith("video/")) {
+            subType = "videos";
+        }
+        String b2FileName;
+        if (carId != null) {
+            b2FileName = "temp/cars/" + carId + "/" + subType + "/" + uniqueFileName;
+        } else {
+            b2FileName = "temp/" + uploader.getId() + "/" + uniqueFileName;
+        }
 
         java.util.Map<String, String> fileMetadata = new java.util.HashMap<>();
         fileMetadata.put("uploaded-by-user-id", String.valueOf(uploader.getId()));
@@ -490,7 +500,7 @@ public class B2FileService {
         return DirectUploadInitResponse.builder()
                 .uploadUrl(uploadUrl.getUploadUrl())
                 .authorizationToken(uploadUrl.getAuthorizationToken())
-                .fileName(b2FileName) // Client puts this in X-Bz-File-Name
+                .fileName(uniqueFileName)
                 .fileUrl(publicUrl)
                 .build();
     }
@@ -547,6 +557,7 @@ public class B2FileService {
         if (!decodedPath.startsWith("temp/")) {
             UploadedFile finalFile = UploadedFile.builder()
                     .fileUrl(publicUrl)
+                    .fileId(fileId) // Store B2 File ID
                     .fileName(fileName)
                     .originalFileName(originalFileName != null ? originalFileName : fileName)
                     .contentType(contentType != null ? contentType : "application/octet-stream")
@@ -559,32 +570,31 @@ public class B2FileService {
                     .fileId(fileId)
                     .build();
 
-            log.info("Directly finalized upload: {}", publicUrl);
-            return uploadedFileRepository.save(finalFile);
+            // Persist the record — previously returned unsaved
+            UploadedFile savedFile = uploadedFileRepository.save(finalFile);
+            log.info("Saved UploadedFile (direct) with ID: {} for path: {}", savedFile.getId(), decodedPath);
+            return savedFile;
         }
 
-        // Set carId when the upload belongs to a car, so the retry runner
-        // can discover these files via findByCarIdAndStorageStatus()
-        Long carId = (ownerType == ResourceType.CAR_IMAGE && ownerId != null) ? ownerId : null;
-        log.info("Saving TemporaryFile. CarId resolved to: {}", carId);
+        // Handle temp/ path - create TemporaryFile
+        // Extract carId from path if available (e.g., temp/cars/123/images/file.jpg)
+        Long extractedCarId = extractCarIdFromTempPath(decodedPath);
 
         TemporaryFile tempFile = TemporaryFile.builder()
                 .fileUrl(publicUrl)
-                .fileId(fileId) // Store B2 File ID
+                .fileId(fileId)
                 .fileName(fileName)
                 .originalFileName(originalFileName != null ? originalFileName : fileName)
                 .contentType(contentType != null ? contentType : "application/octet-stream")
                 .fileSize(fileSize != null ? fileSize : 0L)
                 .uploadedBy(uploader)
-                .fileHash(fileHash)
-                .carId(carId)
+                .carId(extractedCarId)
                 .build();
 
         TemporaryFile saved = temporaryFileRepository.save(tempFile);
-        log.info("Saved TemporaryFile with ID: {}, CarId: {}", saved.getId(), saved.getCarId());
+        log.info("Saved TemporaryFile with ID: {} for temp path: {} (carId: {})", saved.getId(), decodedPath, extractedCarId);
         return saved;
     }
-
     private String generateUniqueFileName(String originalFilename, Long userId) {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
         String uuid = UUID.randomUUID().toString().substring(0, 8);
@@ -605,7 +615,28 @@ public class B2FileService {
             return path.substring(0, slashIndex);
         }
         return path.isEmpty() ? null : path;
+    }
 
+    /**
+     * Extracts car ID from a temp path like "temp/cars/123/images/file.jpg".
+     *
+     * @param tempPath the decoded B2 file path
+     * @return the car ID, or null if not found
+     */
+    private Long extractCarIdFromTempPath(String tempPath) {
+        // Expected format: temp/cars/{carId}/...
+        if (tempPath == null || !tempPath.startsWith("temp/cars/")) {
+            return null;
+        }
+        String afterPrefix = tempPath.substring("temp/cars/".length());
+        int slashIndex = afterPrefix.indexOf('/');
+        String carIdStr = slashIndex != -1 ? afterPrefix.substring(0, slashIndex) : afterPrefix;
+        try {
+            return Long.parseLong(carIdStr);
+        } catch (NumberFormatException e) {
+            log.warn("Could not parse carId from temp path: {}", tempPath);
+            return null;
+        }
     }
 
     public String generatePresignedUrl(String fileUrl, int expirationMinutes) {
