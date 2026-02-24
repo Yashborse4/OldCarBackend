@@ -256,8 +256,8 @@ public class SecurityUtils {
 
     /**
      * Extract username from email address (part before @ symbol)
-     * Removes digits and extracts core username
-     * Example: yashborse432005@gmail.com -> yash
+     * Simply removes the domain part to get clean username
+     * Example: yashborse@gmail.com -> yashborse
      * 
      * @param email Email address to extract username from
      * @return Extracted username or null if email is invalid
@@ -269,52 +269,21 @@ public class SecurityUtils {
 
         // Get the local part (before @)
         String localPart = email.substring(0, email.indexOf("@"));
-
-        // Remove all digits to get the alphabetic portion
-        String alphabeticPart = localPart.replaceAll("[0-9]", "");
-
-        // If the alphabetic part is too long, take a reasonable portion (first 4-8
-        // chars)
-        // This handles cases like "yashborse" -> "yash"
-        String username = alphabeticPart;
-        if (alphabeticPart.length() > 8) {
-            // Try to find a natural break point (uppercase letter, underscore, dot)
-            int breakPoint = -1;
-            for (int i = 1; i < Math.min(alphabeticPart.length(), 12); i++) {
-                char c = alphabeticPart.charAt(i);
-                if (Character.isUpperCase(c) || c == '_' || c == '.') {
-                    breakPoint = i;
-                    break;
-                }
-            }
-
-            if (breakPoint > 3) {
-                username = alphabeticPart.substring(0, breakPoint);
-            } else {
-                // No natural break, take first 8 characters
-                username = alphabeticPart.substring(0, 8);
-            }
-        } else if (alphabeticPart.length() > 5) {
-            // For medium length (6-8 chars), take first 4-5 characters
-            username = alphabeticPart.substring(0, Math.min(5, alphabeticPart.length()));
-        }
-
-        // Ensure minimum length
+        
+        // Remove any special characters that are not allowed in usernames
+        // Keep only alphanumeric, underscore, dot, and hyphen
+        String username = localPart.replaceAll("[^a-zA-Z0-9_.-]", "_");
+        
+        // Ensure minimum length of 3 characters
         if (username.length() < 3) {
-            // If too short after processing, use original local part
-            username = localPart;
-            if (username.length() < 3) {
-                username = username + "_user";
-            }
+            username = username + "_user";
+        }
+        
+        // Ensure maximum length of 50 characters
+        if (username.length() > 50) {
+            username = username.substring(0, 50);
         }
 
-        // Sanitize username to ensure it only contains valid characters
-        username = username.replaceAll("[^a-zA-Z0-9_.-]", "_");
-
-        // Append 5 random alphanumeric characters
-        String randomSuffix = java.util.UUID.randomUUID().toString().substring(0, 5);
-        username = username + "_" + randomSuffix;
-
-        return username;
+        return username.toLowerCase();
     }
 }
