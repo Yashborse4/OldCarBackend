@@ -782,6 +782,7 @@ public class ChatService {
     /**
      * Leave chat
      */
+    @Transactional
     public void leaveChat(Long chatId, Long userId) {
         log.info("User ID: {} leaving chat ID: {}", userId, chatId);
 
@@ -789,15 +790,37 @@ public class ChatService {
                 .findByChatRoomIdAndUserId(chatId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Participant not found"));
 
+        ChatRoom chatRoom = participant.getChatRoom();
+        String userDisplayName = participant.getUser().getDisplayName();
+
         participant.setActive(false);
         participant.setLeftAt(LocalDateTime.now());
         chatParticipantRepository.save(participant);
 
-        // Send system message
-        sendSystemMessage(participant.getChatRoom(),
-                participant.getUser().getDisplayName() + " left the chat");
-
-        log.info("User left chat successfully");
+        // Check if there are any remaining active participants
+        long activeParticipantCount = chatParticipantRepository.countActiveByChatRoomId(chatId);
+        
+        if (activeParticipantCount == 0) {
+            // No active participants left, delete the group and all its data
+            log.info("No active participants left in chat ID: {}. Deleting group and all messages.", chatId);
+            
+            // Delete all messages in the chat room
+            List<ChatMessage> messages = chatMessageRepository.findByChatRoomIdAndIsDeletedFalseOrderByCreatedAtDesc(chatId, Pageable.unpaged()).getContent();
+            for (ChatMessage message : messages) {
+                message.setDeleted(true);
+                chatMessageRepository.save(message);
+            }
+            // Or hard delete: chatMessageRepository.deleteAll(messages);
+            
+            // Delete the chat room
+            chatRoomRepository.delete(chatRoom);
+            
+            log.info("Group chat ID: {} and all associated data have been deleted", chatId);
+        } else {
+            // Send system message only if group still has participants
+            sendSystemMessage(chatRoom, userDisplayName + " left the chat");
+            log.info("User left chat successfully. Remaining active participants: {}", activeParticipantCount);
+        }
     }
 
     /**

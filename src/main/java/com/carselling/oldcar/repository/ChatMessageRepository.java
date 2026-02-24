@@ -44,6 +44,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
                      "AND p.isActive = true " +
                      "AND m.id > COALESCE(p.lastReadMessageId, 0) " +
                      "AND m.isDeleted = false " +
+                     "AND m.sender.id != :userId " +  // Exclude messages sent by current user
                      "GROUP BY p.chatRoom.id")
        List<Object[]> getUnreadCountByChat(@Param("userId") Long userId);
 
@@ -67,6 +68,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
                      "AND m.chatRoom.id IN :chatRoomIds " +
                      "AND m.id > COALESCE(p.lastReadMessageId, 0) " +
                      "AND m.isDeleted = false " +
+                     "AND m.sender.id != :userId " +  // Exclude messages sent by current user
                      "GROUP BY m.chatRoom.id")
        List<Object[]> countUnreadMessages(@Param("userId") Long userId, @Param("chatRoomIds") List<Long> chatRoomIds);
 

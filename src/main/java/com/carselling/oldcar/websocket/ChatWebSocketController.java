@@ -15,6 +15,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.security.core.Authentication;
 import com.carselling.oldcar.security.UserPrincipal;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * WebSocket Controller for handling real-time chat messages via STOMP protocol
@@ -24,6 +26,9 @@ import java.util.Map;
 @Slf4j
 public class ChatWebSocketController {
 
+    // Deduplication set to prevent duplicate messages
+    private static final Set<String> recentlyProcessedMessages = ConcurrentHashMap.newKeySet();
+    
     private final ChatService ChatService;
     private final UserService userService;
     private final SimpMessagingTemplate messagingTemplate;
@@ -53,6 +58,23 @@ public class ChatWebSocketController {
 
             Long userId = userPrincipal.getId();
             log.debug("User {} sending message to chat room {}", userId, chatRoomId);
+            
+            // Check for duplicate message using clientMessageId
+            String clientMessageId = messageRequest.getClientMessageId();
+            if (clientMessageId != null) {
+                // Check if we've recently processed this message
+                String dedupeKey = userId + ":" + clientMessageId;
+                if (recentlyProcessedMessages.contains(dedupeKey)) {
+                    log.warn("Duplicate message detected and ignored: {}", clientMessageId);
+                    return;
+                }
+                // Add to processed set and clean old entries
+                recentlyProcessedMessages.add(dedupeKey);
+                // Keep only last 100 messages per user
+                if (recentlyProcessedMessages.size() > 100) {
+                    recentlyProcessedMessages.removeIf(key -> key.startsWith(userId + ":"));
+                }
+            }
 
             // Send message through service
             ChatMessageDto message = ChatService.sendMessage(messageRequest, userId);
