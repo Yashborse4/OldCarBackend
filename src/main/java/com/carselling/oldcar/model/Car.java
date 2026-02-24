@@ -28,7 +28,6 @@ import java.util.List;
         @Index(name = "idx_car_price", columnList = "price"),
         @Index(name = "idx_car_owner", columnList = "owner_id"),
         @Index(name = "idx_car_created_at", columnList = "created_at"),
-        @Index(name = "idx_car_is_active", columnList = "is_active"),
         @Index(name = "idx_car_featured", columnList = "is_featured"),
         @Index(name = "idx_car_retry", columnList = "status, next_retry_at")
 })
@@ -111,7 +110,7 @@ public class Car {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20)
     @Builder.Default
-    private CarStatus status = CarStatus.DRAFT;
+    private CarStatus status = CarStatus.PUBLISHED;
 
     /**
      * Idempotency key for preventing duplicate car creation on retries.

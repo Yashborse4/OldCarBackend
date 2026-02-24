@@ -414,7 +414,11 @@ public class CarServiceImpl implements CarService {
             return convertToResponseV2(savedCar);
         }
 
-        log.info("Created new vehicle with ID: {} for user: {}", savedCar.getId(), currentUserId);
+        // No temp files — car is ready immediately. Auto-activate for verified dealers.
+        autoActivateIfEligible(savedCar);
+        savedCar = carRepository.save(savedCar);
+
+        log.info("Created new vehicle with ID: {} (status: {}) for user: {}", savedCar.getId(), savedCar.getStatus(), currentUserId);
         auditLogService.logDataAccess("Car", savedCar.getId(), "CREATE", owner.getUsername(),
                 "Vehicle created by user " + currentUserId);
 
