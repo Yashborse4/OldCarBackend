@@ -10,15 +10,12 @@ import com.carselling.oldcar.service.car.CarService;
 import com.carselling.oldcar.service.analytics.UserAnalyticsService;
 import com.carselling.oldcar.util.PageableUtils;
 import com.carselling.oldcar.util.SecurityUtils;
-import com.carselling.oldcar.b2.B2FileService;
 import com.carselling.oldcar.model.MediaStatus;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import com.carselling.oldcar.dto.file.FileUploadResponse;
-import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -47,7 +44,6 @@ public class CarController {
 
         private final CarService carService;
         private final UserAnalyticsService userAnalyticsService;
-        private final B2FileService b2FileService;
 
         /**
          * Get All Vehicles with Enhanced Features
@@ -230,9 +226,9 @@ public class CarController {
         @PutMapping("/{id}")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
         public ResponseEntity<ApiResponse<CarResponse>> updateCar(
-                @PathVariable String id,
-                @Valid @RequestPart("car") CarRequest carRequest,
-                @RequestPart(value = "images", required = false) List<MultipartFile> images) {
+                        @PathVariable String id,
+                        @Valid @RequestPart("car") CarRequest carRequest,
+                        @RequestPart(value = "images", required = false) List<MultipartFile> images) {
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
 

@@ -76,6 +76,12 @@ public class CarRequest {
 
     @Size(max = 20, message = "Registration number must not exceed 20 characters")
     private String registrationNumber;
+
+    @Size(max = 50, message = "Category must not exceed 50 characters")
+    private String category;
+
+    @Size(max = 50, message = "Registration type must not exceed 50 characters")
+    private String registrationType;
     @Size(max = 50, message = "Usage must not exceed 50 characters")
     private String usage;
 
