@@ -38,7 +38,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
-    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080}")
+    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080,https://*.yashborse.me,https://yashborse.me}")
     private String corsAllowedOrigins;
 
     @Value("${app.cors.allowed-methods:GET,POST,PUT,DELETE,PATCH,OPTIONS}")

@@ -36,6 +36,12 @@ public class JwtTokenProvider {
 
     private javax.crypto.SecretKey key;
 
+    // TODO: [PRODUCTION-READY & CONCURRENCY] Local Token Blacklist.
+    // Storing blacklisted tokens in a local ConcurrentHashMap means a token revoked
+    // on one server (e.g., via logout) remains valid on all other servers in a
+    // cluster.
+    // Use Redis for storing the token blacklist to ensure cluster-wide
+    // invalidation.
     private final Map<String, Long> blacklistedTokens = new ConcurrentHashMap<>();
 
     @PostConstruct

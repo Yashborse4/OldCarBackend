@@ -59,6 +59,10 @@ public class AuthController {
         /**
          * User Login with Device Info
          * POST /api/auth/login
+         * // TODO: [PRODUCTION-READY & API-DESIGN] Missing Rate Limiting.
+         * // The login endpoint handles authentication and should be strictly
+         * rate-limited
+         * // to prevent brute-force attacks and credential stuffing.
          */
         @PostMapping("/login")
         @io.swagger.v3.oas.annotations.Operation(summary = "Login user", description = "Authenticate user and return JWT tokens")
@@ -140,6 +144,11 @@ public class AuthController {
         /**
          * Check if email exists for password reset
          * POST /api/auth/password/forgot/check-email
+         * // TODO: [PRODUCTION-READY & API-DESIGN] Missing Rate Limiting.
+         * // This endpoint allows unauthenticated checks for email existence, which
+         * creates
+         * // an Enumeration Vulnerability. Attackers can scrape registered emails.
+         * Apply strict rate limiting.
          */
         @PostMapping("/password/forgot/check-email")
         public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkEmailForPasswordReset(
@@ -246,6 +255,10 @@ public class AuthController {
         /**
          * Check Username Availability
          * GET /api/auth/check-username/{username}
+         * // TODO: [PRODUCTION-READY & API-DESIGN] Enumeration Vulnerability.
+         * // Missing rate limiting allows attackers to rapidly scrape and discover
+         * active usernames.
+         * // Add @RateLimit.
          */
         @GetMapping("/check-username/{username}")
         public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkUsernameAvailability(
@@ -265,6 +278,10 @@ public class AuthController {
         /**
          * Check Email Availability
          * GET /api/auth/check-email/{email}
+         * // TODO: [PRODUCTION-READY & API-DESIGN] Enumeration Vulnerability.
+         * // Missing rate limiting allows attackers to rapidly scrape and discover
+         * active emails.
+         * // Add @RateLimit.
          */
         @GetMapping("/check-email/{email}")
         public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkEmailAvailability(
