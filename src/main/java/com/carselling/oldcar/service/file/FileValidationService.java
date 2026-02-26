@@ -1,7 +1,6 @@
 package com.carselling.oldcar.service.file;
 
 import com.carselling.oldcar.config.FileUploadConfig;
-import com.carselling.oldcar.service.file.VirusScanService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
