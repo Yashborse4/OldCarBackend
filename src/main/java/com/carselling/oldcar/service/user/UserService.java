@@ -413,6 +413,7 @@ public class UserService {
                 .city(user.getCity())
                 .latitude(user.getLatitude())
                 .longitude(user.getLongitude())
+                .onboardingCompleted(Boolean.TRUE.equals(user.getOnboardingCompleted()))
                 .build();
     }
 

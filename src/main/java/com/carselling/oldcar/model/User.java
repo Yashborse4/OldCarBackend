@@ -140,6 +140,19 @@ public class User {
     @Column(name = "profile_image_url", length = 500)
     private String profileImageUrl; // Profile image URL from storage service
 
+    @Column(name = "onboarding_completed")
+    @Builder.Default
+    private Boolean onboardingCompleted = false;
+
+    // Trust Signals
+    @Column(name = "dealer_rating")
+    @Builder.Default
+    private Double dealerRating = 4.8;
+
+    @Column(name = "dealer_review_count")
+    @Builder.Default
+    private Integer dealerReviewCount = 124;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

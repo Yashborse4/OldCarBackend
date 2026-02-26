@@ -48,6 +48,7 @@ public class UserResponse {
     private String city;
     private Double latitude;
     private Double longitude;
+    private Boolean onboardingCompleted;
 
     // Helper method
     public String getDisplayName() {
