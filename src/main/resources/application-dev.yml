@@ -68,6 +68,7 @@ server:
   port: 9000
   error:
     include-stacktrace: always
+  address: 0.0.0.0
 
 # Logging Configuration for Development
 logging:
