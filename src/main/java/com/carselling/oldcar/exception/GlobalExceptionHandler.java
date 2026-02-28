@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -496,6 +497,22 @@ public class GlobalExceptionHandler {
                                 .message("Endpoint not found")
                                 .details(String.format("No handler found for %s %s", ex.getHttpMethod(),
                                                 ex.getRequestURL()))
+                                .success(false)
+                                .build();
+
+                return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+        }
+
+        @ExceptionHandler(NoResourceFoundException.class)
+        public ResponseEntity<ApiResponse<Object>> handleNoResourceFoundException(
+                        NoResourceFoundException ex, HttpServletRequest request) {
+
+                log.warn("Static resource not found: {}", ex.getMessage());
+
+                ApiResponse<Object> response = ApiResponse.builder()
+                                .timestamp(LocalDateTime.now())
+                                .message("Resource not found")
+                                .details(String.format("No static resource found for path: %s", ex.getResourcePath()))
                                 .success(false)
                                 .build();
 
