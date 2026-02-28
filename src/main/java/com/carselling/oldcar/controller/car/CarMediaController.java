@@ -6,7 +6,7 @@ import com.carselling.oldcar.dto.car.UpdateMediaStatusRequest;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.model.UploadedFile;
 import com.carselling.oldcar.service.car.CarService;
-import com.carselling.oldcar.service.TempFileStorageService;
+import com.carselling.oldcar.service.file.TempFileStorageService;
 import com.carselling.oldcar.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
