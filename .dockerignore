@@ -1,0 +1,120 @@
+# ============================================================================
+# Docker Ignore File for Sell The Old Car
+# Optimizes build context and prevents sensitive data leakage
+# ============================================================================
+
+# Build artifacts
+build/
+.gradle/
+*.jar
+*.war
+*.ear
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE files
+.idea/
+.vscode/
+.cursor/
+.windsurf/
+*.iws
+*.iml
+*.ipr
+.classpath
+.project
+.settings/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment and secrets (NEVER include in image)
+.env
+.env.*
+*.env
+application*.yml
+application*.yaml
+application*.properties
+!docker-compose*.yml
+secrets/
+credentials/
+*.p12
+*.jks
+*.key
+*.pem
+*.crt
+
+# Logs and temp files
+logs/
+*.log
+*.tmp
+*.temp
+*.bak
+*.backup
+tmp/
+temp/
+*.pid
+*.seed
+*.pid.lock
+
+# Test files
+test/
+src/test/
+*Test.java
+*Tests.java
+
+# Documentation
+docs/
+*.md
+!README.md
+HELP.md
+LICENSE
+CHANGELOG
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.mv.db
+*.trace.db
+
+# Uploads and user data
+uploads/
+data/
+cache/
+agents/
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Node modules (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Build output files
+build_output*.txt
+startup_error*.txt
+build_final*.txt
+build_log*.txt
+build_security*.txt
+compilation_log*.txt
+compile_error.txt
+status_full.txt
+compile_errors.txt
+bootrun_stacktrace*.txt
+
+# Firebase credentials
+*firebase-adminsdk*.json
+serviceAccountKey.json
