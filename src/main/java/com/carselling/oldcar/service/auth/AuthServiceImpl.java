@@ -68,10 +68,10 @@ public class AuthServiceImpl implements AuthService {
             if (username == null) {
                 throw new InvalidInputException("Invalid email format provided");
             }
-            
+
             // Check if username already exists, if so append random 3-digit number
             username = generateUniqueUsername(username);
-            
+
             log.info("No username provided, extracting from email: {} -> {}", email, username);
             request.setUsername(username); // Update request object
         }
@@ -138,9 +138,9 @@ public class AuthServiceImpl implements AuthService {
                 .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                 .verifiedDealer(Boolean.TRUE.equals(user.getDealerStatus() == DealerStatus.VERIFIED))
                 .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
+                .onboardingCompleted(Boolean.TRUE.equals(user.getOnboardingCompleted()))
                 .expiresAt(null)
                 .refreshExpiresAt(null)
-                // Trigger re-compile for dealerStatus field
                 .expiresIn(900L)
                 .refreshExpiresIn(604800L)
                 .build();
@@ -155,29 +155,29 @@ public class AuthServiceImpl implements AuthService {
      */
     private String generateUniqueUsername(String baseUsername) {
         String username = baseUsername;
-        
+
         // If username is available, return it as-is
         if (!userRepository.existsByUsername(username)) {
             return username;
         }
-        
+
         // Username is taken, try appending random 3-digit numbers
         int attempts = 0;
         int maxAttempts = 10; // Prevent infinite loop
-        
+
         while (attempts < maxAttempts) {
             // Generate random 3-digit number (100-999)
             int randomNum = 100 + SECURE_RANDOM.nextInt(900);
             String candidateUsername = baseUsername + randomNum;
-            
+
             if (!userRepository.existsByUsername(candidateUsername)) {
                 log.info("Username '{}' is taken, using '{}' instead", baseUsername, candidateUsername);
                 return candidateUsername;
             }
-            
+
             attempts++;
         }
-        
+
         // If all attempts failed (very unlikely), use timestamp-based suffix
         String timestampUsername = baseUsername + System.currentTimeMillis() % 1000;
         log.info("Username '{}' is taken, using timestamp-based '{}' instead", baseUsername, timestampUsername);
@@ -375,6 +375,13 @@ public class AuthServiceImpl implements AuthService {
                 .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                 .verifiedDealer(user.getDealerStatus() == DealerStatus.VERIFIED)
                 .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
+                .onboardingCompleted(Boolean.TRUE.equals(user.getOnboardingCompleted()))
+                .verificationReminder(
+                        (user.getRole() == Role.DEALER
+                                && (user.getDealerStatus() == null
+                                        || user.getDealerStatus() != DealerStatus.VERIFIED))
+                                                ? "Reminder: Your dealer verification is pending. Please complete verification to list cars publicly and gain buyer trust."
+                                                : null)
                 .expiresAt(expiresAt)
                 .refreshExpiresAt(refreshExpiresAt)
                 .expiresIn(900L)
@@ -463,6 +470,7 @@ public class AuthServiceImpl implements AuthService {
                     .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                     .verifiedDealer(user.getDealerStatus() == DealerStatus.VERIFIED)
                     .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
+                    .onboardingCompleted(Boolean.TRUE.equals(user.getOnboardingCompleted()))
                     .build();
 
             return TokenValidationResponse.builder()
