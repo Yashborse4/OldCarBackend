@@ -69,6 +69,8 @@ public interface CarService {
 
     CarResponse finalizeMedia(String id, java.util.List<Long> tempFileIds, Long currentUserId);
 
+    void processAsyncMediaFinalization(Long carId, java.util.List<Long> tempFileIds, Long currentUserId);
+
     boolean isVehicleOwner(String id, Long userId);
 
     Long getCarOwnerId(String carId);
