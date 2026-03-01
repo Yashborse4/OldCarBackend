@@ -27,6 +27,8 @@ public class JwtAuthResponse {
     private Boolean emailVerified;
     private Boolean verifiedDealer;
     private String dealerStatus; // Added to support granular status display
+    private Boolean onboardingCompleted; // Whether user has completed preference onboarding
+    private String verificationReminder; // Reminder message for unverified dealers
     private LocalDateTime expiresAt;
     private LocalDateTime refreshExpiresAt;
     private Long expiresIn; // in seconds
