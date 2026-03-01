@@ -3,7 +3,7 @@ package com.carselling.oldcar.controller;
 import com.carselling.oldcar.dto.analytics.LeadDto;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.security.UserPrincipal;
-import com.carselling.oldcar.service.DealerAnalyticsService;
+import com.carselling.oldcar.service.analytics.DealerAnalyticsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;

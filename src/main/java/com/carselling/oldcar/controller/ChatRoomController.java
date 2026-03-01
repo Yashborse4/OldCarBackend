@@ -203,6 +203,11 @@ public class ChatRoomController {
 
         /**
          * Get all participants in a chat room
+         * // TODO: [PRODUCTION-READY & API-DESIGN] Unbounded List Return.
+         * // Returning a full list of participants without pagination will cause memory
+         * exhaustion
+         * // and slow response times if a group chat has a massive number of users.
+         * // Refactor to use Pageable and return Page<ChatParticipantDto>.
          */
         @GetMapping("/rooms/{chatRoomId}/participants")
         public ResponseEntity<ApiResponse<List<ChatParticipantDto>>> getChatRoomParticipants(
@@ -335,6 +340,11 @@ public class ChatRoomController {
 
         /**
          * Search dealers
+         * // TODO: [PRODUCTION-READY & API-DESIGN] Unbounded Search Results.
+         * // This endpoint returns an unpaginated List of dealers matching a query.
+         * // A broad query (e.g., "a") could return thousands of records, leading to
+         * OutOfMemoryErrors
+         * // and heavy database load. Implement pagination (Pageable).
          */
         @GetMapping("/dealers/search")
         public ResponseEntity<ApiResponse<List<ChatParticipantDto>>> searchDealers(
@@ -346,6 +356,12 @@ public class ChatRoomController {
 
         /**
          * Search users (broad search)
+         * // TODO: [PRODUCTION-READY & API-DESIGN] Unbounded Search Results.
+         * // Returning all matching users without pagination is dangerous in
+         * production.
+         * // It exposes the system to Denial of Service (DoS) attacks via broad
+         * queries.
+         * // Implement pagination (Pageable) and query length validation.
          */
         @GetMapping("/users/search")
         public ResponseEntity<ApiResponse<List<ChatParticipantDto>>> searchUsers(
