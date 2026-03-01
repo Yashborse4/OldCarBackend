@@ -27,6 +27,8 @@ public class CarSearchCriteria {
     private java.util.List<String> fuelType;
     private java.util.List<String> transmission;
     private String variant; // Car variant (e.g., LX, EX, Sport, etc.)
+    private java.util.List<String> category;
+    private java.util.List<String> registrationType;
     private String bodyType;
     private String color;
     private Integer minSeatingCapacity;

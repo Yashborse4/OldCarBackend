@@ -38,4 +38,7 @@ public class DealerDashboardResponse {
 
     /** Total saves/bookmarks across all cars. */
     private long totalSaves;
+
+    /** Verification reminder message for unverified dealers. Null if verified. */
+    private String verificationReminder;
 }
