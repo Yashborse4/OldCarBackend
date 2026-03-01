@@ -41,6 +41,9 @@ public class B2Properties {
     }
 
     public String getCdnDomain() {
+        if (cdnDomain != null && !cdnDomain.startsWith("http://") && !cdnDomain.startsWith("https://")) {
+            return "https://" + cdnDomain;
+        }
         return cdnDomain;
     }
 
