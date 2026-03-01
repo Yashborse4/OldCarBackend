@@ -64,7 +64,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // Register the WebSocket endpoint with SockJS fallback
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("http://localhost:*", "https://*.carselling.com") // Strict origins
+                .setAllowedOriginPatterns("http://localhost:*", "https://*.yashborse.me", "https://yashborse.me") // Strict
+                                                                                                                  // origins
                 .withSockJS()
                 .setSessionCookieNeeded(false)
                 .setHeartbeatTime(25000)
@@ -72,7 +73,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
         // Also register without SockJS for native WebSocket clients
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("http://localhost:*", "https://*.carselling.com");
+                .setAllowedOriginPatterns("http://localhost:*", "https://*.yashborse.me", "https://yashborse.me");
 
         log.info("WebSocket STOMP endpoints registered at /ws");
     }

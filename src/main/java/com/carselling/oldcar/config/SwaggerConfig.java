@@ -24,10 +24,10 @@ public class SwaggerConfig {
         @Value("${app.swagger.servers.dev-url:http://localhost:9000}")
         private String devServerUrl;
 
-        @Value("${app.swagger.servers.prod-url:https://api.carselling.com}")
+        @Value("${app.swagger.servers.prod-url:https://api.yashborse.me}")
         private String prodServerUrl;
 
-        @Value("${app.swagger.servers.staging-url:https://staging-api.carselling.com}")
+        @Value("${app.swagger.servers.staging-url:https://staging-api.yashborse.me}")
         private String stagingServerUrl;
 
         @Bean
@@ -53,8 +53,8 @@ public class SwaggerConfig {
                                 .version("v2.0")
                                 .contact(new Contact()
                                                 .name("Car Selling Platform Team")
-                                                .email("support@carselling.com")
-                                                .url("https://carselling.com"))
+                                                .email("support@yashborse.me")
+                                                .url("https://yashborse.me"))
                                 .license(new License()
                                                 .name("MIT License")
                                                 .url("https://opensource.org/licenses/MIT"));
