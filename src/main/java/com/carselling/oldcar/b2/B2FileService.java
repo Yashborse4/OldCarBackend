@@ -980,7 +980,8 @@ public class B2FileService {
 
                 .uploadUrl(uploadUrl.getUploadUrl())
 
-                .authorizationToken(uploadUrl.getAuthorizationToken());
+                .authorizationToken(uploadUrl.getAuthorizationToken())
+                .build();
 
     }
 
@@ -1098,7 +1099,7 @@ public class B2FileService {
 
                     .contentType(contentType != null ? contentType : "application/octet-stream")
 
-                    .fileSize(fileSize != null ? fileSize : 0L)
+                    .size(fileSize != null ? fileSize : 0L)
 
                     .uploadedBy(uploader)
 
@@ -1110,117 +1111,47 @@ public class B2FileService {
 
                     .fileHash(fileHash)
 
-                    .fileId(fileId)
-
                     .build();
 
 
 
-            return finalFile;
+            return uploadedFileRepository.save(finalFile);
 
         }
 
 
 
-        TemporaryFile tempFile = TemporaryFile.builder();
+        TemporaryFile tempFile = TemporaryFile.builder()
+
+                .fileUrl(publicUrl)
+
+                .fileId(fileId)
+
+                .fileName(fileName)
+
+                .originalFileName(originalFileName != null ? originalFileName : fileName)
+
+                .contentType(actualType)
+
+                .fileSize(actualSize)
+
+                .uploadedBy(uploader)
+
+                .fileHash(fileHash)
+
+                .build();
 
 
 
-        // 3. Save as TemporaryFile or UploadedFile based on path
+        TemporaryFile saved = temporaryFileRepository.save(tempFile);
 
-        String decodedPath = java.net.URLDecoder.decode(b2FileName, StandardCharsets.UTF_8);
+        log.info("Saved TemporaryFile with ID: {}, CarId: {}", saved.getId(), saved.getCarId());
 
-        String fileName = decodedPath.contains("/") ? decodedPath.substring(decodedPath.lastIndexOf("/") + 1)
-
-                : decodedPath;
-
-
-
-        String domain = properties.getCdnDomain();
-
-        if (domain.endsWith("/")) {
-
-            domain = domain.substring(0, domain.length() - 1);
-
-        }
-
-        String publicUrl = domain + "/" + decodedPath;
-
-
-
-        // 3. SECURITY VALIDATION
-
-        // Use B2's actual size and type to prevent client spoofing
-
-        long actualSize = fileInfo.getContentLength() != null ? fileInfo.getContentLength()
-
-                : (fileSize != null ? fileSize : 0L);
-
-        String actualType = fileInfo.getContentType();
-
-        // Fallback to client-provided type if B2 has generic/missing type
-
-        if (actualType == null || "application/octet-stream".equals(actualType)) {
-
-            actualType = contentType;
-
-        }
-
-
-
-        // Validate against policies
-
-        fileValidationService.validateFileMetadata(fileName, actualSize, actualType);
-
-
-
-        log.info("Completing Direct Upload. Path: {}, OwnerType: {}, OwnerId: {}", decodedPath, ownerType, ownerId);
-
-
-
-        // DIRECT FINALIZATION: If path is not "temp/", save directly as UploadedFile
-
-        if (!decodedPath.startsWith("temp/")) {
-
-            UploadedFile finalFile = UploadedFile.builder()
-
-                    .fileUrl(publicUrl)
-
-                    .fileId(fileId) // Store B2 File ID
-
-                    .fileName(fileName)
-
-                    .originalFileName(originalFileName != null ? originalFileName : fileName)
-
-                    .contentType(contentType != null ? contentType : "application/octet-stream")
-
-                    .fileSize(fileSize != null ? fileSize : 0L)
-
-                    .uploadedBy(uploader)
-
-                    .ownerType(ownerType)
-
-                    .ownerId(ownerId)
-
-                    .accessType(AccessType.PUBLIC) // Default to Public for direct uploads
-
-                    .fileHash(fileHash)
-
-                    .fileId(fileId)
-
-                    .build();
-
-
-
-            TemporaryFile saved = temporaryFileRepository.save(tempFile);
-
-            log.info("Saved TemporaryFile with ID: {}, CarId: {}", saved.getId(), saved.getCarId());
-
-            return saved;
-
-        }
+        return saved;
 
     }
+
+
 
     private String generateUniqueFileName(String originalFilename, Long userId) {
 

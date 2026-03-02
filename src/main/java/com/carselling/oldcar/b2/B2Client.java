@@ -294,16 +294,8 @@ public class B2Client implements InitializingBean {
         private String bucketType;
     }
 
-    private GetUploadUrlResponse cachedUploadUrlResponse;
-    private long cachedUploadUrlTime;
-
-    public synchronized GetUploadUrlResponse getUploadUrl() {
+    public GetUploadUrlResponse getUploadUrl() {
         checkInitialized();
-        // Return cached response if valid (token lasts 24h, we cache for 23h to be
-        // safe)
-        if (cachedUploadUrlResponse != null && (System.currentTimeMillis() - cachedUploadUrlTime) < 23 * 3600 * 1000L) {
-            return cachedUploadUrlResponse;
-        }
 
         try {
             String bucketId = getCachedBucketId();
@@ -318,9 +310,7 @@ public class B2Client implements InitializingBean {
             response.setUploadUrl(sdkResponse.getUploadUrl());
             response.setAuthorizationToken(sdkResponse.getAuthorizationToken());
 
-            this.cachedUploadUrlResponse = response;
-            this.cachedUploadUrlTime = System.currentTimeMillis();
-            log.info("Refreshed and cached B2 Upload URL");
+            log.info("Requested new B2 Upload URL");
 
             return response;
         } catch (Exception e) {

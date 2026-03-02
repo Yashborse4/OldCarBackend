@@ -299,6 +299,11 @@ public class AdminController {
         /**
          * Get user activity logs (admin only)
          * GET /api/admin/users/{id}/activity
+         * // TODO: [PRODUCTION-READY & API-DESIGN] Unbounded List Return.
+         * // Activity logs can grow to millions of rows. Retrieving them without
+         * pagination
+         * // will likely cause OutOfMemoryErrors and slow down the database.
+         * // Refactor to use Pageable and return Page<UserActivityLog>.
          */
         @GetMapping("/users/{id}/activity")
         public ResponseEntity<ApiResponse<List<UserActivityLog>>> getUserActivityLogs(
@@ -379,6 +384,11 @@ public class AdminController {
         /**
          * Bulk ban users (admin only)
          * POST /api/admin/users/bulk-ban
+         * // TODO: [PRODUCTION-READY & API-DESIGN] Unbounded Input List.
+         * // Accepting an arbitrarily large list of IDs for a bulk update can lead to
+         * // long-running transactions that lock database rows, eventually causing
+         * thread exhaustion.
+         * // Limit the input array size (e.g., max 100) or chunk the processing.
          */
         @PostMapping("/users/bulk-ban")
         public ResponseEntity<ApiResponse<Object>> bulkBanUsers(
