@@ -103,8 +103,7 @@ public class SecurityConfig {
                         .requestMatchers("/graphql").permitAll()
 
                         // Mobile App Public Lifecycle Endpoints
-                        .requestMatchers("/api/v1/mobile/version-check", "/api/v1/mobile/config",
-                                "/api/v1/mobile/health")
+                        .requestMatchers("/api/v1/mobile/version-check", "/api/v1/mobile/config")
                         .permitAll()
 
                         // =====================================================

@@ -138,7 +138,7 @@ public class AuthServiceImpl implements AuthService {
                 .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                 .verifiedDealer(Boolean.TRUE.equals(user.getDealerStatus() == DealerStatus.VERIFIED))
                 .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
-                .onboardingCompleted(Boolean.TRUE.equals(user.getOnboardingCompleted()))
+                .onboardingCompleted(user.getOnboardingCompleted() != null ? user.getOnboardingCompleted() : false)
                 .expiresAt(null)
                 .refreshExpiresAt(null)
                 .expiresIn(900L)
@@ -375,7 +375,7 @@ public class AuthServiceImpl implements AuthService {
                 .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                 .verifiedDealer(user.getDealerStatus() == DealerStatus.VERIFIED)
                 .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
-                .onboardingCompleted(Boolean.TRUE.equals(user.getOnboardingCompleted()))
+                .onboardingCompleted(user.getOnboardingCompleted() != null ? user.getOnboardingCompleted() : false)
                 .verificationReminder(
                         (user.getRole() == Role.DEALER
                                 && (user.getDealerStatus() == null
