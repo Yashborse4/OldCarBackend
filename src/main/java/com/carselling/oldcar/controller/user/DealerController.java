@@ -79,6 +79,32 @@ public class DealerController {
     }
 
     /**
+     * Mark car as sold with final sold price
+     */
+    @PatchMapping("/cars/{carId}/sell")
+    @PreAuthorize("hasRole('DEALER') or hasRole('ADMIN')")
+    @Operation(summary = "Mark Car as Sold", description = "Marks a car as SOLD and updates its final sold price")
+    public ResponseEntity<ApiResponse<Void>> markCarAsSold(
+            @PathVariable Long carId,
+            @RequestBody Map<String, Object> requestBody,
+            Authentication authentication) {
+
+        UserPrincipal user = (UserPrincipal) authentication.getPrincipal();
+
+        if (!requestBody.containsKey("soldPrice")) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("soldPrice is required"));
+        }
+
+        try {
+            java.math.BigDecimal soldPrice = new java.math.BigDecimal(requestBody.get("soldPrice").toString());
+            inventoryService.markCarAsSold(carId, user.getId(), soldPrice);
+            return ResponseEntity.ok(ApiResponse.success("Car marked as sold"));
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Invalid soldPrice format"));
+        }
+    }
+
+    /**
      * Get dealer dashboard analytics
      */
     @GetMapping("/dashboard")
