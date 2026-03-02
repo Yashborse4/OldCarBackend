@@ -3,6 +3,7 @@ package com.carselling.oldcar.service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import com.carselling.oldcar.service.notification.NotificationService;
+import com.carselling.oldcar.service.car.CarSearchService;
 
 import java.util.List;
 import java.util.Locale;
@@ -17,13 +18,13 @@ import java.util.stream.Collectors;
 public class MobileAppService {
 
     private final NotificationService notificationService;
-    private final AdvancedSearchService advancedSearchService;
+    private final CarSearchService carSearchService;
 
     public MobileAppService(
             NotificationService notificationService,
-            @org.springframework.beans.factory.annotation.Autowired(required = false) AdvancedSearchService advancedSearchService) {
+            @org.springframework.beans.factory.annotation.Autowired(required = false) CarSearchService carSearchService) {
         this.notificationService = notificationService;
-        this.advancedSearchService = advancedSearchService;
+        this.carSearchService = carSearchService;
     }
 
     public Map<String, Object> getVersionInfo(String appVersion, String platform) {
@@ -88,26 +89,22 @@ public class MobileAppService {
     }
 
     public Map<String, Object> getSearchSuggestions(String query, int limit) {
-        // Return empty suggestions if AdvancedSearchService is not available (e.g., in
-        // test contexts)
-        if (advancedSearchService == null) {
-            log.debug("AdvancedSearchService not available, returning empty suggestions");
+        // Return empty suggestions if CarSearchService is not available
+        if (carSearchService == null) {
+            log.debug("CarSearchService not available, returning empty suggestions");
             return Map.of(
                     "general", List.of(),
                     "makes", List.of(),
                     "popularSearches", List.of());
         }
 
-        List<String> suggestions = advancedSearchService.suggest(query, limit)
-                .stream()
-                .map(doc -> doc.getBrand() + " " + doc.getModel())
-                .collect(Collectors.toList());
+        List<String> suggestions = carSearchService.suggest(query, limit);
 
         return Map.of(
                 "general", suggestions,
                 "makes",
                 suggestions.stream().filter(s -> Character.isUpperCase(s.charAt(0))).collect(Collectors.toList()),
-                "popularSearches", advancedSearchService.getTrendingSearchTerms(limit));
+                "popularSearches", carSearchService.getTrendingSearchTerms(limit));
     }
 
     private int compareVersions(String version1, String version2) {

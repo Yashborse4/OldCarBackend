@@ -10,6 +10,14 @@ import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
  * Manages WebSocket sessions and user presence for chat functionality
+ * // TODO: [PRODUCTION-READY & CONCURRENCY] In-Memory WebSocket State.
+ * // Tracking WebSocket sessions and presence in a local ConcurrentHashMap will
+ * fail
+ * // in a multi-instance clustered environment. Users connected to different
+ * instances
+ * // won't see each other's status. Consider migrating to Redis Pub/Sub or a
+ * STOMP relay
+ * // (like RabbitMQ/ActiveMQ) for distributed session management.
  */
 @Component
 @Slf4j
@@ -17,16 +25,16 @@ public class WebSocketSessionManager {
 
     // Map of userId to their active session IDs
     private final Map<Long, Set<String>> userSessions = new ConcurrentHashMap<>();
-    
+
     // Map of sessionId to userId
     private final Map<String, Long> sessionToUser = new ConcurrentHashMap<>();
-    
+
     // Map of chatRoomId to set of active userIds in that room
     private final Map<Long, Set<Long>> chatRoomUsers = new ConcurrentHashMap<>();
-    
+
     // Map of userId to their last seen timestamp
     private final Map<Long, LocalDateTime> userLastSeen = new ConcurrentHashMap<>();
-    
+
     // Map of userId to their current typing status per chat room
     private final Map<Long, Map<Long, Boolean>> userTypingStatus = new ConcurrentHashMap<>();
 
@@ -37,7 +45,7 @@ public class WebSocketSessionManager {
         userSessions.computeIfAbsent(userId, k -> new CopyOnWriteArraySet<>()).add(sessionId);
         sessionToUser.put(sessionId, userId);
         updateUserLastSeen(userId);
-        
+
         log.debug("Added session {} for user {}", sessionId, userId);
     }
 
@@ -69,7 +77,7 @@ public class WebSocketSessionManager {
     public void addUserToChat(Long userId, Long chatRoomId) {
         chatRoomUsers.computeIfAbsent(chatRoomId, k -> new CopyOnWriteArraySet<>()).add(userId);
         updateUserLastSeen(userId);
-        
+
         log.debug("Added user {} to chat room {}", userId, chatRoomId);
     }
 
@@ -84,13 +92,13 @@ public class WebSocketSessionManager {
                 chatRoomUsers.remove(chatRoomId);
             }
         }
-        
+
         // Clear typing status for this chat room
         Map<Long, Boolean> typingInRooms = userTypingStatus.get(userId);
         if (typingInRooms != null) {
             typingInRooms.remove(chatRoomId);
         }
-        
+
         log.debug("Removed user {} from chat room {}", userId, chatRoomId);
     }
 
@@ -100,7 +108,7 @@ public class WebSocketSessionManager {
     private void removeUserFromAllChatRooms(Long userId) {
         chatRoomUsers.values().forEach(users -> users.remove(userId));
         chatRoomUsers.entrySet().removeIf(entry -> entry.getValue().isEmpty());
-        
+
         log.debug("Removed user {} from all chat rooms", userId);
     }
 
@@ -152,9 +160,9 @@ public class WebSocketSessionManager {
      */
     public void setUserTyping(Long userId, Long chatRoomId, boolean isTyping) {
         userTypingStatus
-            .computeIfAbsent(userId, k -> new ConcurrentHashMap<>())
-            .put(chatRoomId, isTyping);
-        
+                .computeIfAbsent(userId, k -> new ConcurrentHashMap<>())
+                .put(chatRoomId, isTyping);
+
         // Auto-clear typing status after 5 seconds if still typing
         if (isTyping) {
             Timer timer = new Timer();
@@ -171,7 +179,7 @@ public class WebSocketSessionManager {
                 }
             }, 5000); // 5 seconds
         }
-        
+
         log.debug("Set typing status for user {} in chat room {} to {}", userId, chatRoomId, isTyping);
     }
 
@@ -191,13 +199,13 @@ public class WebSocketSessionManager {
      */
     public Set<Long> getUsersTypingInChatRoom(Long chatRoomId) {
         Set<Long> typingUsers = new HashSet<>();
-        
+
         userTypingStatus.forEach((userId, typingInRooms) -> {
             if (Boolean.TRUE.equals(typingInRooms.get(chatRoomId))) {
                 typingUsers.add(userId);
             }
         });
-        
+
         return typingUsers;
     }
 
@@ -210,7 +218,7 @@ public class WebSocketSessionManager {
         stats.put("totalSessions", sessionToUser.size());
         stats.put("activeChatRooms", chatRoomUsers.size());
         stats.put("usersWithTypingStatus", userTypingStatus.size());
-        
+
         return stats;
     }
 
@@ -219,13 +227,13 @@ public class WebSocketSessionManager {
      */
     public void cleanup() {
         LocalDateTime cutoffTime = LocalDateTime.now().minusMinutes(30);
-        
+
         // Remove users who haven't been seen in 30 minutes
         userLastSeen.entrySet().removeIf(entry -> entry.getValue().isBefore(cutoffTime));
-        
+
         // Clear typing status for users who are no longer online
         userTypingStatus.entrySet().removeIf(entry -> !isUserOnline(entry.getKey()));
-        
+
         log.debug("Completed WebSocket session cleanup");
     }
 }
