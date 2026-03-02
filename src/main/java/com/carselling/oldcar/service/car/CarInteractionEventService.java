@@ -1,4 +1,4 @@
-package com.carselling.oldcar.service;
+package com.carselling.oldcar.service.car;
 
 import com.carselling.oldcar.model.Car;
 import com.carselling.oldcar.model.CarInteractionEvent;

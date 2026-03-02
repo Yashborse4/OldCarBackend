@@ -79,6 +79,7 @@ public class CarServiceImpl implements CarService {
     private final AuditLogService auditLogService;
     private final ViewCountService viewCountService;
     private final PlatformTransactionManager transactionManager;
+    private final org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
 
     private static final int MAX_VIDEO_COUNT = 1;
     private static final int MAX_IMAGE_COUNT = 8;
@@ -316,9 +317,19 @@ public class CarServiceImpl implements CarService {
                 .insuranceClaims(request.getInsuranceClaims())
                 .variant(request.getVariant())
                 .usage(request.getUsage())
-                .latitude(request.getLatitude())
-                .longitude(request.getLongitude())
-                .location(request.getLocation())
+                .category(request.getCategory())
+                .registrationType(request.getRegistrationType())
+                // Dealer cars inherit showroom location by default
+                .latitude((owner.getRole() == Role.DEALER && owner.getLatitude() != null)
+                        ? owner.getLatitude()
+                        : request.getLatitude())
+                .longitude((owner.getRole() == Role.DEALER && owner.getLongitude() != null)
+                        ? owner.getLongitude()
+                        : request.getLongitude())
+                .location((owner.getRole() == Role.DEALER && owner.getLocation() != null
+                        && !owner.getLocation().isBlank())
+                                ? owner.getLocation()
+                                : request.getLocation())
                 .registrationNumber(request.getRegistrationNumber())
                 // Initialize as INACTIVE until media is ready
                 .isActive(false)
@@ -387,28 +398,16 @@ public class CarServiceImpl implements CarService {
             temporaryFileRepository.saveAll(temporaryFiles);
             log.info("Linked {} temporary files to Car ID: {}", temporaryFiles.size(), savedCar.getId());
 
-            // 3. Trigger Async Finalization
-            // Running in background thread to return response immediately
             // 3. Trigger Async Finalization AFTER transaction commit
-            // This prevents race condition where async thread reads carId=null before
-            // commit
+            // Uses Spring's @TransactionalEventListener to ensure the event
+            // fires only after the car record is committed to the database.
             final Long carId = savedCar.getId();
             final List<Long> fileIds = request.getTempFileIds();
             final Long userId = currentUserId;
 
-            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-                    new org.springframework.transaction.support.TransactionSynchronization() {
-                        @Override
-                        public void afterCommit() {
-                            java.util.concurrent.CompletableFuture.runAsync(() -> {
-                                try {
-                                    finalizeMedia(String.valueOf(carId), fileIds, userId);
-                                } catch (Exception e) {
-                                    log.error("Async media finalization failed for car {}", carId, e);
-                                }
-                            });
-                        }
-                    });
+            applicationEventPublisher.publishEvent(
+                    new com.carselling.oldcar.event.media.MediaFinalizationRequestedEvent(
+                            this, carId, fileIds, userId));
 
             // Return immediately with PROCESSING status (set during build)
             return convertToResponseV2(savedCar);
@@ -418,7 +417,8 @@ public class CarServiceImpl implements CarService {
         autoActivateIfEligible(savedCar);
         savedCar = carRepository.save(savedCar);
 
-        log.info("Created new vehicle with ID: {} (status: {}) for user: {}", savedCar.getId(), savedCar.getStatus(), currentUserId);
+        log.info("Created new vehicle with ID: {} (status: {}) for user: {}", savedCar.getId(), savedCar.getStatus(),
+                currentUserId);
         auditLogService.logDataAccess("Car", savedCar.getId(), "CREATE", owner.getUsername(),
                 "Vehicle created by user " + currentUserId);
 
@@ -426,21 +426,21 @@ public class CarServiceImpl implements CarService {
     }
 
     /**
-     * Finalizes media for a car.
-     * Designed to be idempotent and resumable.
+     * Quick synchronous endpoint for media finalization.
+     * Validates limits, switches status to PROCESSING, and fires async event.
      */
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @Transactional
     public CarResponse finalizeMedia(String carIdStr, List<Long> tempFileIds, Long currentUserId) {
         Long carId = parseCarId(carIdStr);
-        Car initialCar = findCarAndEnsureVersion(carId);
-        User owner = initialCar.getOwner();
+
+        Car car = findCarAndEnsureVersion(carId);
 
         // 1. Security check
-        if (currentUserId != null && !owner.getId().equals(currentUserId)) {
+        if (currentUserId != null && !car.getOwner().getId().equals(currentUserId)) {
             throw new SecurityException("You do not own this vehicle");
         }
 
-        if (initialCar.getStatus() == CarStatus.ARCHIVED) {
+        if (car.getStatus() == CarStatus.ARCHIVED) {
             throw new BusinessException("Cannot update media when vehicle status is ARCHIVED");
         }
 
@@ -456,13 +456,46 @@ public class CarServiceImpl implements CarService {
                 .count();
 
         // Check Limits using shared helper against initial snapshot
-        boolean hasExistingVideo = initialCar.getVideoUrl() != null && !initialCar.getVideoUrl().isBlank();
-        int currentImageCount = initialCar.getImages() != null ? initialCar.getImages().size() : 0;
+        boolean hasExistingVideo = car.getVideoUrl() != null && !car.getVideoUrl().isBlank();
+        int currentImageCount = car.getImages() != null ? car.getImages().size() : 0;
 
         validateMediaLimits(newVideos, newImages, hasExistingVideo, currentImageCount);
 
+        log.info("Requesting async media finalization for car {}", carId);
+
+        // 3. Mark as processing and save to prevent concurrent finalizations
+        car.setMediaStatus(MediaStatus.PROCESSING);
+        Car savedCar = carRepository.save(car);
+
+        // 4. Publish Event for Async processing AFTER commit
+        applicationEventPublisher.publishEvent(new com.carselling.oldcar.event.media.MediaFinalizationRequestedEvent(
+                this, carId, tempFileIds, currentUserId));
+
+        return convertToResponseV2(savedCar);
+    }
+
+    /**
+     * Async background processor for heavy file copies without blocking the DB or
+     * HTTP thread.
+     * CRITICAL: Must use NOT_SUPPORTED propagation to prevent
+     * class-level @Transactional
+     * from wrapping the long-running B2 copy operations in a database transaction.
+     */
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void processAsyncMediaFinalization(Long carId, List<Long> tempFileIds, Long currentUserId) {
         try {
-            log.info("Finalizing media for car {}", carId);
+            log.info("Starting async media finalization for car {}", carId);
+
+            // Re-fetch owner safely
+            TransactionTemplate readOnlyTemplate = new TransactionTemplate(transactionManager);
+            readOnlyTemplate.setReadOnly(true);
+            User owner = readOnlyTemplate.execute(status -> {
+                Car initialCar = findCarAndEnsureVersion(carId);
+                initialCar.getOwner().getId(); // Initialize lazy proxy
+                return initialCar.getOwner();
+            });
+
             String targetFolder = "cars/" + carId;
 
             // EXECUTING OUTSIDE DB TRANSACTION -> Avoids OptimisticLocking and connection
@@ -472,8 +505,8 @@ public class CarServiceImpl implements CarService {
                             ResourceType.CAR_IMAGE, carId, owner);
 
             // Fetch a fresh Car entity in a new transaction to apply changes
-            TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-            return transactionTemplate.execute(status -> {
+            TransactionTemplate writeTemplate = new TransactionTemplate(transactionManager);
+            writeTemplate.execute(status -> {
                 Car freshCar = findCarAndEnsureVersion(carId);
 
                 if (finalizedFiles.isEmpty()) {
@@ -510,24 +543,26 @@ public class CarServiceImpl implements CarService {
                     autoActivateIfEligible(freshCar);
                 }
 
-                Car savedCar = carRepository.save(freshCar);
-                return convertToResponseV2(savedCar);
-            });
-
-        } catch (SecurityException e) {
-            log.error("Security violation during media finalization for car {}: {}", carId, e.getMessage());
-            TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-            transactionTemplate.execute(status -> {
-                Car freshCar = findCarAndEnsureVersion(carId);
-                freshCar.setMediaStatus(MediaStatus.FAILED);
-                freshCar.setStatus(CarStatus.DRAFT);
                 carRepository.save(freshCar);
                 return null;
             });
-            throw e;
+
+            log.info("Successfully completed async media finalization for car {}", carId);
+
         } catch (Exception e) {
-            log.error("Transient error finalizing media for car {}: {}. Will be retried.", carId, e.getMessage());
-            throw new BusinessException("Media finalization failed: " + e.getMessage());
+            log.error("Error running async media finalization for car {}: {}", carId, e.getMessage(), e);
+            TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+            transactionTemplate.execute(status -> {
+                try {
+                    Car freshCar = findCarAndEnsureVersion(carId);
+                    freshCar.setMediaStatus(MediaStatus.FAILED);
+                    freshCar.setStatus(CarStatus.DRAFT);
+                    carRepository.save(freshCar);
+                } catch (Exception innerEx) {
+                    log.error("Failed to mark car {} as FAILED after media error", carId, innerEx);
+                }
+                return null;
+            });
         }
     }
 
@@ -659,6 +694,10 @@ public class CarServiceImpl implements CarService {
             car.setLocation(request.getLocation());
         if (request.getRegistrationNumber() != null)
             car.setRegistrationNumber(request.getRegistrationNumber());
+        if (request.getCategory() != null)
+            car.setCategory(request.getCategory());
+        if (request.getRegistrationType() != null)
+            car.setRegistrationType(request.getRegistrationType());
 
         // Update Co-Owner if provided
         if (request.getCoOwnerId() != null) {
@@ -1010,6 +1049,10 @@ public class CarServiceImpl implements CarService {
         assertCanModifyCar(car, currentUserId, "delete image from");
 
         List<String> images = car.getImages() != null ? new ArrayList<>(car.getImages()) : new ArrayList<>();
+        if (images.isEmpty() && car.getImageUrl() != null && !car.getImageUrl().isBlank()) {
+            images.add(car.getImageUrl());
+        }
+
         if (imageIndex < 0 || imageIndex >= images.size()) {
             throw new BusinessException(
                     "Image index " + imageIndex + " is out of bounds. Car has " + images.size() + " images.");
@@ -1057,6 +1100,10 @@ public class CarServiceImpl implements CarService {
         assertCanModifyCar(car, currentUserId, "replace image on");
 
         List<String> images = car.getImages() != null ? new ArrayList<>(car.getImages()) : new ArrayList<>();
+        if (images.isEmpty() && car.getImageUrl() != null && !car.getImageUrl().isBlank()) {
+            images.add(car.getImageUrl());
+        }
+
         if (imageIndex < 0 || imageIndex >= images.size()) {
             throw new BusinessException(
                     "Image index " + imageIndex + " is out of bounds. Car has " + images.size() + " images.");
@@ -1198,6 +1245,10 @@ public class CarServiceImpl implements CarService {
         assertCanModifyCar(car, currentUserId, "update banner of");
 
         List<String> images = car.getImages() != null ? new ArrayList<>(car.getImages()) : new ArrayList<>();
+        if (images.isEmpty() && car.getImageUrl() != null && !car.getImageUrl().isBlank()) {
+            images.add(car.getImageUrl());
+        }
+
         if (imageIndex < 0 || imageIndex >= images.size()) {
             throw new BusinessException(
                     "Image index " + imageIndex + " is out of bounds. Car has " + images.size() + " images.");
@@ -1929,7 +1980,7 @@ public class CarServiceImpl implements CarService {
     }
 
     private Car findCarAndEnsureVersion(Long id) {
-        Car car = carRepository.findById(id)
+        Car car = carRepository.findWithDetailsById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id.toString()));
 
         if (car.getVersion() == null) {
@@ -1937,7 +1988,7 @@ public class CarServiceImpl implements CarService {
                 log.warn("Car {} has null version. Initializing to 0 to prevent optimistic locking failure.", id);
                 carRepository.initializeVersion(id);
                 // Reload to get the version
-                return carRepository.findById(id)
+                return carRepository.findWithDetailsById(id)
                         .orElseThrow(() -> new ResourceNotFoundException("Car", "id", id.toString()));
             } catch (Exception e) {
                 log.error("Failed to initialize version for car {}: {}", id, e.getMessage());
