@@ -4,7 +4,8 @@ import com.carselling.oldcar.dto.car.TrackCarShareRequest;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.annotation.RateLimit;
 import com.carselling.oldcar.service.car.CarService;
-import com.carselling.oldcar.service.CarInteractionEventService;
+import com.carselling.oldcar.service.user.ReferralService;
+import com.carselling.oldcar.service.car.CarInteractionEventService;
 import com.carselling.oldcar.model.CarInteractionEvent;
 import com.carselling.oldcar.security.UserPrincipal;
 import jakarta.validation.Valid;
@@ -14,7 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
 import com.carselling.oldcar.util.SecurityUtils;
 import java.util.Map;
 
@@ -30,7 +30,7 @@ public class CarSocialController {
 
     private final CarService carService;
     private final CarInteractionEventService carInteractionEventService;
-    private final com.carselling.oldcar.service.ReferralService referralService;
+    private final ReferralService referralService;
 
     /**
      * Generate Signed Share Link
