@@ -27,8 +27,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ChatWebSocketController {
 
     // Deduplication set to prevent duplicate messages
+    // TODO: [PRODUCTION-READY & CONCURRENCY] Local Deduplication.
+    // Static ConcurrentHashMap only deduplicates messages hitting this specific JVM
+    // instance.
+    // In a clustered environment, use Redis for distributed deduplication.
     private static final Set<String> recentlyProcessedMessages = ConcurrentHashMap.newKeySet();
-    
+
     private final ChatService ChatService;
     private final UserService userService;
     private final SimpMessagingTemplate messagingTemplate;
@@ -58,7 +62,7 @@ public class ChatWebSocketController {
 
             Long userId = userPrincipal.getId();
             log.debug("User {} sending message to chat room {}", userId, chatRoomId);
-            
+
             // Check for duplicate message using clientMessageId
             String clientMessageId = messageRequest.getClientMessageId();
             if (clientMessageId != null) {

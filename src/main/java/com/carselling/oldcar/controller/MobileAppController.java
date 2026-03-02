@@ -78,24 +78,5 @@ public class MobileAppController {
         return ResponseEntity.ok(ApiResponse.success("Offline data synced", syncData));
     }
 
-    /**
-     * Get app health status
-     */
-    @GetMapping("/health")
-    @Operation(summary = "Get mobile app health status")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getHealthStatus() {
 
-        Map<String, Object> healthStatus = Map.of(
-                "status", "healthy",
-                "timestamp", System.currentTimeMillis(),
-                "services", Map.of(
-                        "api", "up",
-                        "database", "up",
-                        "notifications", "up",
-                        "fileUpload", "up"),
-                "maintenance", false,
-                "message", "All systems operational");
-
-        return ResponseEntity.ok(ApiResponse.success("Health check completed", healthStatus));
-    }
 }
