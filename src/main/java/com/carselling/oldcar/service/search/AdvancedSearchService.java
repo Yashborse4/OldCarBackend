@@ -1,4 +1,4 @@
-package com.carselling.oldcar.service;
+package com.carselling.oldcar.service.search;
 
 import com.carselling.oldcar.document.VehicleSearchDocument;
 import com.carselling.oldcar.model.Car;

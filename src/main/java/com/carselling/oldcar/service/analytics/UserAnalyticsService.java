@@ -42,6 +42,11 @@ public class UserAnalyticsService {
     private final com.carselling.oldcar.repository.UserRepository userRepository;
 
     // Rate limiting: track events per session per minute
+    // TODO: [PRODUCTION-READY & CONCURRENCY] In-memory rate limiting will allow N
+    // times the capacity
+    // where N is the number of application instances in a horizontal scaling setup.
+    // Migrate to Redis or another distributed cache for accurate cluster-wide rate
+    // limiting.
     private final ConcurrentHashMap<String, AtomicInteger> sessionEventCounts = new ConcurrentHashMap<>();
     private static final int MAX_EVENTS_PER_MINUTE = 100;
 
@@ -478,6 +483,15 @@ public class UserAnalyticsService {
             conversionRate = ((double) totalLeads / totalViews) * 100.0;
         }
 
+        // 4. Verification Reminder for unverified dealers
+        String verificationReminder = null;
+        com.carselling.oldcar.model.User dealer = userRepository.findById(dealerId).orElse(null);
+        if (dealer != null && dealer.getRole() == com.carselling.oldcar.model.Role.DEALER
+                && (dealer.getDealerStatus() == null
+                        || dealer.getDealerStatus() != com.carselling.oldcar.model.DealerStatus.VERIFIED)) {
+            verificationReminder = "Reminder: Your dealer verification is pending. Please complete verification to list cars publicly and gain buyer trust.";
+        }
+
         return com.carselling.oldcar.dto.car.DealerDashboardResponse.builder()
                 .totalViews(totalViews)
                 .totalUniqueVisitors(totalUniqueVisitors)
@@ -487,6 +501,7 @@ public class UserAnalyticsService {
                 .totalShares(totalShares)
                 .totalSaves(totalSaves)
                 .conversionRate(Math.round(conversionRate * 10.0) / 10.0)
+                .verificationReminder(verificationReminder)
                 .build();
     }
 
