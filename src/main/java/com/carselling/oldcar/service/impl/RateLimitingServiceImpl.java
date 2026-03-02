@@ -14,6 +14,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RateLimitingServiceImpl implements RateLimitingService {
 
     // In-memory rate limiting bucket cache using composite key "userId:roomId"
+    // TODO: [PRODUCTION-READY & CONCURRENCY] This Local ConcurrentHashMap only
+    // limits requests per-JVM.
+    // In a clustered environment with multiple instances, rate limits will be
+    // multiplied by the number of instances.
+    // Migrate to distributed Bucket4j backend using Redis or Hazelcast for
+    // production.
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     @Override

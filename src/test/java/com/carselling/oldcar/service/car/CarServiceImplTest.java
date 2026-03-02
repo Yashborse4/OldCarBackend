@@ -46,11 +46,11 @@ class CarServiceImplTest {
     @Mock
     private com.carselling.oldcar.repository.UploadedFileRepository uploadedFileRepository;
     @Mock
-    private com.carselling.oldcar.repository.TemporaryFileRepository temporaryFileRepository;
-    @Mock
     private MediaFinalizationService mediaFinalizationService;
     @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
 
     @InjectMocks
     private CarServiceImpl carService;
