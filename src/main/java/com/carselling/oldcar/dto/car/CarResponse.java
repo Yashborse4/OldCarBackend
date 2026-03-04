@@ -59,6 +59,20 @@ public class CarResponse {
     private String uploaderRole;
     private Long carMasterId; // Reference to catalog entry, if linked
 
+    // New fields for UI Redesign
+    private String registrationMonthYear;
+    private String engineCapacity;
+    private String ownership;
+    private String makeMonthYear;
+    private Integer returnDays;
+    private String registrationNumber;
+    private String phoneNumber;
+    private String spareKey;
+    private Long discountAmount;
+    private Long otherCharges;
+    private Boolean zeroWorryMax;
+    private Boolean lifetimeWarranty;
+
     // Dealer Trust Signals
     private Double dealerRating;
     private Integer dealerReviewCount;
@@ -78,6 +92,10 @@ public class CarResponse {
         private String driveType;
         private Integer doors;
         private Integer seats;
+        private String emissionStandard;
+        private Integer bootSpace;
+        private Integer cylinders;
+        private String maxPower;
     }
 
     // Helper methods
