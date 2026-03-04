@@ -91,6 +91,12 @@ public class CarSpecification {
             if (criteria.getTransmission() != null && !criteria.getTransmission().isEmpty()) {
                 predicates.add(root.get("transmission").in(criteria.getTransmission()));
             }
+            if (criteria.getCategory() != null && !criteria.getCategory().isEmpty()) {
+                predicates.add(root.get("category").in(criteria.getCategory()));
+            }
+            if (criteria.getRegistrationType() != null && !criteria.getRegistrationType().isEmpty()) {
+                predicates.add(root.get("registrationType").in(criteria.getRegistrationType()));
+            }
 
             // 3. Range Filters
 
@@ -134,6 +140,22 @@ public class CarSpecification {
             // 5. Featured Filter
             if (Boolean.TRUE.equals(criteria.getFeatured())) {
                 predicates.add(criteriaBuilder.isTrue(root.get("isFeatured")));
+            }
+
+            // 6. Proximity Search (Portable Bounding Box Fallback)
+            if (criteria.getLatitude() != null && criteria.getLongitude() != null && criteria.getRadiusKm() != null) {
+                double latitude = criteria.getLatitude();
+                double longitude = criteria.getLongitude();
+                double radiusKm = criteria.getRadiusKm();
+
+                // Approximately 1 degree of latitude is 111km
+                double latDelta = radiusKm / 111.0;
+                // Longitude delta depends on latitude
+                double lonDelta = radiusKm / (111.0 * Math.cos(Math.toRadians(latitude)));
+
+                predicates.add(criteriaBuilder.between(root.get("latitude"), latitude - latDelta, latitude + latDelta));
+                predicates.add(
+                        criteriaBuilder.between(root.get("longitude"), longitude - lonDelta, longitude + lonDelta));
             }
 
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));

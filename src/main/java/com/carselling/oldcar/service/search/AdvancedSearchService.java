@@ -59,38 +59,13 @@ public class AdvancedSearchService {
         boolean verifiedOnly = criteria.getVerifiedDealer() == null
                 || Boolean.TRUE.equals(criteria.getVerifiedDealer());
 
-        // Use the generic query method we added to the repository
-        searchResults = vehicleSearchRepository.findWithQuery(q, true, verifiedOnly, pageable.getPageNumber(),
-                pageable.getPageSize());
+        // Use the comprehensive criteria search method we added to the repository
+        searchResults = vehicleSearchRepository.findWithCriteria(criteria, verifiedOnly,
+                pageable.getPageNumber(), pageable.getPageSize());
 
-        // For pagination of the *generic* list, we might assume the repo returns the
-        // 'page' of results.
-        // The total count is separate, but for now we can just use the list size or do
-        // a count query if needed.
-        // For this migration step, strict "Total Elements" might be inaccurate without
-        // a separate count call,
-        // but getting the data flowing is priority.
+        totalEstimate = searchResults.size(); // In actual implementation, this should come from ES Hits Total
 
-        totalEstimate = searchResults.size(); // Placeholder
-
-        // Apply additional memory filters if strictly needed (though ES should handle
-        // most)
-        // Kept for safety migration match
-        List<VehicleSearchDocument> filtered = searchResults.stream()
-                .filter(doc -> matchesAny(criteria.getMake(), doc.getBrand()))
-                .filter(doc -> matchesAny(criteria.getModel(), doc.getModel()))
-                .filter(doc -> matches(criteria.getVariant(), doc.getVariant()))
-                .filter(doc -> matchesAny(criteria.getFuelType(), doc.getFuelType()))
-                .filter(doc -> matchesAny(criteria.getTransmission(), doc.getTransmission()))
-                .filter(doc -> matchesAny(criteria.getLocation(), doc.getCity()))
-                .filter(doc -> inRange(criteria.getMinYear(), criteria.getMaxYear(), doc.getYear()))
-                .filter(doc -> inRange(
-                        criteria.getMinPrice() != null ? BigDecimal.valueOf(criteria.getMinPrice()) : null,
-                        criteria.getMaxPrice() != null ? BigDecimal.valueOf(criteria.getMaxPrice()) : null,
-                        doc.getPrice() != null ? BigDecimal.valueOf(doc.getPrice()) : null))
-                .collect(Collectors.toList());
-
-        List<CarSearchHitDto> hitDtos = filtered.stream()
+        List<CarSearchHitDto> hitDtos = searchResults.stream()
                 .map(vehicleSearchResultMapper::toDto)
                 .collect(Collectors.toList());
 
@@ -151,8 +126,37 @@ public class AdvancedSearchService {
         return vehicleSearchRepository.findSuggestions(prefix).stream()
                 .filter(doc -> doc.isActive()) // Enforce Status = ACTIVE
                 .filter(doc -> doc.isDealerVerified()) // Enforce verified dealer only
-                .limit(Math.max(1, Math.min(limit, 20)))
+                .limit(Math.max(1, Math.min(limit, 40)))
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public com.carselling.oldcar.dto.car.SuggestionResponseDto suggestRich(String prefix, int limit) {
+        List<VehicleSearchDocument> docs = suggest(prefix, limit);
+
+        List<String> brands = docs.stream()
+                .map(VehicleSearchDocument::getBrand)
+                .filter(b -> b != null && !b.isBlank() && b.toLowerCase().contains(prefix.toLowerCase()))
+                .distinct()
+                .limit(limit)
+                .collect(Collectors.toList());
+
+        List<String> models = docs.stream()
+                .map(doc -> {
+                    String brand = doc.getBrand() != null ? doc.getBrand() : "";
+                    String model = doc.getModel() != null ? doc.getModel() : "";
+                    return (brand + " " + model).trim();
+                })
+                .filter(m -> !m.isBlank() && m.toLowerCase().contains(prefix.toLowerCase()))
+                .distinct()
+                .limit(limit)
+                .collect(Collectors.toList());
+
+        return com.carselling.oldcar.dto.car.SuggestionResponseDto.builder()
+                .brands(brands)
+                .models(models)
+                .general(List.of())
+                .build();
     }
 
     /**
@@ -321,6 +325,10 @@ public class AdvancedSearchService {
                 .normalizedBrand(car.getMake() != null ? car.getMake().toLowerCase() : null)
                 .normalizedModel(car.getModel() != null ? car.getModel().toLowerCase() : null)
                 .normalizedCity(owner != null && owner.getLocation() != null ? owner.getLocation().toLowerCase() : null)
+                .location(formatLocation(car))
+                .category(car.getCategory())
+                .numberOfOwners(car.getNumberOfOwners())
+                .usage(car.getUsage())
                 .build();
 
         // Removed methods: buildSearchableText, calculateSearchBoost, setSuggest as
@@ -392,5 +400,12 @@ public class AdvancedSearchService {
             return car.getImages().get(0);
         }
         return car.getImageUrl();
+    }
+
+    private String formatLocation(Car car) {
+        if (car.getLatitude() != null && car.getLongitude() != null) {
+            return car.getLatitude() + "," + car.getLongitude();
+        }
+        return null;
     }
 }
