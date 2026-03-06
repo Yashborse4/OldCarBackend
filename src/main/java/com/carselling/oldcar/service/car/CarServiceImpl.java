@@ -55,11 +55,15 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.data.jpa.domain.Specification;
+import com.carselling.oldcar.service.file.ViewCountService;
+import com.carselling.oldcar.service.analytics.UserPreferenceScoreService;
+import com.carselling.oldcar.model.UserPreferenceScore;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Enhanced Car Service V2 with analytics and advanced features
  */
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -75,6 +79,7 @@ public class CarServiceImpl implements CarService {
     private final com.carselling.oldcar.repository.UploadedFileRepository uploadedFileRepository;
     private final com.carselling.oldcar.repository.TemporaryFileRepository temporaryFileRepository;
     private final MediaFinalizationService mediaFinalizationService;
+    private final UserPreferenceScoreService preferenceScoreService;
 
     private final AuditLogService auditLogService;
     private final ViewCountService viewCountService;
@@ -272,6 +277,9 @@ public class CarServiceImpl implements CarService {
             @CacheEvict(value = "publicCars", allEntries = true),
             @CacheEvict(value = "publicCarDetail", allEntries = true)
     })
+    // TODO(SeniorEng): Performance - allEntries=true clears the entire cache. Under
+    // high load, this causes cache stampedes. Switch to targeted eviction or
+    // tag-based cache invalidation.
     public CarResponse createVehicle(CarRequest request, Long currentUserId, String idempotencyKey) {
         log.debug("Creating new vehicle for user: {} (idempotency: {})", currentUserId, idempotencyKey);
 
@@ -1309,17 +1317,47 @@ public class CarServiceImpl implements CarService {
         Specification<Car> spec = CarSpecification.getCarsByCriteria(criteria);
         Page<Car> cars = carRepository.findAll(spec, pageable);
 
-        // Apply owner role filtering and visibility checks (though most are now handled
-        // by visibility checks in convert)
-        // Note: The Specification handles the main filtering. Here we do final DTO
-        // conversion and strict visibility checks.
-
+        // Apply owner role filtering and visibility checks
         List<CarResponse> carResponses = cars.getContent().stream()
                 .filter(this::isVehicleVisible) // Ensure basic visibility rules still apply
                 .map(this::convertToResponseV2)
                 .collect(Collectors.toList());
 
+        // In-memory boosting based on user preferences (if no explicit sort is
+        // requested)
+        if (pageable.getSort().isUnsorted()) {
+            User currentUser = authService.getCurrentUserOrNull();
+            if (currentUser != null) {
+                List<UserPreferenceScore> topPrefs = preferenceScoreService.getUserTopPreferences(currentUser.getId());
+                if (!topPrefs.isEmpty()) {
+                    carResponses.sort((c1, c2) -> {
+                        double s1 = calculateBoostScore(c1, topPrefs);
+                        double s2 = calculateBoostScore(c2, topPrefs);
+                        return Double.compare(s2, s1); // Descending
+                    });
+                }
+            }
+        }
+
         return new PageImpl<>(carResponses, pageable, cars.getTotalElements());
+    }
+
+    private double calculateBoostScore(CarResponse car, List<UserPreferenceScore> prefs) {
+        double score = 0.0;
+        for (UserPreferenceScore pref : prefs) {
+            boolean match = false;
+            switch (pref.getAttributeType()) {
+                case MAKE -> match = pref.getAttributeValue().equalsIgnoreCase(car.getMake());
+                case CATEGORY -> match = pref.getAttributeValue().equalsIgnoreCase(car.getCategory());
+                case FUEL_TYPE -> match = pref.getAttributeValue().equalsIgnoreCase(
+                        car.getSpecifications() != null ? car.getSpecifications().getFuelType() : null);
+            }
+            if (match) {
+                // Diminishing returns the lower the rank of the preference
+                score += pref.getScore();
+            }
+        }
+        return score;
     }
 
     /**
@@ -1523,6 +1561,7 @@ public class CarServiceImpl implements CarService {
     // Helper methods
 
     private CarResponse convertToResponseV2(Car car) {
+        User owner = car.getOwner();
         return CarResponse.builder()
                 .id(String.valueOf(car.getId()))
                 .make(car.getMake())
@@ -1530,7 +1569,7 @@ public class CarServiceImpl implements CarService {
                 .year(car.getYear())
                 .price(car.getPrice() != null ? car.getPrice().longValue() : 0L)
                 .mileage(car.getMileage() != null ? car.getMileage().longValue() : 0L)
-                .location(car.getOwner().getLocation())
+                .location(owner.getLocation())
                 .condition("Good") // Default value
                 .description(car.getDescription())
                 .images(car.getImages() != null ? new java.util.ArrayList<>(car.getImages())
@@ -1541,8 +1580,8 @@ public class CarServiceImpl implements CarService {
                         .transmission(car.getTransmission())
                         .color(car.getColor())
                         .build())
-                .dealerId(car.getOwner().getId().toString())
-                .dealerName(car.getOwner().getUsername())
+                .dealerId(owner.getId().toString())
+                .dealerName(owner.getUsername()) // or showroomName if available
                 .coOwnerId(car.getCoOwner() != null ? car.getCoOwner().getId().toString() : null)
                 .coOwnerName(car.getCoOwner() != null ? car.getCoOwner().getUsername() : null)
                 .isCoListed(car.getCoOwner() != null)
@@ -1554,6 +1593,12 @@ public class CarServiceImpl implements CarService {
                 .mediaStatus(car.getMediaStatus() != null ? car.getMediaStatus().name() : "NONE")
                 .isFeatured(Boolean.TRUE.equals(car.getIsFeatured()) &&
                         (car.getFeaturedUntil() == null || car.getFeaturedUntil().isAfter(LocalDateTime.now())))
+                .isInspected(car.getIsInspected())
+                .verifiedDealer(owner.isDealerVerified())
+                .uploaderRole(owner.getRole().name())
+                .dealerRating(owner.getDealerRating())
+                .dealerReviewCount(owner.getDealerReviewCount())
+                .dealerActiveListings((int) carRepository.countActiveCarsByOwnerId(owner.getId()))
                 .createdAt(car.getCreatedAt())
                 .updatedAt(car.getUpdatedAt())
                 .build();
@@ -1662,6 +1707,9 @@ public class CarServiceImpl implements CarService {
                 break;
             case "contact_click":
                 car.incrementContactClickCount();
+                break;
+            case "share":
+                car.incrementShareCount();
                 break;
             default:
                 throw new IllegalArgumentException("Invalid stat type: " + statType);

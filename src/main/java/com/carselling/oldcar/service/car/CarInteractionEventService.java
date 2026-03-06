@@ -7,6 +7,7 @@ import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.CarInteractionEventRepository;
 import com.carselling.oldcar.repository.CarRepository;
 import com.carselling.oldcar.repository.UserRepository;
+import com.carselling.oldcar.service.analytics.UserPreferenceScoreService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -31,6 +32,7 @@ public class CarInteractionEventService {
     private final CarInteractionEventRepository eventRepository;
     private final CarRepository carRepository;
     private final UserRepository userRepository;
+    private final UserPreferenceScoreService scoreService;
 
     /**
      * Track a car interaction event (async for performance)
@@ -89,8 +91,38 @@ public class CarInteractionEventService {
             eventRepository.save(event);
             log.debug("{} event tracked for car {}", eventType, carId);
 
+            // Update Behavioral Preference Scores
+            if (user != null) {
+                double weight = determineEventWeight(eventType);
+                if (weight > 0) {
+                    scoreService.updateScoreForCarInteraction(user.getId(), car, weight);
+                }
+            }
+
         } catch (Exception e) {
             log.error("Error tracking {} event for car {}: {}", eventType, carId, e.getMessage());
+        }
+    }
+
+    private double determineEventWeight(EventType eventType) {
+        if (eventType == null)
+            return 0.0;
+        switch (eventType) {
+            case CAR_VIEW:
+                return 1.0;
+            case SAVE:
+                return 5.0;
+            case CONTACT_CLICK:
+            case CHAT_OPEN:
+            case CALL_CLICK:
+            case WHATSAPP_CLICK:
+                return 10.0;
+            case SHARE:
+                return 3.0;
+            case TEST_DRIVE_REQUEST:
+                return 15.0;
+            default:
+                return 0.0;
         }
     }
 

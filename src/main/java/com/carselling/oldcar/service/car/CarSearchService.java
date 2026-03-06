@@ -48,9 +48,21 @@ public class CarSearchService {
                 .maxYear(request.getMaxYear())
                 .minPrice(request.getMinPrice() != null ? request.getMinPrice().longValue() : null)
                 .maxPrice(request.getMaxPrice() != null ? request.getMaxPrice().longValue() : null)
+                .minMileage(request.getMinMileage())
+                .maxMileage(request.getMaxMileage())
+                .category(request.getCategory() != null ? List.of(request.getCategory()) : null)
+                .condition(request.getUsage())
+                .numberOfOwners(request.getNumberOfOwners())
+                // Currently CarSearchCriteria does not have numberOfOwners, so we skip or map
+                // it later,
+                // Wait, it doesn't have numberOfOwners. I'll need to update CarSearchCriteria
+                // too.
                 .verifiedDealer(request.getVerifiedDealer())
                 .sortBy(request.getSort() != null ? request.getSort() : "relevance")
                 .sortDirection("desc") // Default to desc, or could be added to request DTO
+                .latitude(request.getLatitude())
+                .longitude(request.getLongitude())
+                .radiusKm(request.getRadiusKm())
                 .build();
 
         int page = request.getPage() != null ? Math.max(0, request.getPage()) : 0;
@@ -77,13 +89,19 @@ public class CarSearchService {
         return searchProvider.suggest(prefix, safeLimit);
     }
 
+    public com.carselling.oldcar.dto.car.SuggestionResponseDto suggestRich(String prefix, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 20));
+        return searchProvider.suggestRich(prefix, safeLimit);
+    }
+
     public List<String> getTrendingSearchTerms(int limit) {
         return searchProvider.getTrendingSearchTerms(limit);
     }
 
     public List<String> getRecentSearches(Long userId, int limit) {
         User user = userRepository.findById(userId)
-                .orElse(null); // Or throw exception if strict, but for recent searches, null safe return is better?
+                .orElse(null); // Or throw exception if strict, but for recent searches, null safe return is
+                               // better?
                                // Actually provider expects User. If User not found, return empty list.
         if (user == null) {
             return java.util.Collections.emptyList();
