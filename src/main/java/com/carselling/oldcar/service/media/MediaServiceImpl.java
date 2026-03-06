@@ -405,6 +405,9 @@ public class MediaServiceImpl implements MediaService {
             throw new com.carselling.oldcar.exception.MediaUploadNotAllowedException("Access denied to private media");
         }
 
+        // TODO(SeniorEng): Performance - Generating presigned URLs dynamically per file
+        // can cause high latency API calls. Consider CDN-level signed cookies or
+        // batching presigned URL generation.
         // Generate Presigned URL for Private File (1 hour expiration)
         return b2FileService.generatePresignedUrl(file.getFileUrl(), 60);
     }

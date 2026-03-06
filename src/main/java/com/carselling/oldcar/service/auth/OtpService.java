@@ -162,6 +162,9 @@ public class OtpService {
                         : "****");
 
         // Verify using BCrypt password matching (SECURE)
+        // TODO(SeniorEng): Security/Optimization - Implement a Redis-based circuit
+        // breaker to block IP/Email temporarily after X failed attempts to prevent DB
+        // load during brute-force attacks.
         if (passwordEncoder.matches(inputOtp, otp.getOtpHash())) {
             // Success
             otp.setUsed(true);
