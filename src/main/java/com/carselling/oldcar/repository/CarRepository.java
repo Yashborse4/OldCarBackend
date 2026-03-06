@@ -45,6 +45,14 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
         */
        java.util.Optional<Car> findByIdempotencyKeyAndOwnerId(String idempotencyKey, Long ownerId);
 
+       /**
+        * Find car with details (owner, coOwner, images) eagerly fetched to prevent N+1
+        * queries.
+        */
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "coOwner", "images" })
+       @Query("SELECT c FROM Car c WHERE c.id = :id")
+       java.util.Optional<Car> findWithDetailsById(@Param("id") Long id);
+
        // Find active cars (Efficient Public Query)
        // Find active cars (Efficient Public Query)
        @Query("SELECT c FROM Car c JOIN FETCH c.owner o WHERE c.isActive = true AND " +
@@ -129,6 +137,9 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
 
        Page<Car> findByIsSold(Boolean isSold, Pageable pageable);
 
+       // Find newly created cars
+       List<Car> findByCreatedAtAfter(LocalDateTime date);
+
        // Advanced search with multiple criteria
        @Query("SELECT c FROM Car c WHERE " +
                      "(:make IS NULL OR LOWER(c.make) LIKE LOWER(CONCAT('%', :make, '%'))) AND " +
@@ -186,6 +197,17 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
                      "c.isActive = true")
        Page<Car> searchCars(@Param("searchTerm") String searchTerm, Pageable pageable);
 
+       @Query("SELECT DISTINCT CONCAT(c.make, ' ', c.model) FROM Car c WHERE " +
+                     "(LOWER(c.make) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+                     "LOWER(c.model) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) AND " +
+                     "c.isActive = true")
+       List<String> findDistinctMakeAndModelBySearchTerm(@Param("searchTerm") String searchTerm, Pageable pageable);
+
+       @Query("SELECT DISTINCT c.make FROM Car c WHERE " +
+                     "LOWER(c.make) LIKE LOWER(CONCAT('%', :searchTerm, '%')) AND " +
+                     "c.isActive = true")
+       List<String> findDistinctMakesBySearchTerm(@Param("searchTerm") String searchTerm, Pageable pageable);
+
        // Find cars created within date range
        @Query("SELECT c FROM Car c WHERE c.createdAt BETWEEN :startDate AND :endDate AND c.isActive = true")
        List<Car> findCarsCreatedBetween(@Param("startDate") LocalDateTime startDate,
@@ -222,6 +244,8 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        long countByOwner(User owner);
 
        long countByOwnerId(Long ownerId);
+
+       long countByOwnerIdAndStatus(Long ownerId, CarStatus status);
 
        boolean existsByIdAndOwnerId(Long id, Long ownerId);
 
@@ -437,11 +461,14 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
                      "ORDER BY c.viewCount DESC, c.createdAt DESC")
        List<Car> findTrendingCars(Pageable pageable);
 
-       @Query("SELECT c FROM Car c WHERE c.latitude IS NOT NULL AND c.longitude IS NOT NULL AND " +
-                     "c.isActive = true AND " +
-                     "(6371 * ACOS(COS(RADIANS(:latitude)) * COS(RADIANS(c.latitude)) * " +
-                     "COS(RADIANS(c.longitude) - RADIANS(:longitude)) + " +
-                     "SIN(RADIANS(:latitude)) * SIN(RADIANS(c.latitude)))) <= :radiusKm")
+       @Query(value = "SELECT * FROM cars c WHERE c.latitude IS NOT NULL AND c.longitude IS NOT NULL AND " +
+                     "c.is_active = true AND c.status <> 'DELETED' AND " +
+                     "ABS(c.latitude - :latitude) < (:radiusKm / 111.0) AND " +
+                     "ABS(c.longitude - :longitude) < (:radiusKm / (111.0 * COS(RADIANS(:latitude))))", countQuery = "SELECT count(*) FROM cars c WHERE c.latitude IS NOT NULL AND c.longitude IS NOT NULL AND "
+                                   +
+                                   "c.is_active = true AND c.status <> 'DELETED' AND " +
+                                   "ABS(c.latitude - :latitude) < (:radiusKm / 111.0) AND " +
+                                   "ABS(c.longitude - :longitude) < (:radiusKm / (111.0 * COS(RADIANS(:latitude))))", nativeQuery = true)
        Page<Car> findNearbyyCars(@Param("latitude") Double latitude,
                      @Param("longitude") Double longitude,
                      @Param("radiusKm") Double radiusKm,

@@ -33,6 +33,7 @@ import java.util.Optional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final com.carselling.oldcar.repository.CarRepository carRepository;
     private final AuthService authService;
     private final B2FileService b2FileService;
 
@@ -295,6 +296,9 @@ public class UserService {
     public UserStatistics getUserStatistics() {
         log.info("Getting user statistics for admin dashboard");
 
+        // TODO(SeniorEng): Performance - Real-time COUNT() queries on large tables
+        // cause performance degradation. Migrate admin statistics to a scheduled
+        // aggregation job, Materialized Views, or a Redis cache.
         long totalUsers = userRepository.count();
         // Assuming there are methods to count active, dealer, admin, etc.
         // If not, we might need to add them to UserRepository or use example queries
@@ -414,6 +418,12 @@ public class UserService {
                 .latitude(user.getLatitude())
                 .longitude(user.getLongitude())
                 .onboardingCompleted(Boolean.TRUE.equals(user.getOnboardingCompleted()))
+                // Trust Signals
+                .dealerRating(user.getDealerRating())
+                .dealerReviewCount(user.getDealerReviewCount())
+                .responseTime(user.getResponseTime())
+                .activeListingsCount(carRepository.countByOwnerIdAndStatus(user.getId(),
+                        com.carselling.oldcar.model.CarStatus.PUBLISHED))
                 .build();
     }
 

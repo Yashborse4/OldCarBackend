@@ -3,6 +3,7 @@ package com.carselling.oldcar.service;
 import com.carselling.oldcar.model.Car;
 import com.carselling.oldcar.model.CarInteractionEvent;
 import com.carselling.oldcar.model.CarInteractionEvent.EventType;
+import com.carselling.oldcar.service.car.CarInteractionEventService;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.CarInteractionEventRepository;
 import com.carselling.oldcar.repository.CarRepository;
