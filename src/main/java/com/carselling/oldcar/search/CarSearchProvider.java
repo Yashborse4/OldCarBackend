@@ -30,6 +30,17 @@ public interface CarSearchProvider {
         return java.util.Collections.emptyList();
     }
 
+    /**
+     * Get rich, structured autocomplete suggestions (Brands, Models, etc).
+     */
+    default com.carselling.oldcar.dto.car.SuggestionResponseDto suggestRich(String prefix, int limit) {
+        return com.carselling.oldcar.dto.car.SuggestionResponseDto.builder()
+                .brands(java.util.Collections.emptyList())
+                .models(java.util.Collections.emptyList())
+                .general(java.util.Collections.emptyList())
+                .build();
+    }
+
     default List<String> getTrendingSearchTerms(int limit) {
         return java.util.Collections.emptyList();
     }

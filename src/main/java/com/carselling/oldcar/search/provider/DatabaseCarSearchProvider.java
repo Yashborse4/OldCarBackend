@@ -64,4 +64,47 @@ public class DatabaseCarSearchProvider implements CarSearchProvider {
                 .createdAt(car.getCreatedAt())
                 .build();
     }
+
+    @Override
+    public List<String> suggest(String prefix, int limit) {
+        if (prefix == null || prefix.trim().isEmpty()) {
+            return List.of();
+        }
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit);
+        return carRepository.findDistinctMakeAndModelBySearchTerm(prefix.trim(), pageable);
+    }
+
+    @Override
+    public com.carselling.oldcar.dto.car.SuggestionResponseDto suggestRich(String prefix, int limit) {
+        if (prefix == null || prefix.trim().length() < 2) {
+            return com.carselling.oldcar.dto.car.SuggestionResponseDto.builder()
+                    .brands(List.of())
+                    .models(List.of())
+                    .general(List.of())
+                    .build();
+        }
+
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit);
+
+        // Find distinct Brands
+        List<String> brands = carRepository.findDistinctMakesBySearchTerm(prefix.trim().toLowerCase(), pageable);
+
+        // Find distinct Models (Make + Model)
+        List<String> models = carRepository.findDistinctMakeAndModelBySearchTerm(prefix.trim().toLowerCase(), pageable);
+
+        return com.carselling.oldcar.dto.car.SuggestionResponseDto.builder()
+                .brands(brands)
+                .models(models)
+                .general(List.of())
+                .build();
+    }
+
+    @Override
+    public List<String> getTrendingSearchTerms(int limit) {
+        // Fallback trending searches when ElasticSearch is not available
+        return List.of("Honda City", "SUVs under 10 Lakhs", "Automatic Cars", "Diesel Cars", "Maruti Swift")
+                .stream()
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
 }

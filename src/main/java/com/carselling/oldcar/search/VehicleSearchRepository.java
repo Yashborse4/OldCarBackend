@@ -1,6 +1,8 @@
 package com.carselling.oldcar.search;
 
 import com.carselling.oldcar.document.VehicleSearchDocument;
+import com.carselling.oldcar.dto.car.CarSearchCriteria;
+import org.opensearch.client.json.JsonData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -114,7 +116,18 @@ public class VehicleSearchRepository {
 
       SearchResponse<VehicleSearchDocument> response = client.search(request, VehicleSearchDocument.class);
       return response.hits().hits().stream()
-          .map(h -> h.source())
+          .map(h -> {
+            VehicleSearchDocument doc = h.source();
+            if (doc != null && !h.sort().isEmpty()) {
+              try {
+                // If distance is the first sort field, we can extract it
+                doc.setDistanceKm(Double.parseDouble(h.sort().get(0).toString()));
+              } catch (NumberFormatException | NullPointerException e) {
+                log.warn("Failed to parse distance from sort field: {}", h.sort().get(0));
+              }
+            }
+            return doc;
+          })
           .collect(Collectors.toList());
 
     } catch (IOException e) {
@@ -137,25 +150,106 @@ public class VehicleSearchRepository {
   }
 
   // Support for the generic 'findWithBoostingSearchAndFilters' logic
-  public List<VehicleSearchDocument> findWithQuery(String searchText, boolean activeOnly, boolean verifiedOnly,
-      int page, int size) {
+  public List<VehicleSearchDocument> findWithCriteria(CarSearchCriteria criteria, boolean verifiedOnly, int page,
+      int size) {
     BoolQuery.Builder bool = new BoolQuery.Builder();
 
-    if (activeOnly) {
-      bool.must(m -> m.term(t -> t.field("active").value(v -> v.booleanValue(true))));
-    }
+    // Base active filter
+    bool.must(m -> m.term(t -> t.field("active").value(v -> v.booleanValue(true))));
+
     if (verifiedOnly) {
       bool.must(m -> m.term(t -> t.field("dealerVerified").value(v -> v.booleanValue(true))));
     }
 
-    if (searchText != null && !searchText.isBlank()) {
+    String q = criteria.getQuery();
+    if (q != null && !q.isBlank()) {
       bool.must(m -> m
           .multiMatch(mm -> mm
-              .query(searchText)
+              .query(q)
               .fields("brand^3", "model^3", "variant", "city")));
     }
 
-    return search(Query.of(q -> q.bool(bool.build())), page * size, size);
+    // Exact matches
+    if (criteria.getMake() != null && !criteria.getMake().isEmpty()) {
+      bool.filter(f -> f.terms(t -> t.field("brand.keyword")
+          .terms(ts -> ts.value(criteria.getMake().stream()
+              .map(v -> org.opensearch.client.opensearch._types.FieldValue.of(v)).collect(Collectors.toList())))));
+    }
+    if (criteria.getModel() != null && !criteria.getModel().isEmpty()) {
+      bool.filter(f -> f.terms(t -> t.field("model.keyword")
+          .terms(ts -> ts.value(criteria.getModel().stream()
+              .map(v -> org.opensearch.client.opensearch._types.FieldValue.of(v)).collect(Collectors.toList())))));
+    }
+    if (criteria.getFuelType() != null && !criteria.getFuelType().isEmpty()) {
+      bool.filter(f -> f.terms(t -> t.field("fuelType.keyword")
+          .terms(ts -> ts.value(criteria.getFuelType().stream()
+              .map(v -> org.opensearch.client.opensearch._types.FieldValue.of(v)).collect(Collectors.toList())))));
+    }
+    if (criteria.getTransmission() != null && !criteria.getTransmission().isEmpty()) {
+      bool.filter(f -> f.terms(t -> t.field("transmission.keyword")
+          .terms(ts -> ts.value(criteria.getTransmission().stream()
+              .map(v -> org.opensearch.client.opensearch._types.FieldValue.of(v)).collect(Collectors.toList())))));
+    }
+    if (criteria.getLocation() != null && !criteria.getLocation().isEmpty()) {
+      bool.filter(f -> f.terms(t -> t.field("city.keyword")
+          .terms(ts -> ts.value(criteria.getLocation().stream()
+              .map(v -> org.opensearch.client.opensearch._types.FieldValue.of(v)).collect(Collectors.toList())))));
+    }
+    if (criteria.getCategory() != null && !criteria.getCategory().isEmpty()) {
+      bool.filter(f -> f.terms(t -> t.field("category.keyword")
+          .terms(ts -> ts.value(criteria.getCategory().stream()
+              .map(v -> org.opensearch.client.opensearch._types.FieldValue.of(v)).collect(Collectors.toList())))));
+    }
+    if (criteria.getCondition() != null && !criteria.getCondition().isBlank()) {
+      bool.filter(f -> f.term(t -> t.field("usage.keyword").value(v -> v.stringValue(criteria.getCondition()))));
+    }
+    if (criteria.getNumberOfOwners() != null) {
+      bool.filter(f -> f.term(t -> t.field("numberOfOwners").value(v -> v.longValue(criteria.getNumberOfOwners()))));
+    }
+
+    // Ranges
+    if (criteria.getMinPrice() != null || criteria.getMaxPrice() != null) {
+      bool.filter(f -> f.range(r -> {
+        r.field("price");
+        if (criteria.getMinPrice() != null)
+          r.gte(JsonData.of(criteria.getMinPrice()));
+        if (criteria.getMaxPrice() != null)
+          r.lte(JsonData.of(criteria.getMaxPrice()));
+        return r;
+      }));
+    }
+
+    if (criteria.getMinYear() != null || criteria.getMaxYear() != null) {
+      bool.filter(f -> f.range(r -> {
+        r.field("year");
+        if (criteria.getMinYear() != null)
+          r.gte(JsonData.of(criteria.getMinYear()));
+        if (criteria.getMaxYear() != null)
+          r.lte(JsonData.of(criteria.getMaxYear()));
+        return r;
+      }));
+    }
+
+    if (criteria.getMinMileage() != null || criteria.getMaxMileage() != null) {
+      bool.filter(f -> f.range(r -> {
+        r.field("mileage");
+        if (criteria.getMinMileage() != null)
+          r.gte(JsonData.of(criteria.getMinMileage()));
+        if (criteria.getMaxMileage() != null)
+          r.lte(JsonData.of(criteria.getMaxMileage()));
+        return r;
+      }));
+    }
+
+    if (criteria.getLatitude() != null && criteria.getLongitude() != null && criteria.getRadiusKm() != null) {
+      bool.filter(f -> f
+          .geoDistance(g -> g
+              .field("location")
+              .distance(criteria.getRadiusKm() + "km")
+              .location(loc -> loc.latlon(ll -> ll.lat(criteria.getLatitude()).lon(criteria.getLongitude())))));
+    }
+
+    return search(Query.of(b -> b.bool(bool.build())), page * size, size);
   }
 
   public List<VehicleSearchDocument> findSuggestions(String prefix) {
@@ -212,7 +306,15 @@ public class VehicleSearchRepository {
   public void createIndex(String indexName) {
     try {
       client.indices().create(c -> c.index(indexName));
-      log.info("Created new index: {}", indexName);
+
+      // Put mapping for geo_point
+      client.indices().putMapping(m -> m
+          .index(indexName)
+          .properties("location", p -> p.geoPoint(gp -> gp))
+          .properties("brand", p -> p.text(t -> t.fields("keyword", f -> f.keyword(k -> k))))
+          .properties("model", p -> p.text(t -> t.fields("keyword", f -> f.keyword(k -> k)))));
+
+      log.info("Created new index with geo_point mapping: {}", indexName);
     } catch (IOException e) {
       log.error("Failed to create index {}", indexName, e);
       throw new RuntimeException("Failed to create index " + indexName, e);
