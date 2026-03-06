@@ -101,6 +101,15 @@ public class ChatMediaCleanupScheduler {
     }
 
     private String extractB2Key(UploadedFile file) {
-        return file.getFileName();
+        String fileUrl = file.getFileUrl();
+        try {
+            java.net.URI uri = new java.net.URI(fileUrl);
+            String path = uri.getPath();
+            if (path.startsWith("/"))
+                path = path.substring(1);
+            return path;
+        } catch (Exception e) {
+            return file.getFileName();
+        }
     }
 }

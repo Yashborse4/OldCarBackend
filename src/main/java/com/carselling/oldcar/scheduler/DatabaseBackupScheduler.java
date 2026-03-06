@@ -35,6 +35,12 @@ public class DatabaseBackupScheduler {
 
     // Cron: 2:00 AM IST daily (IST is UTC+5:30)
     // "0 0 2 * * *" with zone="Asia/Kolkata"
+    // TODO: [PRODUCTION-READY & CONCURRENCY] Missing Distributed Lock.
+    // In a multi-instance deployment, this @Scheduled job will run concurrently on
+    // EVERY server,
+    // causing redundant database dumps and B2 uploads. Integrate ShedLock or a
+    // similar mechanism
+    // to ensure only one instance executes this job.
     @Scheduled(cron = "0 0 2 * * *", zone = "Asia/Kolkata")
     public void scheduleDatabaseBackup() {
         jobExecutionService.executeWithMetrics("DatabaseBackup", () -> {

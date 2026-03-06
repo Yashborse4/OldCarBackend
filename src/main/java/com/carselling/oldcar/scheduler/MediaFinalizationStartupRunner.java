@@ -187,7 +187,9 @@ public class MediaFinalizationStartupRunner implements CommandLineRunner {
                     .map(TemporaryFile::getId)
                     .collect(Collectors.toList());
 
-            carService.finalizeMedia(String.valueOf(car.getId()), tempFileIds, null);
+            // Call processAsyncMediaFinalization directly (skips event indirection)
+            // The scheduler IS the retry mechanism, so no need for events here.
+            carService.processAsyncMediaFinalization(car.getId(), tempFileIds, null);
 
         } catch (Exception e) {
             handleCarFailure(car, e);
@@ -304,8 +306,9 @@ public class MediaFinalizationStartupRunner implements CommandLineRunner {
 
             try {
                 log.info("Startup: Finalizing {} temp files for car {}", tempFileIds.size(), carId);
-                // Pass null for userId — startup runner is a system process, not user-initiated
-                carService.finalizeMedia(String.valueOf(carId), tempFileIds, null);
+                // Call processAsyncMediaFinalization directly — startup runner is a system
+                // process
+                carService.processAsyncMediaFinalization(carId, tempFileIds, null);
                 successCount++;
             } catch (Exception e) {
                 failCount++;
