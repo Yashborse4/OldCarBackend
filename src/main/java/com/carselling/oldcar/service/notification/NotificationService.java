@@ -201,27 +201,58 @@ public class NotificationService {
     }
 
     /**
-     * Send Broadcast Notification to All Users
+     * Send Broadcast Notification to All Active Users
+     * Batches users into the NotificationQueue for background processing
      */
     @Async
-    public void sendToAll(String title, String body) {
-        // Warning: Sending to topic is better for "All Users"
-        Message message = Message.builder()
-                .setNotification(Notification.builder()
-                        .setTitle(title)
-                        .setBody(body)
-                        .build())
-                .setTopic("all_users")
-                .build();
+    public void sendToAll(String title, String body, Map<String, String> data) {
+        log.info("Starting batched broadcast notification: {}", title);
 
-        try {
-            String response = FirebaseMessaging.getInstance().send(message);
-            log.info("Sent broadcast notification: {}", response);
-        } catch (FirebaseMessagingException e) {
-            log.error("Firebase error sending broadcast: {}", e.getMessage());
-        } catch (Exception e) {
-            log.error("Unexpected error sending broadcast", e);
+        int pageSize = 500;
+        int page = 0;
+        long totalQueued = 0;
+
+        String metadataJson = null;
+        if (data != null && !data.isEmpty()) {
+            try {
+                metadataJson = objectMapper.writeValueAsString(data);
+            } catch (Exception e) {
+                log.error("Failed to serialize broadcast metadata", e);
+            }
         }
+
+        while (true) {
+            org.springframework.data.domain.Page<User> userPage = userRepository.findAllActiveUsers(
+                    org.springframework.data.domain.PageRequest.of(page, pageSize));
+
+            if (userPage.isEmpty()) {
+                break;
+            }
+
+            List<NotificationQueue> batch = new java.util.ArrayList<>();
+            LocalDateTime now = LocalDateTime.now();
+
+            for (User user : userPage.getContent()) {
+                NotificationQueue queueItem = NotificationQueue.builder()
+                        .userId(user.getId())
+                        .title(title)
+                        .body(body)
+                        .metadata(metadataJson)
+                        .status(NotificationQueue.NotificationStatus.PENDING)
+                        .attempts(0)
+                        .nextRetryAt(now)
+                        .build();
+                batch.add(queueItem);
+            }
+
+            queueRepository.saveAll(batch);
+            totalQueued += batch.size();
+            log.debug("Queued batch of {} notifications (Page {})", batch.size(), page);
+
+            page++;
+        }
+
+        log.info("Finished queuing broadcast. Total queued: {}", totalQueued);
     }
 
     private void cleanupInvalidTokens(List<UserDeviceToken> tokens, List<SendResponse> responses) {

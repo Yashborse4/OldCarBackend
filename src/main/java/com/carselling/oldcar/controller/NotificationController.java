@@ -116,15 +116,15 @@ public class NotificationController {
     @PostMapping("/broadcast")
     @PreAuthorize("hasRole('ADMIN')")
     @RateLimit(capacity = 1, refill = 1, refillPeriod = 60) // 1 broadcast per minute
-    @Operation(summary = "Broadcast notification", description = "Send notification to ALL users")
+    @Operation(summary = "Broadcast notification", description = "Send notification to ALL active users in background chunks")
     public ResponseEntity<ApiResponse<Void>> broadcastNotification(
             @RequestBody Map<String, String> payload) {
 
         String title = payload.getOrDefault("title", "Broadcast");
         String body = payload.getOrDefault("body", "Message to all users");
 
-        notificationService.sendToAll(title, body);
+        notificationService.sendToAll(title, body, payload);
 
-        return ResponseEntity.ok(ApiResponse.success("Broadcast sent", null));
+        return ResponseEntity.accepted().body(ApiResponse.success("Broadcast dispatched to background queue", null));
     }
 }
