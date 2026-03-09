@@ -7,11 +7,14 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.retry.annotation.EnableRetry;
 
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+
 @SpringBootApplication
 @EnableScheduling
 @EnableCaching
 @EnableAsync
 @EnableRetry
+@EnableJpaAuditing
 public class OldCarApplication {
 
     public static void main(String[] args) {

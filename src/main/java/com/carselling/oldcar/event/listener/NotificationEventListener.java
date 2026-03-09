@@ -50,7 +50,7 @@ public class NotificationEventListener {
 
                 case BROADCAST_PUSH:
                     log.debug("Handling BROADCAST_PUSH event");
-                    notificationService.sendToAll(event.getSubject(), event.getContent());
+                    notificationService.sendToAll(event.getSubject(), event.getContent(), null);
                     break;
 
                 default:
