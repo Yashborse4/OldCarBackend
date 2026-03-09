@@ -42,6 +42,8 @@ public class AuthController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request data or validation error"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Username or email already exists")
         })
+        // TODO(SeniorEng): Security - Implement reCAPTCHA or similar bot-protection
+        // mechanism to prevent automated bulk account creation.
         public ResponseEntity<ApiResponse<JwtAuthResponse>> register(
                         @Valid @RequestBody RegisterRequest request) {
 
@@ -181,6 +183,8 @@ public class AuthController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid OTP or request data"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
         })
+        // TODO(SeniorEng): Security - Ensure OTP tokens are invalidated immediately
+        // upon successful password reset to prevent reuse.
         public ResponseEntity<ApiResponse<Object>> resetPassword(
                         @Valid @RequestBody ResetPasswordRequest request) {
 
@@ -322,6 +326,8 @@ public class AuthController {
          * POST /api/auth/email/verify/confirm
          */
         @PostMapping("/email/verify/confirm")
+        // TODO(SeniorEng): Security - Ensure rate limiting and max-attempts tracking
+        // for OTP confirmation to prevent brute force attacks on email verification.
         public ResponseEntity<ApiResponse<JwtAuthResponse>> confirmEmailVerification(
                         @RequestBody ConfirmEmailVerificationRequest request) {
 
