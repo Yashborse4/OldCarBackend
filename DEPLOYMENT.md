@@ -7,9 +7,9 @@ This guide provides step-by-step instructions for deploying the Sell The Old Car
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Docker Network                        │
-│                     (car-network: 172.20.0.0/16)            │
+┌───────────────────────────────────────────────────────────┐
+│                        Docker Network                     │
+│                     (car-network: 172.20.0.0/16)          │
 ├─────────────┬─────────────┬─────────────┬─────────────────┤
 │     App     │  PostgreSQL │    Redis    │   OpenSearch    │
 │   (8080)    │   (5432)    │   (6379)    │    (9200)       │
