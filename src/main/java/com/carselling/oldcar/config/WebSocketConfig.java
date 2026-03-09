@@ -64,16 +64,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // Register the WebSocket endpoint with SockJS fallback
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("http://localhost:*", "https://*.yashborse.me", "https://yashborse.me") // Strict
-                                                                                                                  // origins
+                .setAllowedOriginPatterns("*")
                 .withSockJS()
                 .setSessionCookieNeeded(false)
                 .setHeartbeatTime(25000)
                 .setDisconnectDelay(5000);
 
         // Also register without SockJS for native WebSocket clients
-        registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("http://localhost:*", "https://*.yashborse.me", "https://yashborse.me");
+        registry.addEndpoint("/ws-native")
+                .setAllowedOriginPatterns("*");
+
 
         log.info("WebSocket STOMP endpoints registered at /ws");
     }

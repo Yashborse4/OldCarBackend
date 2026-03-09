@@ -189,6 +189,7 @@ public class RedisConfig {
 
         // Chat and messaging
         cacheConfigurations.put("chatMessages", defaultCacheConfig.entryTtl(Duration.ofHours(1)));
+        cacheConfigurations.put("userChats", defaultCacheConfig.entryTtl(Duration.ofMinutes(15)));
 
         // System and metadata
         cacheConfigurations.put("userActivity", defaultCacheConfig.entryTtl(Duration.ofHours(6)));
@@ -200,6 +201,10 @@ public class RedisConfig {
 
         // Car Master Data
         cacheConfigurations.put("models", defaultCacheConfig.entryTtl(Duration.ofHours(24)));
+
+        // Admin Dashboards & Statistics
+        cacheConfigurations.put("adminDashboard", defaultCacheConfig.entryTtl(Duration.ofMinutes(5)));
+        cacheConfigurations.put("systemStatistics", defaultCacheConfig.entryTtl(Duration.ofMinutes(5)));
 
         return cacheConfigurations;
     }
@@ -214,8 +219,8 @@ public class RedisConfig {
                 "vehicles", "vehicleSearch", "vehicleRecommendations", "vehicleStats",
                 "trendingVehicles", "trendingSearches",
                 "publicCars", "publicCarDetail",
-                "chatMessages", "userActivity", "systemConfig", "fileMetadata",
-                "fraudDetection", "models"));
+                "chatMessages", "userChats", "userActivity", "systemConfig", "fileMetadata",
+                "fraudDetection", "models", "adminDashboard", "systemStatistics"));
 
         return cacheManager;
     }
