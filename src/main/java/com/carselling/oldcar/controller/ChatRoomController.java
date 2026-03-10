@@ -202,21 +202,17 @@ public class ChatRoomController {
         }
 
         /**
-         * Get all participants in a chat room
-         * // TODO: [PRODUCTION-READY & API-DESIGN] Unbounded List Return.
-         * // Returning a full list of participants without pagination will cause memory
-         * exhaustion
-         * // and slow response times if a group chat has a massive number of users.
-         * // Refactor to use Pageable and return Page<ChatParticipantDto>.
+         * Get paginated participants in a chat room
          */
         @GetMapping("/rooms/{chatRoomId}/participants")
-        public ResponseEntity<ApiResponse<List<ChatParticipantDto>>> getChatRoomParticipants(
+        public ResponseEntity<ApiResponse<Page<ChatParticipantDto>>> getChatRoomParticipants(
                         @PathVariable Long chatRoomId,
+                        @PageableDefault(size = 20) Pageable pageable,
                         Authentication authentication) {
                 UserPrincipal currentUser = (UserPrincipal) authentication.getPrincipal();
 
-                List<ChatParticipantDto> participants = chatService.getChatRoomParticipants(chatRoomId,
-                                currentUser.getId());
+                Page<ChatParticipantDto> participants = chatService.getChatRoomParticipants(chatRoomId,
+                                currentUser.getId(), pageable);
                 return ResponseEntity.ok(ApiResponse.success("Participants retrieved successfully", participants));
         }
 
@@ -340,34 +336,33 @@ public class ChatRoomController {
 
         /**
          * Search dealers
-         * // TODO: [PRODUCTION-READY & API-DESIGN] Unbounded Search Results.
-         * // This endpoint returns an unpaginated List of dealers matching a query.
-         * // A broad query (e.g., "a") could return thousands of records, leading to
-         * OutOfMemoryErrors
-         * // and heavy database load. Implement pagination (Pageable).
          */
         @GetMapping("/dealers/search")
-        public ResponseEntity<ApiResponse<List<ChatParticipantDto>>> searchDealers(
+        public ResponseEntity<ApiResponse<Page<ChatParticipantDto>>> searchDealers(
                         @RequestParam String query,
+                        @PageableDefault(size = 20) Pageable pageable,
                         Authentication authentication) {
-                List<ChatParticipantDto> dealers = chatService.searchDealers(query);
+                if (query == null || query.trim().length() < 2) {
+                        return ResponseEntity.badRequest().body(ApiResponse.error(
+                                        "Search query must be at least 2 characters long to prevent heavy database loads."));
+                }
+                Page<ChatParticipantDto> dealers = chatService.searchDealers(query.trim(), pageable);
                 return ResponseEntity.ok(ApiResponse.success("Dealers found", dealers));
         }
 
         /**
          * Search users (broad search)
-         * // TODO: [PRODUCTION-READY & API-DESIGN] Unbounded Search Results.
-         * // Returning all matching users without pagination is dangerous in
-         * production.
-         * // It exposes the system to Denial of Service (DoS) attacks via broad
-         * queries.
-         * // Implement pagination (Pageable) and query length validation.
          */
         @GetMapping("/users/search")
-        public ResponseEntity<ApiResponse<List<ChatParticipantDto>>> searchUsers(
+        public ResponseEntity<ApiResponse<Page<ChatParticipantDto>>> searchUsers(
                         @RequestParam String query,
+                        @PageableDefault(size = 20) Pageable pageable,
                         Authentication authentication) {
-                List<ChatParticipantDto> users = chatService.searchUsers(query);
+                if (query == null || query.trim().length() < 2) {
+                        return ResponseEntity.badRequest().body(ApiResponse.error(
+                                        "Search query must be at least 2 characters long to prevent heavy database loads."));
+                }
+                Page<ChatParticipantDto> users = chatService.searchUsers(query.trim(), pageable);
                 return ResponseEntity.ok(ApiResponse.success("Users found", users));
         }
 

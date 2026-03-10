@@ -78,5 +78,4 @@ public class MobileAppController {
         return ResponseEntity.ok(ApiResponse.success("Offline data synced", syncData));
     }
 
-
 }

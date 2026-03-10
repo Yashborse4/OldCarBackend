@@ -173,6 +173,7 @@ public class ChatMessageController {
          */
         @GetMapping("/search/messages")
         @io.swagger.v3.oas.annotations.Operation(summary = "Search messages globally", description = "Search messages across all chat rooms the user is part of")
+       
         public ResponseEntity<ApiResponse<Page<ChatMessageDto>>> searchMessages(
                         @RequestParam String query,
                         @PageableDefault(size = 20) Pageable pageable,
