@@ -50,6 +50,14 @@ public class IdempotencyService {
         }
 
         // In-memory fallback
+        // TODO: [PRODUCTION-READY & CONCURRENCY] Distributed Lock failure.
+        // If Redis is unavailable, this falls back to a local JVM memory cache. In a
+        // multi-node cluster,
+        // this allows duplicate requests hitting different nodes to both acquire the
+        // lock.
+        // Needs a robust fallback mechanism (e.g. Database row lock or pessimistic
+        // locking)
+        // to guarantee idempotency across the cluster.
         Object value = inMemoryCacheService.get(fullKey);
         if (value != null) {
             return false; // Already exists

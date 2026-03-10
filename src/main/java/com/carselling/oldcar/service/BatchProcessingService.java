@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Async
 public class BatchProcessingService {
 
     private final VehicleRepository vehicleRepository;
@@ -37,12 +38,18 @@ public class BatchProcessingService {
     private final NotificationService notificationService;
 
     // Track batch job status
+    // TODO: [PRODUCTION-READY & CONCURRENCY] Storing batch job statuses in a local
+    // ConcurrentHashMap will cause:
+    // 1. Loss of all active jobs on server restart or crash.
+    // 2. "Job Not Found" errors if the status check request is routed to a
+    // different instance by the Load Balancer.
+    // Move this state to a persistent data store (Database table or Redis) to
+    // support multi-instance deployments.
     private final Map<String, BatchJobStatus> batchJobs = new ConcurrentHashMap<>();
 
     /**
      * Batch import vehicles from CSV file
      */
-    @Async
     public CompletableFuture<String> importVehiclesFromCsv(MultipartFile file, User user) {
         String jobId = UUID.randomUUID().toString();
         BatchJobStatus status = new BatchJobStatus(jobId, "VEHICLE_IMPORT", "RUNNING");
@@ -63,8 +70,7 @@ public class BatchProcessingService {
             // Process in batches of 50
             int batchSize = 50;
             for (int i = 0; i < importRows.size(); i += batchSize) {
-                List<VehicleImportRow> batch = importRows.subList(i,
-                        Math.min(i + batchSize, importRows.size()));
+                List<VehicleImportRow> batch = importRows.subList(i, Math.min(i + batchSize, importRows.size()));
 
                 processBatch(batch, user, processedCount, successCount, errorCount, errors);
 
@@ -89,8 +95,7 @@ public class BatchProcessingService {
 
             log.info("Vehicle Import Completed for user {}: {}", user.getId(), details);
 
-            log.info("Completed vehicle batch import. Success: {}, Errors: {}",
-                    successCount.get(), errorCount.get());
+            log.info("Completed vehicle batch import. Success: {}, Errors: {}", successCount.get(), errorCount.get());
 
             return CompletableFuture.completedFuture(jobId);
 
@@ -130,16 +135,9 @@ public class BatchProcessingService {
             AtomicInteger processedCount = new AtomicInteger(0);
 
             vehicles.forEach(vehicle -> {
-                csvContent.append(String.format("%d,%s,%s,%d,%s,%d,%s,%s,%s,\"%s\"\n",
-                        vehicle.getId(),
-                        vehicle.getMake(),
-                        vehicle.getModel(),
-                        vehicle.getYear(),
-                        vehicle.getPrice(),
-                        vehicle.getMileage(),
-                        vehicle.getFuelType(),
-                        vehicle.getTransmission(),
-                        vehicle.getLocation(),
+                csvContent.append(String.format("%d,%s,%s,%d,%s,%d,%s,%s,%s,\"%s\"\n", vehicle.getId(),
+                        vehicle.getMake(), vehicle.getModel(), vehicle.getYear(), vehicle.getPrice(),
+                        vehicle.getMileage(), vehicle.getFuelType(), vehicle.getTransmission(), vehicle.getLocation(),
                         vehicle.getDescription().replace("\"", "\"\"")));
 
                 status.setProcessedRecords(processedCount.incrementAndGet());
@@ -148,16 +146,10 @@ public class BatchProcessingService {
             // Upload CSV file to storage
             byte[] csvBytes = csvContent.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
             String fileName = "vehicles_export_" + jobId + ".csv";
-            
-            com.carselling.oldcar.dto.file.FileUploadResponse uploadResponse = b2FileService.uploadFile(
-                    csvBytes, 
-                    fileName, 
-                    "text/csv", 
-                    "exports/" + user.getId(), 
-                    user, 
-                    com.carselling.oldcar.model.ResourceType.OTHER, 
-                    user.getId()
-            );
+
+            com.carselling.oldcar.dto.file.FileUploadResponse uploadResponse = b2FileService.uploadFile(csvBytes,
+                    fileName, "text/csv", "exports/" + user.getId(), user,
+                    com.carselling.oldcar.model.ResourceType.OTHER, user.getId());
 
             status.setStatus("COMPLETED");
             status.setDownloadUrl(uploadResponse.getFileUrl());
@@ -210,17 +202,17 @@ public class BatchProcessingService {
                 MultipartFile thumbnailImage = resizeImage(image, 300, 200);
 
                 // Upload original, resized, and thumbnail versions
-                String originalUrl = b2FileService.uploadFile(image, "vehicles/" + vehicleId + "/original/", user, com.carselling.oldcar.model.ResourceType.CAR_IMAGE, vehicleId)
-                        .getFileUrl();
-                String resizedUrl = b2FileService
-                        .uploadFile(resizedImage, "vehicles/" + vehicleId + "/resized/", user, com.carselling.oldcar.model.ResourceType.CAR_IMAGE, vehicleId).getFileUrl();
-                String thumbnailUrl = b2FileService
-                        .uploadFile(thumbnailImage, "vehicles/" + vehicleId + "/thumbnails/", user, com.carselling.oldcar.model.ResourceType.CAR_IMAGE, vehicleId).getFileUrl();
+                String originalUrl = b2FileService.uploadFile(image, "vehicles/" + vehicleId + "/original/", user,
+                        com.carselling.oldcar.model.ResourceType.CAR_IMAGE, vehicleId).getFileUrl();
+                String resizedUrl = b2FileService.uploadFile(resizedImage, "vehicles/" + vehicleId + "/resized/", user,
+                        com.carselling.oldcar.model.ResourceType.CAR_IMAGE, vehicleId).getFileUrl();
+                String thumbnailUrl = b2FileService.uploadFile(thumbnailImage, "vehicles/" + vehicleId + "/thumbnails/",
+                        user, com.carselling.oldcar.model.ResourceType.CAR_IMAGE, vehicleId).getFileUrl();
 
                 processedImageUrls.add(originalUrl);
 
-                log.debug("Processed image for vehicle {}: original={}, resized={}, thumbnail={}",
-                        vehicleId, originalUrl, resizedUrl, thumbnailUrl);
+                log.debug("Processed image for vehicle {}: original={}, resized={}, thumbnail={}", vehicleId,
+                        originalUrl, resizedUrl, thumbnailUrl);
             }
 
             // Update vehicle with processed image URLs
@@ -261,9 +253,7 @@ public class BatchProcessingService {
      * Get all batch jobs for a user
      */
     public List<BatchJobStatus> getUserBatchJobs(String userId) {
-        return batchJobs.values().stream()
-                .filter(job -> userId.equals(job.getUserId()))
-                .collect(Collectors.toList());
+        return batchJobs.values().stream().filter(job -> userId.equals(job.getUserId())).collect(Collectors.toList());
     }
 
     // Private helper methods
@@ -283,8 +273,7 @@ public class BatchProcessingService {
 
                 String[] fields = line.split(",");
                 if (fields.length >= 8) { // Minimum required fields
-                    VehicleImportRow row = new VehicleImportRow(
-                            fields[0].trim(), // make
+                    VehicleImportRow row = new VehicleImportRow(fields[0].trim(), // make
                             fields[1].trim(), // model
                             Integer.parseInt(fields[2].trim()), // year
                             new BigDecimal(fields[3].trim()), // price
@@ -303,27 +292,18 @@ public class BatchProcessingService {
     }
 
     @Transactional
-    private void processBatch(List<VehicleImportRow> batch, User user,
-            AtomicInteger processedCount, AtomicInteger successCount,
-            AtomicInteger errorCount, List<String> errors) {
+    private void processBatch(List<VehicleImportRow> batch, User user, AtomicInteger processedCount,
+            AtomicInteger successCount, AtomicInteger errorCount, List<String> errors) {
         for (VehicleImportRow row : batch) {
             try {
                 // Validate row data
                 validateVehicleImportRow(row);
 
                 // Create vehicle entity
-                Car vehicle = Car.builder()
-                        .make(row.getMake())
-                        .model(row.getModel())
-                        .year(row.getYear())
-                        .price(row.getPrice())
-                        .mileage(row.getMileage())
-                        .fuelType(row.getFuelType())
-                        .transmission(row.getTransmission())
-                        .description(row.getDescription())
-                        .owner(user)
-                        .isActive(true)
-                        .build();
+                Car vehicle = Car.builder().make(row.getMake()).model(row.getModel()).year(row.getYear())
+                        .price(row.getPrice()).mileage(row.getMileage()).fuelType(row.getFuelType())
+                        .transmission(row.getTransmission()).description(row.getDescription()).owner(user)
+                        .isActive(true).build();
 
                 vehicleRepository.save(vehicle);
                 successCount.incrementAndGet();

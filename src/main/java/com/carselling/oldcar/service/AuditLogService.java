@@ -22,6 +22,13 @@ import java.util.concurrent.atomic.AtomicLong;
 public class AuditLogService {
 
     // In-memory audit tracking for immediate alerting
+    // TODO: [PRODUCTION-READY & CONCURRENCY] Distributed Brute Force tracking
+    // failure.
+    // In a multi-node environment, 5 consecutive failed logins routed to 5 separate
+    // instances
+    // will register as 1 failure per instance, completely bypassing the Brute Force
+    // alert.
+    // Migrate tracking to Redis or Database.
     private final Map<String, AtomicLong> failedLoginAttempts = new ConcurrentHashMap<>();
     private final Map<String, LocalDateTime> lastFailedAttempt = new ConcurrentHashMap<>();
 
@@ -29,28 +36,28 @@ public class AuditLogService {
      * Log authentication events
      */
     @Async
-    public void logAuthenticationEvent(String username, String eventType, String ipAddress, 
-                                     String userAgent, boolean success, String details) {
+    public void logAuthenticationEvent(String username, String eventType, String ipAddress,
+            String userAgent, boolean success, String details) {
         try {
             if (!success) {
                 // Track failed attempts
                 String key = ipAddress + ":" + username;
                 failedLoginAttempts.computeIfAbsent(key, k -> new AtomicLong(0)).incrementAndGet();
                 lastFailedAttempt.put(key, LocalDateTime.now());
-                
+
                 log.warn("Failed authentication attempt: {} from IP: {} - {}", username, ipAddress, details);
-                
+
                 // Alert on multiple failed attempts
                 if (failedLoginAttempts.get(key).get() >= 5) {
-                    logSecurityEvent("BRUTE_FORCE_ATTEMPT", username, ipAddress, 
-                        "Multiple failed login attempts detected", "HIGH");
+                    logSecurityEvent("BRUTE_FORCE_ATTEMPT", username, ipAddress,
+                            "Multiple failed login attempts detected", "HIGH");
                 }
             } else {
                 // Reset failed attempts on successful login
                 String key = ipAddress + ":" + username;
                 failedLoginAttempts.remove(key);
                 lastFailedAttempt.remove(key);
-                
+
                 log.info("Successful authentication: {} from IP: {}", username, ipAddress);
             }
         } catch (Exception e) {
@@ -63,17 +70,17 @@ public class AuditLogService {
      */
     @Async
     public void logApiAccess(String endpoint, String method, String username, String ipAddress,
-                           String userAgent, int statusCode, long responseTime) {
+            String userAgent, int statusCode, long responseTime) {
         try {
             // Log suspicious activities
             if (statusCode == 401 || statusCode == 403) {
-                log.warn("Unauthorized access attempt: {} {} by {} from {}", 
+                log.warn("Unauthorized access attempt: {} {} by {} from {}",
                         method, endpoint, username != null ? username : "ANONYMOUS", ipAddress);
-                
+
                 logSecurityEvent("UNAUTHORIZED_ACCESS", username, ipAddress,
-                    String.format("Unauthorized access to %s %s", method, endpoint), "MEDIUM");
+                        String.format("Unauthorized access to %s %s", method, endpoint), "MEDIUM");
             }
-            
+
             // Log slow requests
             if (responseTime > 5000) {
                 log.warn("Slow API response: {} {} took {}ms", method, endpoint, responseTime);
@@ -87,8 +94,8 @@ public class AuditLogService {
      * Log security events
      */
     @Async
-    public void logSecurityEvent(String eventType, String username, String ipAddress, 
-                               String details, String severity) {
+    public void logSecurityEvent(String eventType, String username, String ipAddress,
+            String details, String severity) {
         try {
             // Log based on severity
             switch (severity.toUpperCase()) {
@@ -96,7 +103,7 @@ public class AuditLogService {
                 case "MEDIUM" -> log.warn("MEDIUM severity security event: {} - {}", eventType, details);
                 default -> log.info("Security event: {} - {}", eventType, details);
             }
-            
+
             // Additional alerting logic can be added here
             if ("HIGH".equals(severity)) {
                 // In a real application, this could trigger alerts to security team
@@ -111,15 +118,15 @@ public class AuditLogService {
      * Log data access events
      */
     @Async
-    public void logDataAccess(String entityType, Long entityId, String operation, 
-                            String username, String details) {
+    public void logDataAccess(String entityType, Long entityId, String operation,
+            String username, String details) {
         try {
-            log.debug("Data access logged: {} {} on {} ID: {} by {}", 
+            log.debug("Data access logged: {} {} on {} ID: {} by {}",
                     operation, entityType, entityId, username);
-            
+
             // Log sensitive data access
             if ("User".equals(entityType) || "Admin".equals(entityType)) {
-                log.info("Sensitive data access: {} {} on {} ID: {} by {}", 
+                log.info("Sensitive data access: {} {} on {} ID: {} by {}",
                         operation, entityType, entityId, username);
             }
         } catch (Exception e) {
@@ -134,14 +141,14 @@ public class AuditLogService {
     public void logAdminAction(String action, String targetUser, String details, String ipAddress) {
         try {
             String adminUsername = getCurrentUsername();
-            
-            log.warn("Admin action performed: {} by {} on {} - {}", 
+
+            log.warn("Admin action performed: {} by {} on {} - {}",
                     action, adminUsername, targetUser, details);
-            
+
             // All admin actions are considered high priority
             logSecurityEvent("ADMIN_ACTION", adminUsername, ipAddress,
-                String.format("Action: %s, Target: %s, Details: %s", action, targetUser, details),
-                "HIGH");
+                    String.format("Action: %s, Target: %s, Details: %s", action, targetUser, details),
+                    "HIGH");
         } catch (Exception e) {
             log.error("Error logging admin action: {}", e.getMessage());
         }
@@ -155,8 +162,7 @@ public class AuditLogService {
                 "activeFailedAttempts", failedLoginAttempts.size(),
                 "totalFailedAttempts", failedLoginAttempts.values().stream()
                         .mapToLong(AtomicLong::get).sum(),
-                "lastStatisticsUpdate", LocalDateTime.now()
-        );
+                "lastStatisticsUpdate", LocalDateTime.now());
     }
 
     /**
@@ -165,13 +171,12 @@ public class AuditLogService {
     @Async
     public void cleanupOldTrackingData() {
         LocalDateTime cutoff = LocalDateTime.now().minusHours(24);
-        
-        lastFailedAttempt.entrySet().removeIf(entry -> 
-            entry.getValue().isBefore(cutoff));
-        
+
+        lastFailedAttempt.entrySet().removeIf(entry -> entry.getValue().isBefore(cutoff));
+
         // Remove corresponding failed attempts
         failedLoginAttempts.keySet().retainAll(lastFailedAttempt.keySet());
-        
+
         log.info("Cleaned up old security tracking data");
     }
 
@@ -180,8 +185,8 @@ public class AuditLogService {
      */
     public boolean hasSuspiciousActivity(String ipAddress) {
         return failedLoginAttempts.entrySet().stream()
-                .anyMatch(entry -> entry.getKey().startsWith(ipAddress + ":") && 
-                         entry.getValue().get() >= 3);
+                .anyMatch(entry -> entry.getKey().startsWith(ipAddress + ":") &&
+                        entry.getValue().get() >= 3);
     }
 
     /**
@@ -203,12 +208,12 @@ public class AuditLogService {
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
             return xForwardedFor.split(",")[0].trim();
         }
-        
+
         String xRealIp = request.getHeader("X-Real-IP");
         if (xRealIp != null && !xRealIp.isEmpty()) {
             return xRealIp;
         }
-        
+
         return request.getRemoteAddr();
     }
 }
