@@ -43,8 +43,7 @@ application.yml
 .env.*.local
 application-local.yml
 application-local.properties
-application-prod.yml
-application-prod.properties
+application-local.properties
 *.p12
 *.jks
 *.key
@@ -211,3 +210,8 @@ compile_errors.txt
 application*.yml
 application*.yaml
 application*.properties
+
+# BUT allow dev, prod, and test profiles to be tracked
+!application-dev.yml
+!application-prod.yml
+!application-test.yml

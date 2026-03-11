@@ -1,0 +1,143 @@
+# Production Environment Configuration
+
+spring:
+  # Email Configuration (Standard Spring Boot)
+  mail:
+    host: ${EMAIL_HOST}
+    port: ${EMAIL_PORT:587}
+    username: ${EMAIL_USERNAME}
+    password: ${EMAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            trust: "*"
+
+  # Database Configuration for Production
+  datasource:
+    url: ${DATABASE_URL:jdbc:mysql://prod-db-server:3306/car_selling_prod?useSSL=true&requireSSL=true&serverTimezone=UTC}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      connection-timeout: 30000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      leak-detection-threshold: 120000
+
+  # JPA Configuration for Production
+  jpa:
+    hibernate:
+      ddl-auto: validate # Never auto-create schema in production
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        use_sql_comments: false
+        jdbc:
+          batch_size: 50 # Larger batch size for production
+
+  # Cache Configuration for Production
+  cache:
+    type: redis # Use Redis for production caching
+  data:
+    redis:
+      host: ${REDIS_HOST:prod-redis-server}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      timeout: 2000ms
+  security:
+    require-ssl: true
+
+  # GraphQL Configuration (Secure)
+  graphql:
+    schema:
+      introspection:
+        enabled: false
+    graphiql:
+      enabled: false
+
+# Server Configuration for Production
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+  ssl:
+    enabled: ${SSL_ENABLED:false}
+    key-store: ${SSL_KEY_STORE:}
+    key-store-password: ${SSL_KEY_STORE_PASSWORD:}
+    key-store-type: PKCS12
+
+# Security Configuration for Production
+
+# SSL Configuration (if using embedded Tomcat)
+
+# Logging Configuration for Production
+logging:
+  level:
+    root: WARN
+    com.carselling.oldcar: INFO
+    org.springframework.security: WARN
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN
+  file:
+    name: /var/log/sell-the-old-car/application.log
+    max-size: 50MB
+    max-history: 90
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+
+# Management Configuration for Production
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /management
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Application Specific Configuration for Production
+app:
+  # JWT Configuration
+  jwt:
+    secret: ${JWT_SECRET} # Must be provided via environment variable
+    access-token-expiration: ${JWT_ACCESS_EXPIRATION:900000} # 15 minutes
+    refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days
+    
+  # File Upload Configuration
+  upload:
+    path: ${UPLOAD_PATH:/var/uploads/car-selling}
+    
+
+    
+  # Rate Limiting (strict for production)
+  rate-limit:
+    login-attempts: 5
+    lockout-duration: 900000 # 15 minutes
+    otp-requests: 3
+
+# Backblaze B2 Configuration
+  # Backblaze B2 Configuration
+  b2:
+    applicationKeyId: ${B2_APPLICATION_KEY_ID}
+    applicationKey: ${B2_APPLICATION_KEY}
+    bucketId: ${B2_BUCKET_ID}
+    bucketName: ${B2_BUCKET_NAME}
+    cdnDomain: ${B2_CDN_DOMAIN}
