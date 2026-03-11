@@ -1,21 +1,8 @@
 # Production Environment Configuration
 
 spring:
-  # Email Configuration (Standard Spring Boot)
-  mail:
-    host: ${EMAIL_HOST}
-    port: ${EMAIL_PORT:587}
-    username: ${EMAIL_USERNAME}
-    password: ${EMAIL_PASSWORD}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-            required: true
-          ssl:
-            trust: "*"
+  # Mail config is provided via Docker env vars (SPRING_MAIL_*)
+  # No YAML override needed
 
   # Database Configuration for Production
   datasource:
@@ -108,6 +95,9 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  health:
+    mail:
+      enabled: false
   metrics:
     export:
       prometheus:
