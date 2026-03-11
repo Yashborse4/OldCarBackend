@@ -28,7 +28,7 @@ jobs:
           --health-retries 5
 
       opensearch:
-        image: opensearchproject/opensearch:2.12.0
+        image: opensearchproject/opensearch:latest
         env:
           discovery.type: single-node
           plugins.security.disabled: "true"
@@ -67,6 +67,16 @@ jobs:
       with:
         gradle-version: wrapper
 
+    - name: Cache Gradle packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
@@ -89,7 +99,7 @@ jobs:
         
         SPRING_MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
         SPRING_MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }} 
-      run: ./gradlew build --info
+      run: ./gradlew build --parallel --info
 
     - name: Publish Test Results
       uses: actions/upload-artifact@v4

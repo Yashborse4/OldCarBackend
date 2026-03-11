@@ -68,9 +68,9 @@ check_prerequisites() {
 
 # Build images
 build() {
-    log_info "Building Docker images..."
+    log_info "Building Docker images with BuildKit..."
     cd "$SCRIPT_DIR"
-    docker-compose build --no-cache
+    DOCKER_BUILDKIT=1 docker-compose build
     log_success "Build completed"
 }
 
