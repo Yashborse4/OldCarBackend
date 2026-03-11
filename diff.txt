@@ -1,0 +1,53 @@
+diff --git a/docker-compose.yml b/docker-compose.yml
+index 00daff2..b8cfac4 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -240,6 +240,7 @@ services:
+       - plugins.security.disabled=true
+       - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_PASSWORD}
++      
+     ulimits:
+       memlock:
+         soft: -1
+diff --git a/src/main/java/com/carselling/oldcar/config/SwaggerConfig.java b/src/main/java/com/carselling/oldcar/config/SwaggerConfig.java
+index 4e02f65..a703197 100644
+--- a/src/main/java/com/carselling/oldcar/config/SwaggerConfig.java
++++ b/src/main/java/com/carselling/oldcar/config/SwaggerConfig.java
+@@ -24,10 +24,10 @@ public class SwaggerConfig {
+         @Value("${app.swagger.servers.dev-url:http://localhost:9000}")
+         private String devServerUrl;
+ 
+-        @Value("${app.swagger.servers.prod-url:https://api.yashborse.me}")
++        @Value("${app.swagger.servers.prod-url:https://api.wheeldeals.co.in}")
+         private String prodServerUrl;
+ 
+-        @Value("${app.swagger.servers.staging-url:https://staging-api.yashborse.me}")
++        @Value("${app.swagger.servers.staging-url:https://staging-api.wheeldeals.co.in}")
+         private String stagingServerUrl;
+ 
+         @Bean
+@@ -53,8 +53,8 @@ public class SwaggerConfig {
+                                 .version("v2.0")
+                                 .contact(new Contact()
+                                                 .name("Car Selling Platform Team")
+-                                                .email("support@yashborse.me")
+-                                                .url("https://yashborse.me"))
++                                                .email("support@wheeldeals.co.in")
++                                                .url("https://wheeldeals.co.in"))
+                                 .license(new License()
+                                                 .name("MIT License")
+                                                 .url("https://opensource.org/licenses/MIT"));
+diff --git a/src/main/java/com/carselling/oldcar/security/SecurityConfig.java b/src/main/java/com/carselling/oldcar/security/SecurityConfig.java
+index d95efb3..97b1c06 100644
+--- a/src/main/java/com/carselling/oldcar/security/SecurityConfig.java
++++ b/src/main/java/com/carselling/oldcar/security/SecurityConfig.java
+@@ -38,7 +38,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
+ @EnableMethodSecurity(prePostEnabled = true)
+ public class SecurityConfig {
+ 
+-    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080,https://*.yashborse.me,https://yashborse.me}")
++    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080,https://*.wheeldeals.co.in,https://wheeldeals.co.in}")
+     private String corsAllowedOrigins;
+ 
+     @Value("${app.cors.allowed-methods:GET,POST,PUT,DELETE,PATCH,OPTIONS}")

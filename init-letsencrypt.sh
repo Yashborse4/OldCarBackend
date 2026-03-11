@@ -5,10 +5,10 @@
 # Run this ONCE on your VPS to bootstrap HTTPS for your domain.
 # ============================================================================
 
-domains=(yourdomain.com api.yourdomain.com)
+domains=(wheeldeals.co.in api.wheeldeals.co.in)
 rsa_key_size=4096
 data_path="./docker/nginx/certbot"
-email="your-email@example.com" # Adding a valid address is strongly recommended
+email="support@wheeldeals.co.in" # Adding a valid address is strongly recommended
 staging=0 # Set to 1 if you're testing your setup to avoid hitting request limits
 
 if [ -d "$data_path" ]; then
