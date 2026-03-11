@@ -78,9 +78,9 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:-car_password}
 
       # Redis Configuration
-      - SPRING_REDIS_HOST=redis
-      - SPRING_REDIS_PORT=6379
-      - SPRING_REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-}
 
       # Server Configuration
       - SERVER_PORT=8080
@@ -107,11 +107,16 @@ services:
       - OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME:-admin}
       - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
 
-      # Email Configuration
-      - EMAIL_HOST=${EMAIL_HOST}
-      - EMAIL_PORT=${EMAIL_PORT:-587}
-      - EMAIL_USERNAME=${EMAIL_USERNAME}
-      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      # Spring Profile
+      - SPRING_PROFILES_ACTIVE=prod
+
+      # Email Configuration (Spring Boot mail autoconfiguration)
+      - SPRING_MAIL_HOST=${EMAIL_HOST:-smtp.gmail.com}
+      - SPRING_MAIL_PORT=${EMAIL_PORT:-587}
+      - SPRING_MAIL_USERNAME=${EMAIL_USERNAME}
+      - SPRING_MAIL_PASSWORD=${EMAIL_PASSWORD}
+      - SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true
+      - SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true
       - EMAIL_FROM=${EMAIL_FROM}
     volumes:
       - uploads-data:/app/uploads
@@ -240,7 +245,7 @@ services:
       - plugins.security.disabled=true
       - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_PASSWORD}
-      
+
     ulimits:
       memlock:
         soft: -1
