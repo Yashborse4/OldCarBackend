@@ -87,6 +87,7 @@ node_modules/
 
 # Package files
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.ear
 *.zip
