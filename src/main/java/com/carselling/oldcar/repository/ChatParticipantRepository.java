@@ -195,6 +195,14 @@ public interface ChatParticipantRepository extends JpaRepository<ChatParticipant
        List<ChatParticipant> findByChatRoomIdAndIsActiveTrue(@Param("chatRoomId") Long chatRoomId);
 
        /**
+        * Find active participants by chat room ID with pagination
+        */
+       @Query("SELECT p FROM ChatParticipant p " +
+                     "WHERE p.chatRoom.id = :chatRoomId " +
+                     "AND p.isActive = true")
+       Page<ChatParticipant> findByChatRoomIdAndIsActiveTrue(@Param("chatRoomId") Long chatRoomId, Pageable pageable);
+
+       /**
         * Find active participant by chat room ID and user ID
         */
        @Query("SELECT p FROM ChatParticipant p " +

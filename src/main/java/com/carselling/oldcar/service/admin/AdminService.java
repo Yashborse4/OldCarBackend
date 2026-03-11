@@ -300,6 +300,7 @@ public class AdminService {
      * Get dashboard summary (admin only)
      */
     @Transactional(readOnly = true)
+    @org.springframework.cache.annotation.Cacheable(value = "adminDashboard", key = "'global'")
     public com.carselling.oldcar.dto.admin.AdminDashboardResponse getDashboardResponse() {
         log.info("Admin retrieving dashboard summary");
 
@@ -340,6 +341,7 @@ public class AdminService {
      * Get system statistics (admin only)
      */
     @Transactional(readOnly = true)
+    @org.springframework.cache.annotation.Cacheable(value = "systemStatistics", key = "'global'")
     public SystemStatistics getSystemStatistics() {
         log.info("Admin retrieving system statistics");
 
@@ -427,6 +429,9 @@ public class AdminService {
 
         switch (action.toUpperCase()) {
             case "BAN" -> {
+                // TODO(SeniorEng): Performance - Executing updates in a loop causes N+1
+                // problems. Refactor to use a single JPA @Modifying query (e.g., UPDATE User u
+                // SET u.isActive = false WHERE u.id IN :ids).
                 for (Long userId : userIds) {
                     try {
                         if (!userId.equals(currentAdmin.getId())) {

@@ -119,4 +119,26 @@ public class InventoryService {
             throw new IllegalArgumentException("Invalid status: " + newStatus);
         }
     }
+
+    /**
+     * Mark a car as sold with a final sold price
+     */
+    @Transactional
+    public void markCarAsSold(Long carId, Long dealerId, java.math.BigDecimal soldPrice) {
+        Car car = carRepository.findById(carId)
+                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", carId));
+
+        if (!car.isOwnedBy(dealerId)) {
+            throw new UnauthorizedActionException("You do not own this car");
+        }
+
+        log.info("Marking car {} as SOLD with price {}", carId, soldPrice);
+
+        car.setStatus(CarStatus.SOLD);
+        car.setIsActive(false);
+        car.setIsSold(true);
+        car.setPrice(soldPrice);
+
+        carRepository.save(car);
+    }
 }

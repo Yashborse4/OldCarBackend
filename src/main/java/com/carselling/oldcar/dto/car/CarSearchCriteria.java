@@ -36,6 +36,7 @@ public class CarSearchCriteria {
     private Long minMileage;
     private Long maxMileage;
     private String dealerId;
+    private Integer numberOfOwners;
     private String sortBy;
     private String sortDirection;
 
@@ -43,5 +44,9 @@ public class CarSearchCriteria {
      * Optional free-text query for brand/model/city/year search.
      * Mapped from the `query` request parameter.
      */
+    private Double latitude;
+    private Double longitude;
+    private Double radiusKm;
+
     private String query;
 }

@@ -50,6 +50,12 @@ public class UserResponse {
     private Double longitude;
     private Boolean onboardingCompleted;
 
+    // Trust Signal fields
+    private Double dealerRating;
+    private Integer dealerReviewCount;
+    private String responseTime;
+    private Long activeListingsCount;
+
     // Helper method
     public String getDisplayName() {
         if (firstName != null && lastName != null) {

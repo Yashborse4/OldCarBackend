@@ -30,12 +30,13 @@ import java.util.List;
         @Index(name = "idx_car_created_at", columnList = "created_at"),
         @Index(name = "idx_car_featured", columnList = "is_featured"),
         @Index(name = "idx_car_retry", columnList = "status, next_retry_at")
-})
+}, uniqueConstraints = @UniqueConstraint(columnNames = { "owner_id", "idempotency_key" }))
 @SQLRestriction("status <> 'DELETED'")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(com.carselling.oldcar.model.listener.CarAuditListener.class)
 public class Car {
 
     @Id
@@ -107,6 +108,10 @@ public class Car {
     @Builder.Default
     private Boolean isApproved = false; // For moderation
 
+    @Column(name = "is_inspected")
+    @Builder.Default
+    private Boolean isInspected = false; // For "Inspection Verified" badge
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20)
     @Builder.Default
@@ -164,6 +169,14 @@ public class Car {
     @Size(max = 20, message = "Registration number must not exceed 20 characters")
     @Column(name = "registration_number", length = 20)
     private String registrationNumber;
+
+    @Size(max = 50, message = "Category must not exceed 50 characters")
+    @Column(name = "category", length = 50)
+    private String category;
+
+    @Size(max = 50, message = "Registration type must not exceed 50 characters")
+    @Column(name = "registration_type", length = 50)
+    private String registrationType;
 
     @Column(name = "number_of_owners")
     @Min(value = 1, message = "Number of owners must be at least 1")
@@ -247,6 +260,56 @@ public class Car {
     @Column(name = "retry_count")
     @Builder.Default
     private Integer retryCount = 0;
+
+    // --- New fields for UI Redesign ---
+
+    @Column(name = "registration_month_year")
+    private String registrationMonthYear; // e.g., "Mar 2021"
+
+    @Column(name = "engine_capacity")
+    private String engineCapacity; // e.g., "1197cc"
+
+    @Column(name = "ownership_status")
+    private String ownership; // e.g., "1st"
+
+    @Column(name = "make_month_year")
+    private String makeMonthYear; // e.g., "Jan 2021"
+
+    @Column(name = "spare_key")
+    private String spareKey; // e.g., "No" or "Yes"
+
+    @Column(name = "discount_amount", precision = 11, scale = 2)
+    private BigDecimal discountAmount;
+
+    @Column(name = "other_charges", precision = 11, scale = 2)
+    private BigDecimal otherCharges;
+
+    @Builder.Default
+    @Column(name = "zero_worry_max")
+    private Boolean zeroWorryMax = false;
+
+    @Builder.Default
+    @Column(name = "lifetime_warranty")
+    private Boolean lifetimeWarranty = false;
+
+    @Builder.Default
+    @Column(name = "return_days")
+    private Integer returnDays = 30;
+
+    @Column(name = "emission_standard")
+    private String emissionStandard; // e.g., "BSVI"
+
+    @Column(name = "boot_space")
+    private Integer bootSpace; // in litres
+
+    @Column(name = "cylinders")
+    private Integer cylinders;
+
+    @Column(name = "max_power")
+    private String maxPower; // e.g., "83 bhp"
+
+    @Column(name = "seating_capacity")
+    private Integer seatingCapacity;
 
     // Helper methods for backward compatibility
     public User getUser() {
@@ -361,5 +424,18 @@ public class Car {
         if (this.mediaStatus == null) {
             this.mediaStatus = MediaStatus.INIT;
         }
+    }
+
+    // --- Transient fields for Auditing ---
+    @Transient
+    private BigDecimal originalPrice;
+
+    @Transient
+    private Integer originalMileage;
+
+    @PostLoad
+    public void storeOriginalState() {
+        this.originalPrice = this.price;
+        this.originalMileage = this.mileage;
     }
 }

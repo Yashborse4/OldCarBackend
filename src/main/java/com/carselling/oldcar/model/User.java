@@ -153,6 +153,10 @@ public class User {
     @Builder.Default
     private Integer dealerReviewCount = 124;
 
+    @Column(name = "response_time", length = 50)
+    @Builder.Default
+    private String responseTime = "Under 2 hours";
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

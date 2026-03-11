@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @Data
 @Builder
 public class VehicleSummaryDto {
-    
+
     private Long id;
     private String make;
     private String model;
@@ -23,11 +23,12 @@ public class VehicleSummaryDto {
     private Boolean isAvailable;
     private Boolean isFeatured;
     private Integer viewCount;
-    
+    private String status;
+
     // Constructor
     public VehicleSummaryDto(Long id, String make, String model, Integer year, BigDecimal price,
-                           Integer mileage, String primaryImage, String location, Boolean isAvailable,
-                           Boolean isFeatured, Integer viewCount) {
+            Integer mileage, String primaryImage, String location, Boolean isAvailable,
+            Boolean isFeatured, Integer viewCount, String status) {
         this.id = id;
         this.make = make;
         this.model = model;
@@ -39,14 +40,16 @@ public class VehicleSummaryDto {
         this.isAvailable = isAvailable;
         this.isFeatured = isFeatured;
         this.viewCount = viewCount;
+        this.status = status;
     }
-    
+
     public String getVehicleTitle() {
         return year + " " + make + " " + model;
     }
-    
+
     public String getFormattedPrice() {
-        if (price == null) return "N/A";
+        if (price == null)
+            return "N/A";
         return "$" + String.format("%,.0f", price);
     }
 }

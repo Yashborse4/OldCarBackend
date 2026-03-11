@@ -13,6 +13,14 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 /**
  * In-memory cache fallback service for when Redis is unavailable.
  * Provides thread-safe operations with TTL support and memory management.
+ *
+ * // TODO: [PRODUCTION-READY IN MULTI-INSTANCE] This fallback cache stores
+ * state locally in the JVM map.
+ * // In a multi-node/clustered setup, changes on one node will not be reflected
+ * on others,
+ * // potentially causing phantom data reads and cache inconsistencies. Evaluate
+ * cluster-aware fallbacks
+ * // (like a secondary database table or a highly available cache cluster).
  */
 @Service
 @Slf4j

@@ -67,6 +67,24 @@ public class ChatService {
     public Page<ChatRoomDto> getUserChats(Long userId, Pageable pageable) {
         log.info("Getting chats for user ID: {}", userId);
 
+        // Optimization: Cache first page of user chats
+        // We only cache page 0 as it's the most high-frequency read interaction
+        if (pageable.getPageNumber() == 0) {
+            return getCachedUserChats(userId, pageable);
+        }
+
+        return fetchUserChatsFromDb(userId, pageable);
+    }
+
+    /**
+     * Cacheable method for recent user chats (Page 0)
+     */
+    @org.springframework.cache.annotation.Cacheable(value = "userChats", key = "#userId")
+    public Page<ChatRoomDto> getCachedUserChats(Long userId, Pageable pageable) {
+        return fetchUserChatsFromDb(userId, pageable);
+    }
+
+    private Page<ChatRoomDto> fetchUserChatsFromDb(Long userId, Pageable pageable) {
         // 1. Fetch Chat Rooms (Joined with Participants & Car via EntityGraph)
         Page<ChatRoom> chatRoomsPage = chatRoomRepository.findChatRoomsWithParticipants(userId, pageable);
 
@@ -228,6 +246,11 @@ public class ChatService {
         addParticipant(chatRoom, otherUser, ChatParticipant.ParticipantRole.MEMBER);
 
         log.info("Created private chat ID: {}", chatRoom.getId());
+
+        // Evict userChats cache
+        evictUserChatsCache(currentUser.getId());
+        evictUserChatsCache(otherUser.getId());
+
         return convertToRoomDto(chatRoom, currentUserId);
     }
 
@@ -265,6 +288,10 @@ public class ChatService {
         }
 
         log.info("Created group chat ID: {}", chatRoom.getId());
+
+        // Evict userChats cache for all participants
+        evictUserChatsCacheForRoom(chatRoom);
+
         return convertToRoomDto(chatRoom, creatorId);
     }
 
@@ -361,6 +388,13 @@ public class ChatService {
         }
 
         log.info("Created car inquiry chat ID: {}", chatRoom.getId());
+
+        // Caches will be evicted via sendMessage if message exists, else we evict
+        // explicitly
+        if (request.getMessage() == null || request.getMessage().trim().isEmpty()) {
+            evictUserChatsCacheForRoom(chatRoom);
+        }
+
         return convertToRoomDto(chatRoom, buyerId);
     }
 
@@ -420,6 +454,10 @@ public class ChatService {
             }
 
             chatRoom = chatRoomRepository.save(chatRoom);
+
+            // Status change visible in inbox, evict the caches
+            evictUserChatsCacheForRoom(chatRoom);
+
             return convertToRoomDto(chatRoom, dealerId);
         } catch (IllegalArgumentException e) {
             throw new BusinessException("Invalid inquiry status");
@@ -584,6 +622,9 @@ public class ChatService {
 
         ChatMessageDto messageDto = convertToMessageDto(message);
 
+        // Evict chat caches for all participants
+        evictUserChatsCacheForRoom(chatRoom);
+
         // Send real-time message
         sendRealTimeMessage(chatRoom, messageDto);
 
@@ -597,6 +638,19 @@ public class ChatService {
     @org.springframework.cache.annotation.CacheEvict(value = "recentChatMessages", key = "#chatId")
     public void evictRecentMessagesCache(Long chatId) {
         log.debug("Evicting recent messages cache for chat: {}", chatId);
+    }
+
+    @org.springframework.cache.annotation.CacheEvict(value = "userChats", key = "#userId")
+    public void evictUserChatsCache(Long userId) {
+        log.debug("Evicting user chats cache for user: {}", userId);
+    }
+
+    private void evictUserChatsCacheForRoom(ChatRoom chatRoom) {
+        if (chatRoom.getParticipants() != null) {
+            chatRoom.getParticipants().stream()
+                    .filter(ChatParticipant::isActive)
+                    .forEach(participant -> evictUserChatsCache(participant.getUser().getId()));
+        }
     }
 
     /**
@@ -702,6 +756,9 @@ public class ChatService {
 
         chatAuthorizationService.assertCanViewChat(userId, chatId);
 
+        // TODO(SeniorEng): Performance/Scale - DB LIKE queries for message search will
+        // degrade performance at scale. Migrate chat search to a dedicated Full-Text
+        // Search engine (e.g., Elasticsearch).
         Page<ChatMessage> messages = chatMessageRepository
                 .searchInChat(chatId, query, pageable);
 
@@ -709,11 +766,11 @@ public class ChatService {
     }
 
     /**
-     * Get chat participants
+     * Get all chat participants (unpaginated - for internal use)
      */
     @Transactional(readOnly = true)
-    public List<ChatParticipantDto> getChatParticipants(Long chatId, Long userId) {
-        log.info("Getting participants for chat ID: {} by user ID: {}", chatId, userId);
+    public List<ChatParticipantDto> getAllChatParticipants(Long chatId, Long userId) {
+        log.info("Getting all participants for chat ID: {} by user ID: {}", chatId, userId);
 
         chatAuthorizationService.assertCanViewChat(userId, chatId);
 
@@ -723,6 +780,21 @@ public class ChatService {
         return participants.stream()
                 .map(this::convertToParticipantDto)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Get chat participants (paginated)
+     */
+    @Transactional(readOnly = true)
+    public Page<ChatParticipantDto> getChatParticipants(Long chatId, Long userId, Pageable pageable) {
+        log.info("Getting paginated participants for chat ID: {} by user ID: {}", chatId, userId);
+
+        chatAuthorizationService.assertCanViewChat(userId, chatId);
+
+        Page<ChatParticipant> participants = chatParticipantRepository
+                .findByChatRoomIdAndIsActiveTrue(chatId, pageable);
+
+        return participants.map(this::convertToParticipantDto);
     }
 
     /**
@@ -747,8 +819,12 @@ public class ChatService {
             if (!isAlreadyParticipant) {
                 addParticipant(chatRoom, user, ChatParticipant.ParticipantRole.MEMBER);
 
-                // Send system message
+                // Send system message (which also triggers cache eviction)
                 sendSystemMessage(chatRoom, user.getDisplayName() + " joined the chat");
+                // Fallback direct eviction for newly added participants immediately and the
+                // admin
+                evictUserChatsCache(userId);
+                evictUserChatsCache(adminUserId);
             }
         }
 
@@ -773,7 +849,11 @@ public class ChatService {
         participantToRemove.setLeftAt(LocalDateTime.now());
         chatParticipantRepository.save(participantToRemove);
 
-        // Send system message
+        // Evict cache for removed participant
+        evictUserChatsCache(participantUserId);
+
+        // Send system message (this avoids eviction for removed participant since they
+        // are no longer active, but evicts for the rest)
         sendSystemMessage(chatRoom, participantToRemove.getUser().getDisplayName() + " left the chat");
 
         log.info("Participant removed successfully");
@@ -797,24 +877,28 @@ public class ChatService {
         participant.setLeftAt(LocalDateTime.now());
         chatParticipantRepository.save(participant);
 
+        // Evict cache for the participant who just left
+        evictUserChatsCache(userId);
+
         // Check if there are any remaining active participants
         long activeParticipantCount = chatParticipantRepository.countActiveByChatRoomId(chatId);
-        
+
         if (activeParticipantCount == 0) {
             // No active participants left, delete the group and all its data
             log.info("No active participants left in chat ID: {}. Deleting group and all messages.", chatId);
-            
+
             // Delete all messages in the chat room
-            List<ChatMessage> messages = chatMessageRepository.findByChatRoomIdAndIsDeletedFalseOrderByCreatedAtDesc(chatId, Pageable.unpaged()).getContent();
+            List<ChatMessage> messages = chatMessageRepository
+                    .findByChatRoomIdAndIsDeletedFalseOrderByCreatedAtDesc(chatId, Pageable.unpaged()).getContent();
             for (ChatMessage message : messages) {
                 message.setDeleted(true);
                 chatMessageRepository.save(message);
             }
             // Or hard delete: chatMessageRepository.deleteAll(messages);
-            
+
             // Delete the chat room
             chatRoomRepository.delete(chatRoom);
-            
+
             log.info("Group chat ID: {} and all associated data have been deleted", chatId);
         } else {
             // Send system message only if group still has participants
@@ -964,12 +1048,12 @@ public class ChatService {
     }
 
     /**
-     * Search dealers by username (for invites)
+     * Search dealers by username (for invites - paginated)
      */
     @Transactional(readOnly = true)
-    public List<ChatParticipantDto> searchDealers(String query) {
-        log.info("Searching dealers for query: '{}'", query);
-        return userRepository.searchDealers(query).stream()
+    public Page<ChatParticipantDto> searchDealers(String query, Pageable pageable) {
+        log.info("Searching strictly dealers for query: '{}' with pageable: {}", query, pageable);
+        return userRepository.searchUsersByRole(query, Role.DEALER, pageable)
                 .map(user -> ChatParticipantDto.builder()
                         .user(ChatParticipantDto.UserInfo.builder()
                                 .id(user.getId())
@@ -979,10 +1063,8 @@ public class ChatService {
                                 .systemRole(user.getRole().name())
                                 .phoneNumber(user.getPhoneNumber())
                                 .build())
-                        .role(ChatParticipant.ParticipantRole.MEMBER.name())
                         .isActive(true)
-                        .build())
-                .collect(Collectors.toList());
+                        .build());
     }
 
     // Private helper methods
@@ -1060,6 +1142,10 @@ public class ChatService {
         systemMessage = chatMessageRepository.save(systemMessage);
 
         ChatMessageDto messageDto = convertToMessageDto(systemMessage);
+
+        // Evict userChats cache for participants since new message arrives
+        evictUserChatsCacheForRoom(chatRoom);
+
         sendRealTimeMessage(chatRoom, messageDto);
     }
 
@@ -1324,8 +1410,12 @@ public class ChatService {
 
     // Additional public methods required by controller
 
-    public List<ChatParticipantDto> getChatRoomParticipants(Long chatId, Long userId) {
-        return getChatParticipants(chatId, userId);
+    public List<ChatParticipantDto> getAllChatRoomParticipants(Long chatId, Long userId) {
+        return getAllChatParticipants(chatId, userId);
+    }
+
+    public Page<ChatParticipantDto> getChatRoomParticipants(Long chatId, Long userId, Pageable pageable) {
+        return getChatParticipants(chatId, userId, pageable);
     }
 
     public Page<ChatMessageDto> searchMessagesInChatRoom(Long chatId, String query, Long userId, Pageable pageable) {
@@ -1405,13 +1495,12 @@ public class ChatService {
     }
 
     /**
-     * Search users (broad search)
+     * Search users (broad search - paginated)
      */
     @Transactional(readOnly = true)
-    public List<ChatParticipantDto> searchUsers(String query) {
-        log.info("Searching users for query: '{}'", query);
-        List<User> users = userRepository.searchUsers(query);
-        return users.stream()
+    public Page<ChatParticipantDto> searchUsers(String query, Pageable pageable) {
+        log.info("Searching users for query: '{}' with pageable: {}", query, pageable);
+        return userRepository.searchUsers(query, pageable)
                 .map(user -> ChatParticipantDto.builder()
                         .user(ChatParticipantDto.UserInfo.builder()
                                 .id(user.getId())
@@ -1421,10 +1510,8 @@ public class ChatService {
                                 .systemRole(user.getRole().name())
                                 .phoneNumber(user.getPhoneNumber())
                                 .build())
-                        .role("MEMBER") // Default role for search results
                         .isActive(true)
-                        .build())
-                .collect(Collectors.toList());
+                        .build());
     }
 
     // ========================= INVITE LINKS =========================

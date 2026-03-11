@@ -1,6 +1,6 @@
 package com.carselling.oldcar.scheduler;
 
-import com.carselling.oldcar.service.AdvancedSearchService;
+import com.carselling.oldcar.service.search.AdvancedSearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

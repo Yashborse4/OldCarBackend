@@ -30,7 +30,15 @@ public class CarSearchDtos {
         private Integer maxYear;
         private BigDecimal minPrice;
         private BigDecimal maxPrice;
+        private Long minMileage;
+        private Long maxMileage;
+        private String usage; // corresponds to 'condition' from frontend
+        private String category; // corresponds to 'bodyType' from frontend
+        private Integer numberOfOwners;
         private Boolean verifiedDealer;
+        private Double latitude;
+        private Double longitude;
+        private Double radiusKm;
 
         // Pagination & Sorting
         @Builder.Default
@@ -65,6 +73,7 @@ public class CarSearchDtos {
         private LocalDateTime createdAt;
         private String dealerId;
         private Boolean isPromoted;
+        private Double distanceKm;
 
         public static CarSearchHitDto fromDocument(VehicleSearchDocument doc) {
             return CarSearchHitDto.builder()
@@ -80,14 +89,15 @@ public class CarSearchDtos {
                     .transmission(doc.getTransmission())
                     .verifiedDealer(doc.isDealerVerified())
                     .thumbnailUrl(doc.getThumbnailImageUrl())
-                    // Fields not present in VehicleSearchDocument, setting to null/defaults
-                    .sellerType(null)
-                    .ownerName(null)
-                    .condition("Used") // Defaulting to Used as safe assumption for old car platform
+                    // Fields from document
+                    .sellerType(doc.isDealerVerified() ? "DEALER" : "USER")
+                    .ownerName(null) // Not typically in search document for privacy
+                    .condition(doc.getUsage() != null ? doc.getUsage() : "Used")
                     .views(doc.getViewCount())
                     .createdAt(doc.getCreatedAt() != null
                             ? LocalDateTime.ofInstant(doc.getCreatedAt(), java.time.ZoneId.systemDefault())
                             : null)
+                    .distanceKm(doc.getDistanceKm())
                     .build();
         }
     }

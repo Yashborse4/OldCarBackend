@@ -2,8 +2,6 @@
 
 package com.carselling.oldcar.b2;
 
-
-
 import com.carselling.oldcar.service.file.FileValidationService;
 
 import com.carselling.oldcar.dto.file.FileUploadResponse;
@@ -32,8 +30,6 @@ import org.springframework.stereotype.Service;
 
 import org.springframework.web.multipart.MultipartFile;
 
-
-
 import java.io.IOException;
 
 import java.net.URLEncoder;
@@ -50,8 +46,6 @@ import java.util.Optional;
 
 import java.util.UUID;
 
-
-
 @Service
 
 @RequiredArgsConstructor
@@ -59,8 +53,6 @@ import java.util.UUID;
 @Slf4j
 
 public class B2FileService {
-
-
 
     private final B2Client b2Client;
 
@@ -70,29 +62,19 @@ public class B2FileService {
 
     private final FileValidationService fileValidationService;
 
-
-
     private final java.util.concurrent.Executor taskExecutor;
-
-
 
     public FileUploadResponse uploadFile(MultipartFile file, String folder, User uploader, ResourceType ownerType,
 
             Long ownerId) throws IOException {
 
-
-
         // 0. Validate File
 
         fileValidationService.validateFile(file);
 
-
-
         // 1. Calculate Checksum (SHA-1) for Idempotency
 
         String fileHash = calculateSha1(file);
-
-
 
         // 2. Check for Duplicate (Idempotency)
 
@@ -130,8 +112,6 @@ public class B2FileService {
 
         }
 
-
-
         String originalFileName = file.getOriginalFilename();
 
         String uniqueFileName = generateUniqueFileName(originalFileName, uploader.getId());
@@ -139,8 +119,6 @@ public class B2FileService {
         String fullPath;
 
         String b2FileName;
-
-
 
         if (folder != null && folder.startsWith("chat/")) {
 
@@ -156,8 +134,6 @@ public class B2FileService {
 
             String month = LocalDateTime.now().format(DateTimeFormatter.ofPattern("MM"));
 
-
-
             // chat/{chatId}/{year}/{month}/chat_{chatId}_user_{userId}_{timestamp}_{originalName}
 
             // I'll stick to a safe version of originalName or uuid to ensure uniqueness and
@@ -168,21 +144,15 @@ public class B2FileService {
 
                     : "file";
 
-
-
             uniqueFileName = String.format("chat_%s_user_%d_%s_%s", chatIdStr, uploader.getId(), timestamp,
 
                     safeOriginalName);
-
-
 
             // Construct path: chat/{chatId}/{year}/{month}/{fileName}
 
             fullPath = String.format("chat/%s/%s/%s/%s", chatIdStr, year, month, uniqueFileName);
 
             b2FileName = fullPath;
-
-
 
         } else {
 
@@ -196,11 +166,7 @@ public class B2FileService {
 
         }
 
-
-
         log.info("Uploading file to B2: {}", fullPath);
-
-
 
         // Build ownership metadata for B2 tagging
 
@@ -218,8 +184,6 @@ public class B2FileService {
 
         fileMetadata.put("upload-timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
 
-
-
         B2Client.UploadFileResponse b2Response;
 
         try {
@@ -234,8 +198,6 @@ public class B2FileService {
 
         }
 
-
-
         // Construct CDN URL
 
         // User Requirement: "domain name + file name" directly hit Cloudflare.
@@ -243,8 +205,6 @@ public class B2FileService {
         // Assuming Cloudflare is configured to map <cdnDomain>/path -> <b2Bucket>/path
 
         // So we strictly use cdnDomain + "/" + fullPath (which is the B2 file name/key)
-
-
 
         // Ensure no double slashes if domain has trailing slash
 
@@ -256,8 +216,6 @@ public class B2FileService {
 
         }
 
-
-
         // fullPath is "folder/filename"
 
         // b2FileName was encoded, but for the public URL we want the logical path
@@ -268,11 +226,7 @@ public class B2FileService {
 
         // "domain.com/cars/1/foo.jpg")
 
-
-
         String publicUrl = domain + "/" + fullPath;
-
-
 
         // Determine Access Type
 
@@ -287,8 +241,6 @@ public class B2FileService {
             accessType = AccessType.PRIVATE; // Default safe
 
         }
-
-
 
         // Save metadata
 
@@ -318,11 +270,7 @@ public class B2FileService {
 
                 .build();
 
-
-
         uploadedFileRepository.save(uploadedFile);
-
-
 
         return FileUploadResponse.builder()
 
@@ -346,15 +294,11 @@ public class B2FileService {
 
     }
 
-
-
     public FileUploadResponse uploadFile(byte[] content, String fileName, String contentType, String folder,
 
             User uploader, ResourceType ownerType, Long ownerId) {
 
         String fileHash = calculateSha1(content);
-
-
 
         // Idempotency check
 
@@ -388,15 +332,11 @@ public class B2FileService {
 
         }
 
-
-
         String uniqueFileName = generateUniqueFileName(fileName, uploader.getId());
 
         String fullPath = folder + "/" + uniqueFileName;
 
         String b2FileName = fullPath;
-
-
 
         // Metadata
 
@@ -414,8 +354,6 @@ public class B2FileService {
 
         fileMetadata.put("upload-timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
 
-
-
         B2Client.UploadFileResponse b2Response;
 
         try {
@@ -428,8 +366,6 @@ public class B2FileService {
 
         }
 
-
-
         String domain = properties.getCdnDomain();
 
         if (domain.endsWith("/")) {
@@ -440,15 +376,11 @@ public class B2FileService {
 
         String publicUrl = domain + "/" + fullPath;
 
-
-
         AccessType accessType = (ownerType == ResourceType.CHAT_ATTACHMENT || ownerType == ResourceType.OTHER)
 
                 ? AccessType.PRIVATE
 
                 : AccessType.PUBLIC;
-
-
 
         UploadedFile uploadedFile = UploadedFile.builder()
 
@@ -476,11 +408,7 @@ public class B2FileService {
 
                 .build();
 
-
-
         uploadedFileRepository.save(uploadedFile);
-
-
 
         return FileUploadResponse.builder()
 
@@ -504,13 +432,9 @@ public class B2FileService {
 
     }
 
-
-
     public List<FileUploadResponse> uploadMultipleFiles(List<MultipartFile> files, String folder,
 
             User uploader, ResourceType ownerType, Long ownerId) {
-
-
 
         List<java.util.concurrent.CompletableFuture<FileUploadResponse>> futures = files.stream()
 
@@ -540,8 +464,6 @@ public class B2FileService {
 
                 .collect(java.util.stream.Collectors.toList());
 
-
-
         return futures.stream()
 
                 .map(java.util.concurrent.CompletableFuture::join)
@@ -550,19 +472,13 @@ public class B2FileService {
 
     }
 
-
-
     public TemporaryFile uploadTempFile(MultipartFile file, User uploader, Long carId) throws IOException {
 
         fileValidationService.validateFile(file);
 
-
-
         String originalFileName = file.getOriginalFilename();
 
         String fileHash = calculateSha1(file);
-
-
 
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
 
@@ -578,11 +494,7 @@ public class B2FileService {
 
         String uniqueFileName = String.format("%d_%s_%s.%s", uploader.getId(), timestamp, uuid, extension);
 
-
-
         String b2FileName = "temp/" + uniqueFileName;
-
-
 
         java.util.Map<String, String> fileMetadata = new java.util.HashMap<>();
 
@@ -593,8 +505,6 @@ public class B2FileService {
             fileMetadata.put("car-id", String.valueOf(carId));
 
         }
-
-
 
         B2Client.UploadFileResponse b2Response;
 
@@ -608,8 +518,6 @@ public class B2FileService {
 
         }
 
-
-
         String domain = properties.getCdnDomain();
 
         if (domain.endsWith("/")) {
@@ -619,8 +527,6 @@ public class B2FileService {
         }
 
         String publicUrl = domain + "/" + b2FileName;
-
-
 
         TemporaryFile tempFile = TemporaryFile.builder()
 
@@ -644,13 +550,9 @@ public class B2FileService {
 
                 .build();
 
-
-
         return temporaryFileRepository.save(tempFile);
 
     }
-
-
 
     private String calculateSha1(byte[] content) {
 
@@ -683,8 +585,6 @@ public class B2FileService {
         }
 
     }
-
-
 
     private String calculateSha1(MultipartFile file) throws IOException {
 
@@ -732,15 +632,11 @@ public class B2FileService {
 
     }
 
-
-
     public boolean deleteFileByUrl(String fileUrl) {
 
         return deleteFile(fileUrl);
 
     }
-
-
 
     public boolean deleteFile(String fileUrl) {
 
@@ -749,8 +645,6 @@ public class B2FileService {
             return false;
 
         }
-
-
 
         Optional<UploadedFile> fileOpt = uploadedFileRepository.findByFileUrl(fileUrl);
 
@@ -780,8 +674,6 @@ public class B2FileService {
 
                     }
 
-
-
                     try {
 
                         // Decode just in case URL encoding messes up finding the file
@@ -803,8 +695,6 @@ public class B2FileService {
                     b2Client.deleteFileByUrl(fileUrl);
 
                 }
-
-
 
                 uploadedFileRepository.delete(file);
 
@@ -842,12 +732,10 @@ public class B2FileService {
 
     }
 
-
-
     /**
-
+     * 
      * Delete an entire folder/prefix
-
+     * 
      */
 
     public void deleteFolder(String folderPath) {
@@ -866,15 +754,11 @@ public class B2FileService {
 
     }
 
-
-
     // ============================================================================================
 
     // DIRECT UPLOAD METHODS (Serverless FLow)
 
     // ============================================================================================
-
-
 
     @lombok.Data
 
@@ -892,11 +776,7 @@ public class B2FileService {
 
     }
 
-
-
     private final TemporaryFileRepository temporaryFileRepository;
-
-
 
     public DirectUploadInitResponse initDirectUpload(String originalFileName, String folder, User uploader) {
 
@@ -942,13 +822,9 @@ public class B2FileService {
 
         }
 
-
-
         String uniqueFileName = generateUniqueFileName(originalFileName, uploader.getId());
 
         String fullPath = tempFolder + "/" + uniqueFileName;
-
-
 
         // B2 requires the file name to be URL-encoded for the upload request header if
 
@@ -956,13 +832,9 @@ public class B2FileService {
 
         String b2FileName = URLEncoder.encode(fullPath, StandardCharsets.UTF_8).replace("+", "%20");
 
-
-
         // 1. Get One-Time Upload URL from B2
 
         B2Client.GetUploadUrlResponse uploadUrl = b2Client.getUploadUrl();
-
-
 
         String domain = properties.getCdnDomain();
 
@@ -974,8 +846,6 @@ public class B2FileService {
 
         String publicUrl = domain + "/" + fullPath;
 
-
-
         return DirectUploadInitResponse.builder()
 
                 .uploadUrl(uploadUrl.getUploadUrl())
@@ -984,8 +854,6 @@ public class B2FileService {
                 .build();
 
     }
-
-
 
     public Object completeDirectUpload(String b2FileName, String fileId, User uploader, ResourceType ownerType,
 
@@ -996,8 +864,6 @@ public class B2FileService {
         B2Client.B2FileInfo fileInfo = b2Client.getFileInfo(fileId);
 
         String fileHash = fileInfo.getContentSha1();
-
-
 
         // 2. DUPLICATE DETECTION
 
@@ -1029,8 +895,6 @@ public class B2FileService {
 
         }
 
-
-
         // 3. Save as TemporaryFile or UploadedFile based on path
 
         String decodedPath = java.net.URLDecoder.decode(b2FileName, StandardCharsets.UTF_8);
@@ -1038,8 +902,6 @@ public class B2FileService {
         String fileName = decodedPath.contains("/") ? decodedPath.substring(decodedPath.lastIndexOf("/") + 1)
 
                 : decodedPath;
-
-
 
         String domain = properties.getCdnDomain();
 
@@ -1050,8 +912,6 @@ public class B2FileService {
         }
 
         String publicUrl = domain + "/" + decodedPath;
-
-
 
         // 3. SECURITY VALIDATION
 
@@ -1071,17 +931,11 @@ public class B2FileService {
 
         }
 
-
-
         // Validate against policies
 
         fileValidationService.validateFileMetadata(fileName, actualSize, actualType);
 
-
-
         log.info("Completing Direct Upload. Path: {}, OwnerType: {}, OwnerId: {}", decodedPath, ownerType, ownerId);
-
-
 
         // DIRECT FINALIZATION: If path is not "temp/", save directly as UploadedFile
 
@@ -1113,13 +967,9 @@ public class B2FileService {
 
                     .build();
 
-
-
             return uploadedFileRepository.save(finalFile);
 
         }
-
-
 
         TemporaryFile tempFile = TemporaryFile.builder()
 
@@ -1141,8 +991,6 @@ public class B2FileService {
 
                 .build();
 
-
-
         TemporaryFile saved = temporaryFileRepository.save(tempFile);
 
         log.info("Saved TemporaryFile with ID: {}, CarId: {}", saved.getId(), saved.getCarId());
@@ -1150,8 +998,6 @@ public class B2FileService {
         return saved;
 
     }
-
-
 
     private String generateUniqueFileName(String originalFilename, Long userId) {
 
@@ -1170,8 +1016,6 @@ public class B2FileService {
         return String.format("%d_%s_%s.%s", userId, timestamp, uuid, extension);
 
     }
-
-
 
     private String extractCarIdFromFolder(String folder) {
 
@@ -1193,11 +1037,7 @@ public class B2FileService {
 
         return path.isEmpty() ? null : path;
 
-
-
     }
-
-
 
     public String generatePresignedUrl(String fileUrl, int expirationMinutes) {
 
@@ -1206,8 +1046,6 @@ public class B2FileService {
             throw new IllegalArgumentException("File URL cannot be empty");
 
         }
-
-
 
         // Get file info from DB to find the B2 file name (key)
 
@@ -1235,8 +1073,6 @@ public class B2FileService {
 
             b2Key = java.net.URLDecoder.decode(b2Key, StandardCharsets.UTF_8);
 
-
-
             // Generate auth token
 
             String token = b2Client.getDownloadAuthorization(b2Key, expirationMinutes * 60);
@@ -1244,8 +1080,6 @@ public class B2FileService {
             return fileUrl + "?Authorization=" + token;
 
         }
-
-
 
         // UploadedFile file = fileOpt.get(); // Unused after removing b2Key
 
@@ -1271,8 +1105,6 @@ public class B2FileService {
 
         // We can reconstruct it or extracting from URL is safer.
 
-
-
         String domain = properties.getCdnDomain();
 
         String fullPath = fileUrl.replace(domain + "/", "");
@@ -1283,15 +1115,11 @@ public class B2FileService {
 
         fullPath = java.net.URLDecoder.decode(fullPath, StandardCharsets.UTF_8);
 
-
-
         String token = b2Client.getDownloadAuthorization(fullPath, expirationMinutes * 60);
 
         return fileUrl + "?Authorization=" + token;
 
     }
-
-
 
     public FileMetadata getFileMetadata(String fileUrl) {
 
@@ -1300,8 +1128,6 @@ public class B2FileService {
             return null;
 
         }
-
-
 
         try {
 
@@ -1333,8 +1159,6 @@ public class B2FileService {
 
                 b2Key = java.net.URLDecoder.decode(b2Key, StandardCharsets.UTF_8);
 
-
-
                 // This is expensive but necessary if not in DB
 
                 // B2Client doesn't expose getFileAction but has listFiles
@@ -1345,17 +1169,11 @@ public class B2FileService {
 
             }
 
-
-
             if (fileId == null)
 
                 return null;
 
-
-
             B2Client.B2FileInfo info = b2Client.getFileInfo(fileId);
-
-
 
             return FileMetadata.builder()
 
@@ -1369,8 +1187,6 @@ public class B2FileService {
 
                     .build();
 
-
-
         } catch (Exception e) {
 
             log.error("Failed to get file metadata for {}", fileUrl, e);
@@ -1382,4 +1198,3 @@ public class B2FileService {
     }
 
 }
-

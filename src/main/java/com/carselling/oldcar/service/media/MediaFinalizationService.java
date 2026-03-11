@@ -28,8 +28,9 @@ public class MediaFinalizationService {
     private final B2Properties properties;
     private final TemporaryFileRepository temporaryFileRepository;
     private final UploadedFileRepository uploadedFileRepository;
+    private final org.springframework.transaction.PlatformTransactionManager transactionManager;
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     @org.springframework.retry.annotation.Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @org.springframework.retry.annotation.Backoff(delay = 1000))
     public List<UploadedFile> finalizeUploads(List<Long> tempFileIds, String targetFolder, ResourceType ownerType,
             Long ownerId, User currentUser) {
@@ -48,14 +49,22 @@ public class MediaFinalizationService {
 
         for (Long tempId : tempFileIds) {
             log.debug("Processing tempFileId: {}", tempId);
-            Optional<TemporaryFile> tempFileOpt = temporaryFileRepository.findById(tempId);
-            if (tempFileOpt.isEmpty()) {
+            org.springframework.transaction.support.TransactionTemplate tt = new org.springframework.transaction.support.TransactionTemplate(
+                    transactionManager);
+            tt.setReadOnly(true);
+            TemporaryFile tempFile = tt.execute(status -> {
+                TemporaryFile file = temporaryFileRepository.findById(tempId).orElse(null);
+                if (file != null && file.getUploadedBy() != null) {
+                    file.getUploadedBy().getId(); // Initialize lazy proxy safely
+                }
+                return file;
+            });
+
+            if (tempFile == null) {
                 log.warn("Temporary file not found with ID: {} - SKIPPING", tempId);
                 failedFiles.add("ID " + tempId + ": Not found in database");
                 continue;
             }
-
-            TemporaryFile tempFile = tempFileOpt.get();
             log.debug("Found TemporaryFile: fileName={}, fileId={}, fileUrl={}, storageStatus={}",
                     tempFile.getFileName(), tempFile.getFileId(), tempFile.getFileUrl(), tempFile.getStorageStatus());
 
@@ -88,6 +97,14 @@ public class MediaFinalizationService {
                 String targetPath = determineTargetPath(targetFolder, tempFile);
                 log.info("Processing file: sourceFileId={} -> targetPath={}", tempFile.getFileId(), targetPath);
 
+                // Ensure destination prefix exists (B2 folders are virtual, this verifies path
+                // is writable)
+                int lastSlash = targetPath.lastIndexOf('/');
+                if (lastSlash > 0) {
+                    String targetPrefix = targetPath.substring(0, lastSlash + 1);
+                    b2Client.ensureFolderExists(targetPrefix);
+                }
+
                 String newFileId = null;
                 boolean alreadyExists = false;
 
@@ -105,6 +122,14 @@ public class MediaFinalizationService {
                     try {
                         newFileId = b2Client.copyFile(tempFile.getFileId(), targetPath);
                         log.info("B2 copyFile SUCCESS for tempId: {} (newFileId: {})", tempId, newFileId);
+
+                        try {
+                            log.info("Waiting 4 seconds for stabilization post-transfer..");
+                            Thread.sleep(4000);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                        }
+
                     } catch (com.backblaze.b2.client.exceptions.B2Exception b2Exception) {
                         // Source missing (404) — file may have already been moved in a prior attempt
                         if (b2Exception.getStatus() == 404 || (b2Exception.getMessage() != null
@@ -124,18 +149,41 @@ public class MediaFinalizationService {
                             throw b2Exception;
                         }
                     } catch (Exception copyException) {
-                        // TODO: [ERROR_HANDLING] CRITICAL: Verify if B2 specific exceptions need
-                        // specific recovery logic.
-                        // Source missing (404) — file may have already been moved in a prior attempt
-                        if (copyException.getMessage() != null && copyException.getMessage().contains("not_found")) {
-                            log.warn("Source not found (404): {}. Checking if target exists...", tempFile.getFileId());
-                            if (b2Client.fileExists(targetPath)) {
-                                log.info("Target exists — treating as recovered success.");
-                                alreadyExists = true;
+                        // B2Client.copyFile() wraps non-B2 errors in RuntimeException.
+                        // Unwrap the cause to check if a B2Exception is hiding underneath.
+                        Throwable rootCause = copyException.getCause();
+                        if (rootCause instanceof com.backblaze.b2.client.exceptions.B2Exception b2Root) {
+                            // Recovered a B2Exception from the wrapper — route through status-based logic
+                            if (b2Root.getStatus() == 404 || (b2Root.getMessage() != null
+                                    && b2Root.getMessage().contains("not_found"))) {
+                                log.warn("Source not found (404, unwrapped): {}. Checking if target exists...",
+                                        tempFile.getFileId());
+                                if (b2Client.fileExists(targetPath)) {
+                                    log.info("Target exists — treating as recovered success.");
+                                    alreadyExists = true;
+                                } else {
+                                    throw copyException; // Real failure: neither source nor target exist
+                                }
+                            } else if (b2Root.getStatus() == 429 || b2Root.getStatus() >= 500) {
+                                // Transient error — rethrow to trigger @Retryable
+                                log.warn("Transient B2 error (unwrapped, {}): {}. Retrying via @Retryable...",
+                                        b2Root.getStatus(), b2Root.getMessage());
+                                throw copyException;
+                            } else if (b2Root.getStatus() == 401 || b2Root.getStatus() == 403) {
+                                // Auth/permission error — retrying won't help
+                                log.error("B2 auth/permission error ({}): {}. File: {}",
+                                        b2Root.getStatus(), b2Root.getMessage(), tempFile.getFileId());
+                                throw copyException;
                             } else {
-                                throw copyException; // Real failure: neither source nor target exist
+                                log.error("Unhandled B2 error (unwrapped, status {}): {}",
+                                        b2Root.getStatus(), b2Root.getMessage());
+                                throw copyException;
                             }
                         } else {
+                            // Genuine non-B2 exception (IO error, OOM, etc.) — log root cause and rethrow
+                            log.error("Non-B2 copy failure for file {} [{}]: {}",
+                                    tempFile.getFileId(), copyException.getClass().getSimpleName(),
+                                    copyException.getMessage());
                             throw copyException;
                         }
                     }
@@ -244,7 +292,10 @@ public class MediaFinalizationService {
 
         boolean validExt = nameToCheck.endsWith(".jpg") || nameToCheck.endsWith(".jpeg")
                 || nameToCheck.endsWith(".png") || nameToCheck.endsWith(".webp")
-                || nameToCheck.endsWith(".mp4") || nameToCheck.endsWith(".mov");
+                || nameToCheck.endsWith(".mp4") || nameToCheck.endsWith(".mov")
+                || nameToCheck.endsWith(".m4a") || nameToCheck.endsWith(".mp3")
+                || nameToCheck.endsWith(".wav") || nameToCheck.endsWith(".ogg")
+                || nameToCheck.endsWith(".aac");
 
         if (!validExt) {
             throw new SecurityException("File extension not allowed for finalization: " + nameToCheck);
@@ -262,12 +313,27 @@ public class MediaFinalizationService {
      */
     private String determineTargetPath(String baseFolder, TemporaryFile tempFile) {
         String subType = "images"; // Default to images
-        if (tempFile.getContentType() != null && tempFile.getContentType().startsWith("video/")) {
-            subType = "videos";
+        if (tempFile.getContentType() != null) {
+            if (tempFile.getContentType().startsWith("video/")) {
+                subType = "videos";
+            } else if (tempFile.getContentType().startsWith("audio/")) {
+                subType = "audio";
+            } else if (!tempFile.getContentType().startsWith("image/")) {
+                subType = "files";
+            }
         }
 
         // Ensure baseFolder doesn't end with slash
         String cleanBase = baseFolder.endsWith("/") ? baseFolder.substring(0, baseFolder.length() - 1) : baseFolder;
+
+        if (cleanBase.startsWith("chat/")) {
+            // For Chat Structure: chat/{chatId}/{year}/{month}/{subType}/{fileName}
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            String year = now.format(java.time.format.DateTimeFormatter.ofPattern("yyyy"));
+            String month = now.format(java.time.format.DateTimeFormatter.ofPattern("MM"));
+
+            return cleanBase + "/" + year + "/" + month + "/" + subType + "/" + tempFile.getFileName();
+        }
 
         return cleanBase + "/" + subType + "/" + tempFile.getFileName();
     }

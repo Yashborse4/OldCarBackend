@@ -9,7 +9,6 @@ import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.CarReportRepository;
 import com.carselling.oldcar.repository.CarRepository;
 import com.carselling.oldcar.repository.UserRepository;
-import com.carselling.oldcar.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,7 +42,7 @@ public class CarModerationService {
 
         // Prevent users from reporting their own cars
         if (car.getOwner().getId().equals(reporterId)) {
-                    throw new InvalidInputException("You cannot report your own car listing");
+            throw new InvalidInputException("You cannot report your own car listing");
         }
 
         // Create car snapshot for moderation
@@ -62,6 +61,8 @@ public class CarModerationService {
     }
 
     private String createCarSnapshot(Car car) {
+        // TODO(SeniorEng): Logic/Security - Generating JSON via String.format is
+        // error-prone and vulnerable to injection. Use Jackson ObjectMapper.
         // Create JSON snapshot of car details for moderation
         return String.format(
                 "{\"id\":\"%s\",\"make\":\"%s\",\"model\":\"%s\",\"year\":%d,\"price\":%f,\"sellerId\":%d,\"sellerName\":\"%s\",\"description\":\"%s\",\"images\":%d}",
@@ -72,9 +73,8 @@ public class CarModerationService {
                 car.getPrice(),
                 car.getOwner().getId(),
                 car.getOwner().getUsername(),
-                car.getDescription() != null ? car.getDescription().replace("\"", "'" ) : "",
-                car.getImages() != null ? car.getImages().size() : 0
-        );
+                car.getDescription() != null ? car.getDescription().replace("\"", "'") : "",
+                car.getImages() != null ? car.getImages().size() : 0);
     }
 
     @Transactional(readOnly = true)
@@ -84,6 +84,9 @@ public class CarModerationService {
 
     @Transactional(readOnly = true)
     public Long getPendingReportsCount(String carId) {
+        // TODO(SeniorEng): Logic - Implement automated actions: If pending reports >
+        // threshold (e.g., 5), auto-hash/hide the Car listing pending admin review to
+        // limit exposure.
         return carReportRepository.countPendingReportsByCarId(carId);
     }
 }

@@ -3,7 +3,7 @@ package com.carselling.oldcar.search.provider;
 import com.carselling.oldcar.dto.car.CarSearchCriteria;
 import com.carselling.oldcar.dto.car.CarSearchDtos.CarSearchHitDto;
 import com.carselling.oldcar.search.CarSearchProvider;
-import com.carselling.oldcar.service.AdvancedSearchService;
+import com.carselling.oldcar.service.search.AdvancedSearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -50,6 +50,11 @@ public class OpenSearchCarSearchProvider implements CarSearchProvider {
                 })
                 .distinct()
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public com.carselling.oldcar.dto.car.SuggestionResponseDto suggestRich(String prefix, int limit) {
+        return advancedSearchService.suggestRich(prefix, limit);
     }
 
     @Override

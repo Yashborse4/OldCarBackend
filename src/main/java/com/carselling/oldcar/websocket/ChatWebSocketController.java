@@ -363,7 +363,7 @@ public class ChatWebSocketController {
     private void updateUnreadCountsForParticipants(Long chatRoomId, Long senderId) {
         try {
             // Get all participants
-            var participants = ChatService.getChatRoomParticipants(chatRoomId, senderId);
+            var participants = ChatService.getAllChatRoomParticipants(chatRoomId, senderId);
 
             // Send unread count updates to each participant (except sender)
             participants.stream()

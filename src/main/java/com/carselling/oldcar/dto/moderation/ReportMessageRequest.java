@@ -1,7 +1,6 @@
 package com.carselling.oldcar.dto.moderation;
 
 import com.carselling.oldcar.model.MessageReport;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -401,6 +401,7 @@ public class VehicleServiceEnhanced {
                 .location(car.getLocation())
                 .isAvailable(car.getIsAvailable())
                 .isFeatured(car.getIsFeatured())
+                .status(car.getStatus() != null ? car.getStatus().name() : null)
                 .build();
     }
 

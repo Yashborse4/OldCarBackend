@@ -299,6 +299,13 @@ public class CarServiceImpl implements CarService {
         User owner = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUserId.toString()));
 
+        if (owner.getRole() == Role.USER) {
+            long activeCount = carRepository.countActiveCarsByOwnerId(currentUserId);
+            if (activeCount >= 3) {
+                throw new BusinessException("Standard users can only have a maximum of 3 active car listings.");
+            }
+        }
+
         Car car = Car.builder()
                 .make(request.getMake())
                 .model(request.getModel())

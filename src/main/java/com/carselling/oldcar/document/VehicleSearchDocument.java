@@ -101,4 +101,16 @@ public class VehicleSearchDocument {
      */
 
     private List<String> highlights; // e.g. ["single-owner", "verified"]
+
+    private Double distanceKm; // Distance from search center (transient)
+
+    /*
+     * ============================================================
+     * Additional Filters
+     * ============================================================
+     */
+    private String category; // Body Type (SUV, Sedan, etc.)
+    private Integer numberOfOwners;
+    private String usage; // Condition (Used, New, etc.)
+
 }

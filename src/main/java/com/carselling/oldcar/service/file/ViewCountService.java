@@ -36,6 +36,13 @@ public class ViewCountService {
     /**
      * Key = carId, Value = timestamp of last increment.
      * ConcurrentHashMap for thread-safety under async execution.
+     * 
+     * // TODO: [PRODUCTION-READY & CONCURRENCY] In a clustered layout, this
+     * deduplication only works per JVM.
+     * // Under a round-robin load balancer, a user rapidly refreshing a page will
+     * hit multiple instances,
+     * // bypassing this dedup map and inflating the view count. Use a Redis keyed
+     * EXPIRATION SET for dedup.
      */
     private final Map<Long, Long> lastIncrementTimestamps = new ConcurrentHashMap<>();
 

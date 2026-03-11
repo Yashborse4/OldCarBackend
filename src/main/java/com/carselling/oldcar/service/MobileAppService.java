@@ -89,21 +89,33 @@ public class MobileAppService {
     }
 
     public Map<String, Object> getSearchSuggestions(String query, int limit) {
+        // Enforce 2-character trigger for "Advanced Autocomplete"
+        if (query == null || query.trim().length() < 2) {
+            return Map.of(
+                    "brands", List.of(),
+                    "models", List.of(),
+                    "general", List.of(),
+                    "popularSearches",
+                    carSearchService != null ? carSearchService.getTrendingSearchTerms(limit) : List.of());
+        }
+
         // Return empty suggestions if CarSearchService is not available
         if (carSearchService == null) {
             log.debug("CarSearchService not available, returning empty suggestions");
             return Map.of(
+                    "brands", List.of(),
+                    "models", List.of(),
                     "general", List.of(),
-                    "makes", List.of(),
                     "popularSearches", List.of());
         }
 
-        List<String> suggestions = carSearchService.suggest(query, limit);
+        com.carselling.oldcar.dto.car.SuggestionResponseDto richSuggestions = carSearchService.suggestRich(query,
+                limit);
 
         return Map.of(
-                "general", suggestions,
-                "makes",
-                suggestions.stream().filter(s -> Character.isUpperCase(s.charAt(0))).collect(Collectors.toList()),
+                "brands", richSuggestions.getBrands(),
+                "models", richSuggestions.getModels(),
+                "general", richSuggestions.getGeneral(),
                 "popularSearches", carSearchService.getTrendingSearchTerms(limit));
     }
 
