@@ -80,6 +80,17 @@ graph TD
 6.  **Search Engine Connection**: The application connects to the OpenSearch cluster.
 7.  **Ready State**: Once all dependencies are validated, the application accepts traffic.
 
+## 🌐 Deployment
+
+This project is configured for automated deployment to a VPS using GitHub Actions.
+
+### CI/CD Pipeline
+- **Workflow**: `.github/workflows/vps-deploy.yml` triggers on every push to `main`.
+- **Process**: Build -> Test -> SSH to VPS -> Docker Compose Pull & Up.
+
+### Setup Guide
+For detailed instructions on setting up the VPS environment and GitHub Secrets, please refer to the [Git and Environment Setup Guide](docs/GIT_ENV_SETUP.md).
+
 ## 📚 API Documentation
 
 - **GraphQL Playground**: Accessible at `/graphiql` (if enabled in dev profile).
