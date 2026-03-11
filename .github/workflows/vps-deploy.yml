@@ -1,0 +1,40 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Application to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Execute Deployment Script via SSH
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        script: |
+          # Ensure we are in the project directory
+          # Note: Adjust 'OldCarBackend' below if your repository was cloned to a different directory name on the VPS
+          cd OldCarBackend
+          
+          echo "==== Pulling latest changes ===="
+          git pull origin main
+          
+          # Ensure the deployment script has execution permissions
+          chmod +x deploy.sh
+          
+          echo "==== Building new Docker images ===="
+          ./deploy.sh build
+          
+          echo "==== Restarting services ===="
+          ./deploy.sh restart
+          
+          echo "==== Deployment Completed Successfully ===="
