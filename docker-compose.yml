@@ -227,8 +227,6 @@ services:
     image: opensearchproject/opensearch:2.12.0
     container_name: car-selling-opensearch
     restart: unless-stopped
-    mem_limit: 2g
-    cpus: 1
     logging:
       driver: json-file
       options:
