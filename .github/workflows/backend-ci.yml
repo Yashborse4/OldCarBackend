@@ -33,6 +33,7 @@ jobs:
           discovery.type: single-node
           plugins.security.disabled: "true"
           OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+          OPENSEARCH_INITIAL_ADMIN_PASSWORD: "AdminPassword123!"
         ports:
           - 9200:9200
         options: >-
@@ -94,6 +95,11 @@ jobs:
     - name: Publish Test Results
       uses: actions/upload-artifact@v4
       if: always()
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
         name: test-results
-        path: build/test-results/
+        path: |
+          build/test-results/
+          build/reports/
+        if-no-files-found: ignore
