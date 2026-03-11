@@ -3,8 +3,6 @@
 # Sell The Old Car - Only Nginx exposes public ports
 # ============================================================================
 
-version: '3.8'
-
 services:
   # --------------------------------------------------------------------------
   # Nginx Reverse Proxy - Only service with public exposure
@@ -26,7 +24,7 @@ services:
       app:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -49,37 +47,37 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/carselling
       - SPRING_DATASOURCE_USERNAME=${DB_USERNAME:-car_user}
       - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:-car_password}
-      
+
       # Redis Configuration
       - SPRING_REDIS_HOST=redis
       - SPRING_REDIS_PORT=6379
       - SPRING_REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      
+
       # Server Configuration
       - SERVER_PORT=8080
       - LOGGING_LEVEL_ROOT=${LOG_LEVEL:-INFO}
-      
+
       # JWT Configuration
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ACCESS_EXPIRATION=${JWT_ACCESS_EXPIRATION:-900000}
       - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-604800000}
-      
+
       # File Storage
       - STORAGE_UPLOAD_PATH=/app/uploads
-      
+
       # B2 Configuration
       - B2_APPLICATION_KEY_ID=${B2_APPLICATION_KEY_ID}
       - B2_APPLICATION_KEY=${B2_APPLICATION_KEY}
       - B2_BUCKET_NAME=${B2_BUCKET_NAME}
       - B2_BUCKET_ID=${B2_BUCKET_ID}
       - B2_CDN_DOMAIN=${B2_CDN_DOMAIN}
-      
+
       # OpenSearch Configuration
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
       - OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME:-admin}
       - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
-      
+
       # Email Configuration
       - EMAIL_HOST=${EMAIL_HOST}
       - EMAIL_PORT=${EMAIL_PORT:-587}
@@ -100,7 +98,7 @@ services:
       opensearch:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -136,7 +134,7 @@ services:
     networks:
       - backend
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-car_user} -d carselling"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME:-car_user} -d carselling" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -165,7 +163,7 @@ services:
     networks:
       - backend
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -207,7 +205,7 @@ services:
     networks:
       - backend
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      test: [ "CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -243,5 +241,3 @@ networks:
   backend:
     driver: bridge
     internal: false
-
-

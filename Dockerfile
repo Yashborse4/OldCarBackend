@@ -16,7 +16,7 @@ RUN apk add --no-cache bash curl
 # Copy gradle wrapper and configuration first (better layer caching)
 COPY gradlew gradlew.bat ./
 COPY gradle/ gradle/
-COPY build.gradle settings.gradle ./
+COPY build.gradle settings.gradle* ./
 
 # Download dependencies (cached layer)
 RUN ./gradlew dependencies --no-daemon || true
