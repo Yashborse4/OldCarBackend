@@ -54,12 +54,12 @@ services:
       - "8080"
     environment:
       # Database Configuration
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/carselling
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://car-selling-postgres:5432/carselling
       - SPRING_DATASOURCE_USERNAME=${DB_USERNAME:-car_user}
       - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:-car_password}
 
       # Redis Configuration
-      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_HOST=car-selling-redis
       - SPRING_DATA_REDIS_PORT=6379
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-}
 
@@ -83,7 +83,7 @@ services:
       - B2_CDN_DOMAIN=${B2_CDN_DOMAIN}
 
       # OpenSearch Configuration
-      - OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_HOST=car-selling-opensearch
       - OPENSEARCH_PORT=9200
       - OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME:-admin}
       - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
@@ -267,4 +267,3 @@ volumes:
 # --------------------------------------------------------------------------
 networks:
   backend:
-    driver: bridge
