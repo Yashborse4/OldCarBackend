@@ -1,8 +1,20 @@
 # Production Environment Configuration
 
 spring:
-  # Mail config is provided via Docker env vars (SPRING_MAIL_*)
-  # No YAML override needed
+  # Mail Configuration for Production
+  # Primary source: Docker env vars (SPRING_MAIL_USERNAME, SPRING_MAIL_PASSWORD)
+  # Fallback defaults below prevent empty-address crashes
+  mail:
+    host: ${SPRING_MAIL_HOST:smtp.gmail.com}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:yashborse432005@gmail.com}
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
   # Database Configuration for Production
   datasource:

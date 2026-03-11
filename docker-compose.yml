@@ -96,11 +96,11 @@ services:
       # Email Configuration (Spring Boot mail autoconfiguration)
       - SPRING_MAIL_HOST=${EMAIL_HOST:-smtp.gmail.com}
       - SPRING_MAIL_PORT=${EMAIL_PORT:-587}
-      - SPRING_MAIL_USERNAME=${EMAIL_USERNAME}
-      - SPRING_MAIL_PASSWORD=${EMAIL_PASSWORD}
+      - SPRING_MAIL_USERNAME=${EMAIL_USERNAME:-yashborse432005@gmail.com}
+      - SPRING_MAIL_PASSWORD=${EMAIL_PASSWORD:-}
       - SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true
       - SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true
-      - EMAIL_FROM=${EMAIL_FROM}
+      - EMAIL_FROM=${EMAIL_FROM:-yashborse432005@gmail.com}
     volumes:
       - uploads-data:/app/uploads
       - logs-data:/app/logs

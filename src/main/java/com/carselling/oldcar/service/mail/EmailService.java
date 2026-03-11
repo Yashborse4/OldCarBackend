@@ -1,5 +1,6 @@
 package com.carselling.oldcar.service.mail;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -11,17 +12,45 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
- * Service for sending emails via SMTP
+ * Service for sending emails via SMTP.
+ * Uses spring.mail.username as the sender address with a fallback
+ * to app.email.from or a hardcoded default to prevent AddressException
+ * when the environment variable is empty.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EmailService {
 
+    private static final String DEFAULT_FROM_EMAIL = "yashborse432005@gmail.com";
+
     private final JavaMailSender mailSender;
 
-    @Value("${spring.mail.username}")
-    private String fromEmail;
+    @Value("${spring.mail.username:}")
+    private String mailUsername;
+
+    @Value("${app.email.from:}")
+    private String emailFrom;
+
+    private String resolvedFromEmail;
+
+    /**
+     * Resolves the "from" email address at startup.
+     * Priority: spring.mail.username -> app.email.from -> DEFAULT_FROM_EMAIL
+     */
+    @PostConstruct
+    public void init() {
+        if (mailUsername != null && !mailUsername.trim().isEmpty()) {
+            resolvedFromEmail = mailUsername.trim();
+        } else if (emailFrom != null && !emailFrom.trim().isEmpty()) {
+            resolvedFromEmail = emailFrom.trim();
+        } else {
+            resolvedFromEmail = DEFAULT_FROM_EMAIL;
+            log.warn("No email sender address configured (spring.mail.username and app.email.from are both empty). " +
+                    "Falling back to default: {}", DEFAULT_FROM_EMAIL);
+        }
+        log.info("Email sender address resolved to: {}", resolvedFromEmail);
+    }
 
     @Async
     public void sendTextEmail(String to, String subject, String body) {
@@ -30,7 +59,7 @@ public class EmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(fromEmail);
+            helper.setFrom(resolvedFromEmail);
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(body, false); // false = plain text
@@ -51,7 +80,7 @@ public class EmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(fromEmail);
+            helper.setFrom(resolvedFromEmail);
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(htmlBody, true); // true = HTML
