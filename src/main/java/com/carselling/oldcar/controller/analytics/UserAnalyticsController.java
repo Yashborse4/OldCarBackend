@@ -93,6 +93,9 @@ public class UserAnalyticsController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid event data"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded")
     })
+    // TODO(SeniorEng): Performance - High-throughput event ingestion should ideally
+    // be written directly to a fast message broker (e.g., Kafka/RabbitMQ) rather
+    // than processing within the HTTP request thread.
     public ResponseEntity<ApiResponse<Object>> ingestEvents(
             @Valid @RequestBody AnalyticsBatchDto batch,
             Authentication authentication) {

@@ -109,6 +109,9 @@ public class UserController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "User already a dealer")
         })
+        // TODO(SeniorEng): Security - Add stricter velocity checks and automated fraud
+        // detection (e.g., heuristics on recently created accounts) before allowing
+        // dealer request creation.
         public ResponseEntity<ApiResponse<UserResponse>> requestDealerRole() {
                 log.info("User requesting dealer role");
 

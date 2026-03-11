@@ -32,6 +32,9 @@ public class CarPriceController {
      */
     @PostMapping("/analyze")
     @Operation(summary = "Analyze vehicle price", description = "Get market analysis and price recommendation")
+    // TODO(SeniorEng): Optimization - Price analysis could be computationally
+    // expensive or require external API calls. Implement caching for identical
+    // analysis requests.
     public ResponseEntity<ApiResponse<VehiclePriceAnalysisDto>> analyzePrice(
             @Valid @RequestBody VehiclePriceAnalysisRequest request) {
 

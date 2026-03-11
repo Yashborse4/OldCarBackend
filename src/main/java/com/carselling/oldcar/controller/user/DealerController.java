@@ -84,6 +84,9 @@ public class DealerController {
     @PatchMapping("/cars/{carId}/sell")
     @PreAuthorize("hasRole('DEALER') or hasRole('ADMIN')")
     @Operation(summary = "Mark Car as Sold", description = "Marks a car as SOLD and updates its final sold price")
+    // TODO(SeniorEng): Logic - Ensure 'soldPrice' is validated safely. Trigger an
+    // async event here to notify users who have this car in their wishlist that it
+    // has been sold to keep the inventory up to date.
     public ResponseEntity<ApiResponse<Void>> markCarAsSold(
             @PathVariable Long carId,
             @RequestBody Map<String, Object> requestBody,

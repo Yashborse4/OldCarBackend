@@ -61,6 +61,7 @@ public class AdminController {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not authorized (admin only)")
         })
+
         public ResponseEntity<ApiResponse<Page<UserResponse>>> getAllUsers(
                         @RequestParam(value = "username", required = false) String username,
                         @RequestParam(value = "email", required = false) String email,
@@ -161,6 +162,9 @@ public class AdminController {
          * PUT /api/admin/dealers/{id}/status
          */
         @PutMapping("/dealers/{id}/status")
+        // TODO(SeniorEng): Logic - Ensure state machine transition validation in
+        // service layer (e.g. UNVERIFIED -> VERIFIED is allowed, SUSPENDED -> VERIFIED
+        // requires admin note logging).
         public ResponseEntity<ApiResponse<UserResponse>> updateDealerStatus(
                         @PathVariable Long id,
                         @Valid @RequestBody DealerStatusRequest request) {
@@ -299,11 +303,6 @@ public class AdminController {
         /**
          * Get user activity logs (admin only)
          * GET /api/admin/users/{id}/activity
-         * // TODO: [PRODUCTION-READY & API-DESIGN] Unbounded List Return.
-         * // Activity logs can grow to millions of rows. Retrieving them without
-         * pagination
-         * // will likely cause OutOfMemoryErrors and slow down the database.
-         * // Refactor to use Pageable and return Page<UserActivityLog>.
          */
         @GetMapping("/users/{id}/activity")
         public ResponseEntity<ApiResponse<List<UserActivityLog>>> getUserActivityLogs(
@@ -528,6 +527,8 @@ public class AdminController {
          * POST /api/admin/verification-requests/{id}/approve
          */
         @PostMapping("/verification-requests/{id}/approve")
+        // TODO(SeniorEng): Audit - Add audit logging entry capturing which admin
+        // approved the verification request for accountability.
         public ResponseEntity<ApiResponse<com.carselling.oldcar.dto.dealer.DealerVerificationResponseDto>> approveVerificationRequest(
                         @PathVariable Long id,
                         org.springframework.security.core.Authentication authentication) {

@@ -34,6 +34,8 @@ public class CarSearchController {
         @GetMapping
         @RateLimit(capacity = 120, refill = 60, refillPeriod = 1)
         @io.swagger.v3.oas.annotations.Operation(summary = "Search cars", description = "Search for vehicles with advanced filtering")
+        // TODO(SeniorEng): Optimization - Elasticsearch index updates should be
+        // asynchronous. Verify that CarSyncService uses a message queue
         public ResponseEntity<ApiResponse<Page<CarSearchHitDto>>> searchCars(
                         @jakarta.validation.Valid @org.springframework.web.bind.annotation.ModelAttribute CarSearchRequest request) {
 
@@ -48,6 +50,9 @@ public class CarSearchController {
         @GetMapping("/suggestions")
         @RateLimit(capacity = 60, refill = 30, refillPeriod = 1)
         @io.swagger.v3.oas.annotations.Operation(summary = "Get suggestions", description = "Get search suggestions/autocomplete")
+        // TODO(SeniorEng): Optimization - Cache suggestion lists in Redis with a short
+        // TTL (e.g., 5 mins) to reduce load on Elasticsearch for common prefix
+        // searches.
         public ResponseEntity<ApiResponse<List<String>>> suggest(
                         @RequestParam("q") String prefix,
                         @RequestParam(value = "limit", defaultValue = "10") int limit) {

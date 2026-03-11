@@ -46,6 +46,9 @@ public class CarSocialController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Car not found"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Rate limit exceeded")
     })
+    // TODO(SeniorEng): Security - Ensure the generated share tokens have an
+    // expiration date to prevent indefinite tracking and potential token leakage
+    // abuse.
     public ResponseEntity<ApiResponse<Map<String, String>>> generateShareLink(
             @PathVariable String id,
             Authentication authentication) {
@@ -155,6 +158,9 @@ public class CarSocialController {
     @PostMapping("/events")
     @RateLimit(capacity = 60, refill = 30, refillPeriod = 1)
     @io.swagger.v3.oas.annotations.Operation(summary = "Track event", description = "Track generic car interaction event")
+    // TODO(SeniorEng): Optimization - Offload event tracking to a non-blocking
+    // message queue (like Kafka) to ensure the main API thread isn't slowed down by
+    // burst analytics.
     public ResponseEntity<ApiResponse<Object>> trackCarEvent(
             @Valid @RequestBody com.carselling.oldcar.dto.car.CarInteractionEventDto eventDto,
             Authentication authentication,

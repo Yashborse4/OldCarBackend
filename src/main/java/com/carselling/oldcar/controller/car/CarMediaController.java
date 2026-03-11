@@ -40,6 +40,8 @@ public class CarMediaController {
         @PostMapping("/{id}/media-status")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
         @io.swagger.v3.oas.annotations.Operation(summary = "Update media status", description = "Update processing status of vehicle media")
+        // TODO(SeniorEng): Logic - Prevent invalid state transitions (e.g., from
+        // 'FAILED' back to 'PROCESSING' without a new upload) in the service layer.
         public ResponseEntity<ApiResponse<CarResponse>> updateVehicleMediaStatus(
                         @PathVariable String id,
                         @Valid @RequestBody UpdateMediaStatusRequest statusRequest) {
@@ -91,6 +93,9 @@ public class CarMediaController {
         @PostMapping("/{id}/media/temp-upload")
         @PreAuthorize("hasAnyRole('USER', 'DEALER', 'ADMIN')")
         @io.swagger.v3.oas.annotations.Operation(summary = "Upload temp file", description = "Upload file to temporary storage with validation")
+        // TODO(SeniorEng): Security - Ensure strict file type validation (magic bytes,
+        // not just extension) and anti-virus scanning on temp uploads to prevent
+        // malicious payloads.
         public ResponseEntity<ApiResponse<UploadedFile>> uploadTempFile(
                         @PathVariable String id,
                         @RequestParam("file") MultipartFile file) {

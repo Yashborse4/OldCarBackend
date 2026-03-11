@@ -34,31 +34,36 @@ public class MessageModerationController {
     @PostMapping("/report")
     @Operation(summary = "Report a message", description = "Report a chat message for moderation")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Message reported successfully"),
-        @ApiResponse(responseCode = "400", description = "Invalid request"),
-        @ApiResponse(responseCode = "404", description = "Message not found"),
-        @ApiResponse(responseCode = "409", description = "Already reported this message")
+            @ApiResponse(responseCode = "200", description = "Message reported successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid request"),
+            @ApiResponse(responseCode = "404", description = "Message not found"),
+            @ApiResponse(responseCode = "409", description = "Already reported this message")
     })
+    // TODO(SeniorEng): Security - Prevent a single user from spam reporting the
+    // same message or multiple messages rapidly.
     public ResponseEntity<com.carselling.oldcar.dto.common.ApiResponse<MessageReportResponse>> reportMessage(
             @Valid @RequestBody ReportMessageRequest request,
             @AuthenticationPrincipal com.carselling.oldcar.security.UserPrincipal currentUser) {
-        
+
         log.info("User {} reporting message {}", currentUser.getId(), request.getMessageId());
-        
+
         MessageReport report = messageModerationService.reportMessage(request, currentUser.getId());
         MessageReportResponse response = convertToResponse(report);
-        
-        return ResponseEntity.ok(com.carselling.oldcar.dto.common.ApiResponse.success("Message reported successfully", response));
+
+        return ResponseEntity
+                .ok(com.carselling.oldcar.dto.common.ApiResponse.success("Message reported successfully", response));
     }
 
     @GetMapping("/reports")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MODERATOR')")
     @Operation(summary = "Get all reports", description = "Get paginated list of all message reports (Admin/Moderator only)")
-    public ResponseEntity<com.carselling.oldcar.dto.common.ApiResponse<Page<MessageReportResponse>>> getAllReports(Pageable pageable) {
+    public ResponseEntity<com.carselling.oldcar.dto.common.ApiResponse<Page<MessageReportResponse>>> getAllReports(
+            Pageable pageable) {
         Page<MessageReport> reports = messageModerationService.getReports(pageable);
         Page<MessageReportResponse> response = reports.map(this::convertToResponse);
-        
-        return ResponseEntity.ok(com.carselling.oldcar.dto.common.ApiResponse.success("Reports retrieved successfully", response));
+
+        return ResponseEntity
+                .ok(com.carselling.oldcar.dto.common.ApiResponse.success("Reports retrieved successfully", response));
     }
 
     @GetMapping("/reports/status/{status}")
@@ -67,21 +72,24 @@ public class MessageModerationController {
     public ResponseEntity<com.carselling.oldcar.dto.common.ApiResponse<Page<MessageReportResponse>>> getReportsByStatus(
             @PathVariable ReportStatus status,
             Pageable pageable) {
-        
+
         Page<MessageReport> reports = messageModerationService.getReportsByStatus(status, pageable);
         Page<MessageReportResponse> response = reports.map(this::convertToResponse);
-        
-        return ResponseEntity.ok(com.carselling.oldcar.dto.common.ApiResponse.success("Reports retrieved successfully", response));
+
+        return ResponseEntity
+                .ok(com.carselling.oldcar.dto.common.ApiResponse.success("Reports retrieved successfully", response));
     }
 
     @GetMapping("/reports/{reportId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('MODERATOR')")
     @Operation(summary = "Get report by ID", description = "Get detailed information about a specific report")
-    public ResponseEntity<com.carselling.oldcar.dto.common.ApiResponse<MessageReportResponse>> getReport(@PathVariable Long reportId) {
+    public ResponseEntity<com.carselling.oldcar.dto.common.ApiResponse<MessageReportResponse>> getReport(
+            @PathVariable Long reportId) {
         MessageReport report = messageModerationService.getReportById(reportId);
         MessageReportResponse response = convertToResponse(report);
-        
-        return ResponseEntity.ok(com.carselling.oldcar.dto.common.ApiResponse.success("Report retrieved successfully", response));
+
+        return ResponseEntity
+                .ok(com.carselling.oldcar.dto.common.ApiResponse.success("Report retrieved successfully", response));
     }
 
     @PostMapping("/reports/{reportId}/review")
@@ -92,16 +100,15 @@ public class MessageModerationController {
             @RequestParam boolean approve,
             @RequestParam(required = false) String moderatorNotes,
             @AuthenticationPrincipal com.carselling.oldcar.security.UserPrincipal currentUser) {
-        
+
         MessageModerationService.MessageReviewResult result = messageModerationService
                 .reviewReport(reportId, currentUser.getId(), approve, moderatorNotes);
-        
+
         String message = approve ? "Report approved and message hidden" : "Report rejected";
-        
+
         return ResponseEntity.ok(com.carselling.oldcar.dto.common.ApiResponse.success(message, Map.of(
-            "report", convertToResponse(result.getReport()),
-            "actionTaken", approve ? "MESSAGE_HIDDEN" : "REPORT_REJECTED"
-        )));
+                "report", convertToResponse(result.getReport()),
+                "actionTaken", approve ? "MESSAGE_HIDDEN" : "REPORT_REJECTED")));
     }
 
     @GetMapping("/stats/pending-count")
@@ -109,7 +116,8 @@ public class MessageModerationController {
     @Operation(summary = "Get pending reports count", description = "Get count of pending reports")
     public ResponseEntity<com.carselling.oldcar.dto.common.ApiResponse<Map<String, Long>>> getPendingReportsCount() {
         Long count = messageModerationService.getPendingReportsCount();
-        return ResponseEntity.ok(com.carselling.oldcar.dto.common.ApiResponse.success("Pending reports count", Map.of("pendingCount", count)));
+        return ResponseEntity.ok(com.carselling.oldcar.dto.common.ApiResponse.success("Pending reports count",
+                Map.of("pendingCount", count)));
     }
 
     private MessageReportResponse convertToResponse(MessageReport report) {
