@@ -95,7 +95,7 @@ public class SecurityConfig {
 
                         // WebSocket & System
                         .requestMatchers("/ws/**", "/ws-native/**").permitAll()
-                        .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers("/actuator/health", "/management/health").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
 
                         // Search API is public
