@@ -9,6 +9,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -16,21 +18,40 @@ import java.util.List;
 import java.util.Objects;
 
 @Getter
-@NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class UserPrincipal implements UserDetails {
 
+    @JsonProperty("id")
     private Long id;
+
+    @JsonProperty("email")
     private String email;
+
+    @JsonProperty("password")
     private String password;
+
+    @JsonProperty("role")
     private Role role;
+
+    @JsonProperty("active")
     private boolean active;
+
+    @JsonProperty("emailVerified")
     private boolean emailVerified;
+
+    @JsonProperty("verifiedDealer")
     private boolean verifiedDealer;
+
+    @JsonProperty("lockedUntil")
     private LocalDateTime lockedUntil;
 
-    // Remove the private constructor as @AllArgsConstructor and @NoArgsConstructor cover it
+    /**
+     * Explicit no-args constructor for Jackson/Redis
+     */
+    public UserPrincipal() {
+    }
 
     /**
      * Factory method to convert User entity → UserPrincipal
@@ -102,13 +123,7 @@ public class UserPrincipal implements UserDetails {
     /**
      * Custom getters (useful in controllers & security checks)
      */
-    public Long getId() {
-        return id;
-    }
-
-    public Role getRole() {
-        return role;
-    }
+    // Lombok @Getter provides these. Retaining only non-standard ones if any.
 
     public boolean isVerifiedDealer() {
         return verifiedDealer;

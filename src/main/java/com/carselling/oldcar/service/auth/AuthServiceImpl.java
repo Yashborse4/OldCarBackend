@@ -33,7 +33,6 @@ import com.carselling.oldcar.exception.AuthenticationFailedException.AuthError;
  * Handles user authentication with device tracking and enhanced features
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AuthServiceImpl implements AuthService {
 
@@ -42,6 +41,18 @@ public class AuthServiceImpl implements AuthService {
     private final OtpService otpService;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+
+    public AuthServiceImpl(UserRepository userRepository, 
+                           RefreshTokenRepository refreshTokenRepository, 
+                           OtpService otpService, 
+                           PasswordEncoder passwordEncoder, 
+                           JwtTokenProvider jwtTokenProvider) {
+        this.userRepository = userRepository;
+        this.refreshTokenRepository = refreshTokenRepository;
+        this.otpService = otpService;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtTokenProvider = jwtTokenProvider;
+    }
 
     private static final String PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
     private static final int GENERATED_PASSWORD_LENGTH = 16;
