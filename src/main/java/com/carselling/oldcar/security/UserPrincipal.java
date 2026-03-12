@@ -9,6 +9,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.extern.jackson.Jacksonized;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -19,7 +20,9 @@ import java.util.Objects;
 
 @Getter
 @AllArgsConstructor
+@NoArgsConstructor
 @Builder
+@Jacksonized
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class UserPrincipal implements UserDetails {
 
@@ -47,11 +50,6 @@ public class UserPrincipal implements UserDetails {
     @JsonProperty("lockedUntil")
     private LocalDateTime lockedUntil;
 
-    /**
-     * Explicit no-args constructor for Jackson/Redis
-     */
-    public UserPrincipal() {
-    }
 
     /**
      * Factory method to convert User entity → UserPrincipal
