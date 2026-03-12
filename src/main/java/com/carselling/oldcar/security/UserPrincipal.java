@@ -5,41 +5,32 @@ import com.carselling.oldcar.model.User;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 
+@Getter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class UserPrincipal implements UserDetails {
 
-    private final Long id;
-    private final String email;
-    private final String password;
-    private final Role role;
-    private final boolean active;
-    private final boolean emailVerified;
-    private final boolean verifiedDealer;
-    private final LocalDateTime lockedUntil;
+    private Long id;
+    private String email;
+    private String password;
+    private Role role;
+    private boolean active;
+    private boolean emailVerified;
+    private boolean verifiedDealer;
+    private LocalDateTime lockedUntil;
 
-    private UserPrincipal(
-            Long id,
-            String email,
-            String password,
-            Role role,
-            boolean active,
-            boolean emailVerified,
-            boolean verifiedDealer,
-            LocalDateTime lockedUntil) {
-        this.id = id;
-        this.email = email;
-        this.password = password;
-        this.role = role;
-        this.active = active;
-        this.emailVerified = emailVerified;
-        this.verifiedDealer = verifiedDealer;
-        this.lockedUntil = lockedUntil;
-    }
+    // Remove the private constructor as @AllArgsConstructor and @NoArgsConstructor cover it
 
     /**
      * Factory method to convert User entity → UserPrincipal
