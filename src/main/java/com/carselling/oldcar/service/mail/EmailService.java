@@ -34,14 +34,14 @@ public class EmailService {
 
     /**
      * Resolves the "from" email address at startup.
-     * Priority: spring.mail.username -> app.email.from
+     * Priority: app.email.from -> spring.mail.username
      */
     @PostConstruct
     public void init() {
-        if (mailUsername != null && !mailUsername.trim().isEmpty()) {
-            resolvedFromEmail = mailUsername.trim();
-        } else if (emailFrom != null && !emailFrom.trim().isEmpty()) {
+        if (emailFrom != null && !emailFrom.trim().isEmpty()) {
             resolvedFromEmail = emailFrom.trim();
+        } else if (mailUsername != null && !mailUsername.trim().isEmpty()) {
+            resolvedFromEmail = mailUsername.trim();
         } else {
             log.error("CRITICAL: No email sender address configured! " +
                     "(spring.mail.username and app.email.from are both empty). " +
