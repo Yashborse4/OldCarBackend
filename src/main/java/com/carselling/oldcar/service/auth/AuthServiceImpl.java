@@ -17,6 +17,8 @@ import com.carselling.oldcar.util.SecurityUtils;
 import com.carselling.oldcar.model.OtpPurpose;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -417,9 +419,13 @@ public class AuthServiceImpl implements AuthService {
         log.info("Token refresh request");
 
         // 1. Validate against DB
-        RefreshToken storedToken = refreshTokenRepository.findByToken(incomingToken)
-                .orElseThrow(() -> new AuthenticationFailedException("Refresh token not found in database",
-                        AuthError.TOKEN_INVALID));
+        Optional<RefreshToken> tokenOptional = refreshTokenRepository.findByToken(incomingToken);
+        if (tokenOptional.isEmpty()) {
+            log.warn("Refresh token refresh failed: Token not found in database. Token hash: {}...", 
+                     incomingToken.substring(0, Math.min(10, incomingToken.length())));
+            throw new AuthenticationFailedException("Refresh token not found in database", AuthError.TOKEN_INVALID);
+        }
+        RefreshToken storedToken = tokenOptional.get();
 
         // 2. Check revocation
         if (storedToken.isRevoked()) {
@@ -431,6 +437,7 @@ public class AuthServiceImpl implements AuthService {
 
         // 3. Check Expiry
         if (storedToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            log.warn("Refresh token expired for user: {}. Expiry: {}", storedToken.getUser().getUsername(), storedToken.getExpiryDate());
             refreshTokenRepository.delete(storedToken); // cleanup
             throw new AuthenticationFailedException("Refresh token expired", AuthError.TOKEN_INVALID);
         }

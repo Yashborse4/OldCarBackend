@@ -113,8 +113,8 @@ app:
   jwt:
     secret: ${JWT_SECRET:dev-only-change-me-32-chars-minimum}
     # Consistent keys with JwtTokenProvider
-    expiration-ms: 86400000 # 24 hours for development
-    refresh-token-expiration-ms: 86400000 # 24 hours for development
+    access-token-expiration-ms: 86400000 # 24 hours for development
+    refresh-token-expiration-ms: 604800000 # 7 days for development
     
   # File Upload Configuration
   upload:

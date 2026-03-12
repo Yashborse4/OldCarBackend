@@ -120,8 +120,8 @@ app:
   # JWT Configuration
   jwt:
     secret: ${JWT_SECRET} # Must be provided via environment variable
-    access-token-expiration: ${JWT_ACCESS_EXPIRATION:900000} # 15 minutes
-    refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days
+    access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:86400000} # 24 hours default
+    refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000} # 7 days default
     
   # File Upload Configuration
   upload:
