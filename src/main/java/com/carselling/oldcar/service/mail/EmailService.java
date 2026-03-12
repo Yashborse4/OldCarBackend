@@ -22,8 +22,6 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class EmailService {
 
-    private static final String DEFAULT_FROM_EMAIL = "yashborse432005@gmail.com";
-
     private final JavaMailSender mailSender;
 
     @Value("${spring.mail.username:}")
@@ -36,7 +34,7 @@ public class EmailService {
 
     /**
      * Resolves the "from" email address at startup.
-     * Priority: spring.mail.username -> app.email.from -> DEFAULT_FROM_EMAIL
+     * Priority: spring.mail.username -> app.email.from
      */
     @PostConstruct
     public void init() {
@@ -45,9 +43,9 @@ public class EmailService {
         } else if (emailFrom != null && !emailFrom.trim().isEmpty()) {
             resolvedFromEmail = emailFrom.trim();
         } else {
-            resolvedFromEmail = DEFAULT_FROM_EMAIL;
-            log.warn("No email sender address configured (spring.mail.username and app.email.from are both empty). " +
-                    "Falling back to default: {}", DEFAULT_FROM_EMAIL);
+            log.error("CRITICAL: No email sender address configured! " +
+                    "(spring.mail.username and app.email.from are both empty). " +
+                    "Email sending will likely fail.");
         }
         log.info("Email sender address resolved to: {}", resolvedFromEmail);
     }
