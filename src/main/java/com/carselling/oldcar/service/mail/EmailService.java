@@ -105,13 +105,13 @@ public class EmailService {
 
         String normalizedPurpose = purpose != null ? purpose : "";
 
-        String subject = "Your Verification Code - Car World";
+        String subject = "Your Verification Code - Wheel Deal";
         String actionDescription = "verify your email address";
         if ("PASSWORD_RESET".equalsIgnoreCase(normalizedPurpose)) {
-            subject = "Password Reset Request - Car World";
+            subject = "Password Reset Request - Wheel Deal";
             actionDescription = "reset your password";
         } else if ("LOGIN".equalsIgnoreCase(normalizedPurpose)) {
-            subject = "Your Login Code - Car World";
+            subject = "Your Login Code - Wheel Deal";
             actionDescription = "log in to your account";
         }
 
@@ -121,39 +121,55 @@ public class EmailService {
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Verification Code</title>
                     <style>
-                        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4; }
-                        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 40px; margin-bottom: 40px; }
-                        .header { background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%); padding: 30px; text-align: center; color: white; }
-                        .header h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 1px; }
-                        .content { padding: 40px; text-align: center; color: #333333; }
-                        .otp-box { background-color: #f8f9fa; border: 2px dashed #0d47a1; border-radius: 8px; padding: 20px; margin: 30px auto; width: fit-content; min-width: 200px; }
-                        .otp-code { font-size: 36px; font-weight: 700; color: #0d47a1; letter-spacing: 5px; margin: 0; font-family: 'Courier New', monospace; }
-                        .message { font-size: 16px; line-height: 1.6; color: #555555; margin-bottom: 20px; }
-                        .footer { background-color: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee; }
-                        .expiry { color: #d32f2f; font-weight: 500; font-size: 14px; margin-top: 15px; }
+                        body { margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8FAFC; color: #1E293B; }
+                        .wrapper { width: 100%; table-layout: fixed; background-color: #F8FAFC; padding-bottom: 40px; }
+                        .container { max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+                        .header { background: linear-gradient(135deg, #0F172A 0%, #1E40AF 100%); padding: 40px 20px; text-align: center; }
+                        .logo-text { color: #FFFFFF; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin: 0; text-transform: uppercase; }
+                        .logo-accent { color: #EAB308; }
+                        .content { padding: 40px 30px; text-align: center; }
+                        .title { font-size: 22px; font-weight: 700; color: #0F172A; margin-bottom: 12px; }
+                        .description { font-size: 16px; line-height: 1.6; color: #64748B; margin-bottom: 32px; }
+                        .otp-container { background-color: #F1F5F9; border-radius: 12px; padding: 24px; margin: 0 auto 32px auto; display: inline-block; min-width: 260px; }
+                        .otp-code { font-size: 42px; font-weight: 800; color: #1E40AF; letter-spacing: 8px; margin: 0; font-family: 'Courier New', monospace; }
+                        .expiry-tag { display: inline-block; background-color: #FEF2F2; color: #EF4444; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 20px; margin-bottom: 24px; }
+                        .divider { height: 1px; background-color: #E2E8F0; margin: 32px 0; }
+                        .security-note { font-size: 13px; color: #94A3B8; margin-bottom: 0; }
+                        .footer { background-color: #F8FAFC; padding: 32px 20px; text-align: center; }
+                        .footer-text { font-size: 12px; color: #94A3B8; line-height: 1.5; margin: 0 0 8px 0; }
+                        .social-links { margin: 16px 0; }
+                        .social-icon { display: inline-block; width: 32px; height: 32px; margin: 0 8px; }
                     </style>
                 </head>
                 <body>
-                    <div class="container">
-                        <div class="header">
-                            <h1>Car World</h1>
-                        </div>
-                        <div class="content">
-                            <p class="message">Hello,</p>
-                            <p class="message">Use the code below to {{ACTION_DESCRIPTION}}.</p>
-
-                            <div class="otp-box">
-                                <p class="otp-code">{{OTP_CODE}}</p>
+                    <div class="wrapper">
+                        <div class="container">
+                            <div class="header">
+                                <h2 class="logo-text">WHEEL<span class="logo-accent">DEAL</span></h2>
                             </div>
-
-                            <p class="expiry">This code will expire in 5 minutes.</p>
-                            <p class="message" style="font-size: 14px; margin-top: 30px;">If you didn't request this code, you can safely ignore this email.</p>
-                        </div>
-                        <div class="footer">
-                            <p>&copy; {{CURRENT_YEAR}} Car World. All rights reserved.</p>
-                            <p>This is an automated message, please do not reply.</p>
+                            <div class="content">
+                                <h1 class="title">Verification Code</h1>
+                                <p class="description">Hello,<br>Use the secure code below to {{ACTION_DESCRIPTION}}.</p>
+                                
+                                <div class="otp-container">
+                                    <p class="otp-code">{{OTP_CODE}}</p>
+                                </div>
+                                
+                                <div class="expiry-tag">
+                                    Expires in 5 minutes
+                                </div>
+                                
+                                <p class="description" style="font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
+                                
+                                <div class="divider"></div>
+                                
+                                <p class="security-note">For your security, never share this code with anyone.</p>
+                            </div>
+                            <div class="footer">
+                                <p class="footer-text">&copy; {{CURRENT_YEAR}} Wheel Deal. All rights reserved.</p>
+                                <p class="footer-text">This is an automated security message.</p>
+                            </div>
                         </div>
                     </div>
                 </body>
