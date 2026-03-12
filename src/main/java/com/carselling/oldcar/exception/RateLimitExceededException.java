@@ -9,7 +9,7 @@ public class RateLimitExceededException extends RuntimeException {
     private final Long remainingSeconds;
     
     public RateLimitExceededException(String message) {
-        this(message, null);
+        this(message, (Long) null);
     }
     
     public RateLimitExceededException(String message, Long remainingSeconds) {
