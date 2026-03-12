@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.annotation.Bean;
@@ -26,6 +27,7 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.cache.interceptor.CacheErrorHandler;
 
 /**
  * Redis Configuration with Fallback Support
@@ -35,7 +37,7 @@ import java.util.Map;
 @Configuration
 @EnableCaching
 @Slf4j
-public class RedisConfig {
+public class RedisConfig implements CachingConfigurer {
 
     @Value("${app.redis.enabled:true}")
     private boolean redisEnabled;
@@ -154,6 +156,14 @@ public class RedisConfig {
     @Bean
     public RedisHealthService redisHealthService() {
         return new RedisHealthService();
+    }
+
+    /**
+     * Custom error handler: log & treat as cache miss instead of crashing.
+     */
+    @Override
+    public CacheErrorHandler errorHandler() {
+        return new CustomCacheErrorHandler();
     }
 
     // Helper methods
