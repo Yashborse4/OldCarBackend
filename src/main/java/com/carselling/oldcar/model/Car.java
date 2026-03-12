@@ -56,7 +56,7 @@ public class Car {
     @NotNull(message = "Year is required")
     @Min(value = 1900, message = "Year must be after 1900")
     @Max(value = 2030, message = "Year must not exceed 2030")
-    @Column(nullable = false)
+    @Column(name = "\"year\"", nullable = false)
     private Integer year;
 
     @NotNull(message = "Price is required")

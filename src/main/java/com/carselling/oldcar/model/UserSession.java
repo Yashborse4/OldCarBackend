@@ -118,7 +118,7 @@ public class UserSession {
      * List of screens visited (for path analysis)
      */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "screens_visited", columnDefinition = "jsonb")
+    @Column(name = "screens_visited")
     private List<String> screensVisited;
 
     /**
@@ -137,7 +137,7 @@ public class UserSession {
      * Session metadata
      */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "metadata", columnDefinition = "jsonb")
+    @Column(name = "metadata")
     private Map<String, Object> metadata;
 
     /**

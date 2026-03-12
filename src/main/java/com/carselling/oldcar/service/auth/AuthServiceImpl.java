@@ -281,7 +281,7 @@ public class AuthServiceImpl implements AuthService {
      */
     public void requestLoginOtp(String email) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new AuthenticationFailedException("User not found", AuthError.USER_NOT_FOUND));
 
         if (!user.isAccountNonLocked()) {
             throw new AuthenticationFailedException("Account is locked", AuthError.ACCOUNT_LOCKED);

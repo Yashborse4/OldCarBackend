@@ -72,6 +72,7 @@ class ChatServiceInviteTest {
         groupChat = new ChatRoom();
         groupChat.setId(10L);
         groupChat.setName("Test Group");
+        groupChat.setCreatedBy(adminUser);
         groupChat.setType(ChatType.GROUP);
 
         adminParticipant = new ChatParticipant();
@@ -131,6 +132,7 @@ class ChatServiceInviteTest {
         when(userRepository.findById(2L)).thenReturn(Optional.of(normalUser));
         when(chatParticipantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(Optional.empty());
 
+        when(chatMessageRepository.save(any())).thenAnswer(i -> i.getArguments()[0]);
         ChatRoomDto result = chatService.joinChatByLink("valid-token", 2L);
 
         assertNotNull(result);

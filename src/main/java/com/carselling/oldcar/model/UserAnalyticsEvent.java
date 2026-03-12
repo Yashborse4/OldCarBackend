@@ -71,7 +71,7 @@ public class UserAnalyticsEvent {
      * Additional event-specific metadata as JSON
      */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "metadata", columnDefinition = "jsonb")
+    @Column(name = "metadata")
     private Map<String, Object> metadata;
 
     /**
