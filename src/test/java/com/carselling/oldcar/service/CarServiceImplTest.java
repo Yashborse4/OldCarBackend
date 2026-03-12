@@ -10,11 +10,15 @@ import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.CarMasterRepository;
 import com.carselling.oldcar.repository.CarRepository;
+import com.carselling.oldcar.repository.UploadedFileRepository;
+import com.carselling.oldcar.repository.TemporaryFileRepository;
 import com.carselling.oldcar.repository.UserRepository;
 import com.carselling.oldcar.service.auth.AuthService;
 import com.carselling.oldcar.service.car.CarServiceImpl;
 
+import com.carselling.oldcar.service.analytics.UserPreferenceScoreService;
 import com.carselling.oldcar.service.file.FileValidationService;
+import com.carselling.oldcar.service.file.ViewCountService;
 import com.carselling.oldcar.service.media.MediaFinalizationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +26,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -55,6 +61,18 @@ class CarServiceImplTest {
         private MediaFinalizationService mediaFinalizationService;
         @Mock
         private AuditLogService auditLogService;
+        @Mock
+        private UploadedFileRepository uploadedFileRepository;
+        @Mock
+        private TemporaryFileRepository temporaryFileRepository;
+        @Mock
+        private UserPreferenceScoreService preferenceScoreService;
+        @Mock
+        private ViewCountService viewCountService;
+        @Mock
+        private PlatformTransactionManager transactionManager;
+        @Mock
+        private ApplicationEventPublisher applicationEventPublisher;
 
         @InjectMocks
         private CarServiceImpl carService;
@@ -82,7 +100,7 @@ class CarServiceImplTest {
                                 .updatedAt(LocalDateTime.now().minusHours(1))
                                 .build();
 
-                lenient().when(carRepository.findById(10L)).thenReturn(Optional.of(existingCar));
+                lenient().when(carRepository.findWithDetailsById(10L)).thenReturn(Optional.of(existingCar));
                 lenient().when(carRepository.save(any(Car.class))).thenAnswer(invocation -> invocation.getArgument(0));
                 lenient().when(userRepository.findById(1L)).thenReturn(Optional.of(owner));
         }

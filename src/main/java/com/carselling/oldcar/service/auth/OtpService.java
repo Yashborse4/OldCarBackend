@@ -60,8 +60,9 @@ public class OtpService {
             long secondsSinceLast = java.time.Duration.between(latestOtp.get().getCreatedAt(), LocalDateTime.now())
                     .getSeconds();
             if (secondsSinceLast < 60) {
+                long remaining = 60 - secondsSinceLast;
                 throw new com.carselling.oldcar.exception.RateLimitExceededException(
-                        "Please wait " + (60 - secondsSinceLast) + " seconds before requesting a new OTP");
+                        "Please wait " + remaining + " seconds before requesting a new OTP", remaining);
             }
         }
 

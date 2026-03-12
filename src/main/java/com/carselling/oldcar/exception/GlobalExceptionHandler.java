@@ -169,11 +169,18 @@ public class GlobalExceptionHandler {
                         RateLimitExceededException ex, HttpServletRequest request) {
 
                 log.warn("Rate limit exceeded: {}", ex.getMessage());
+                
+                Map<String, Object> data = new HashMap<>();
+                if (ex.getRemainingSeconds() != null) {
+                    data.put("remainingSeconds", ex.getRemainingSeconds());
+                }
 
                 ApiResponse<Object> response = ApiResponse.builder()
                                 .timestamp(LocalDateTime.now())
-                                .message("Rate limit exceeded")
+                                .message(ex.getMessage()) // Use the dynamic message from exception
                                 .details("Too many requests. Please try again later.")
+                                .errorCode("RATE_LIMIT_EXCEEDED")
+                                .data(data)
                                 .success(false)
                                 .build();
 

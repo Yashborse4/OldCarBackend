@@ -1531,7 +1531,7 @@ public class ChatService {
                     .orElseThrow(() -> new AccessDeniedException("Access denied to chat room"));
 
             if (participant.getRole() != ChatParticipant.ParticipantRole.ADMIN) {
-                throw new AccessDeniedException("Only admins can create invite links");
+                throw new BusinessException("Only admins can create invite links");
             }
         } else {
             throw new IllegalArgumentException("Invite links are only supported for group chats");
@@ -1571,7 +1571,7 @@ public class ChatService {
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid or expired invite link"));
 
         if (inviteLink.isExpired()) {
-            throw new ResourceNotFoundException("Invite link has expired");
+            throw new BusinessException("Invite link has expired");
         }
 
         return convertToRoomDto(inviteLink.getChatRoom(), null);
@@ -1588,7 +1588,7 @@ public class ChatService {
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid or expired invite link"));
 
         if (inviteLink.isExpired()) {
-            throw new ResourceNotFoundException("Invite link has expired");
+            throw new BusinessException("Invite link has expired");
         }
 
         ChatRoom chatRoom = inviteLink.getChatRoom();

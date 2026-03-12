@@ -8,6 +8,7 @@ import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.CarInteractionEventRepository;
 import com.carselling.oldcar.repository.CarRepository;
 import com.carselling.oldcar.repository.UserRepository;
+import com.carselling.oldcar.service.analytics.UserPreferenceScoreService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +34,9 @@ class CarInteractionEventServiceTest {
 
         @Mock
         private UserRepository userRepository;
+
+        @Mock
+        private UserPreferenceScoreService scoreService;
 
         @InjectMocks
         private CarInteractionEventService eventService;

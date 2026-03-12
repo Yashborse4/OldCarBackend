@@ -8,10 +8,12 @@ import com.carselling.oldcar.model.ChatRoom;
 import com.carselling.oldcar.model.ChatRoom.ChatType;
 import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.repository.ChatInviteLinkRepository;
+import com.carselling.oldcar.repository.ChatMessageRepository;
 import com.carselling.oldcar.repository.ChatParticipantRepository;
 import com.carselling.oldcar.repository.ChatRoomRepository;
 import com.carselling.oldcar.repository.UserRepository;
 import com.carselling.oldcar.model.ChatParticipant.ParticipantRole;
+import com.carselling.oldcar.service.chat.ChatAuthorizationService;
 import com.carselling.oldcar.service.chat.ChatService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.time.LocalDateTime;
@@ -40,7 +43,13 @@ class ChatServiceInviteTest {
     @Mock
     private ChatInviteLinkRepository chatInviteLinkRepository;
     @Mock
+    private ChatMessageRepository chatMessageRepository;
+    @Mock
     private SimpMessagingTemplate messagingTemplate;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private ChatAuthorizationService chatAuthorizationService;
 
     @InjectMocks
     private ChatService chatService;
@@ -93,7 +102,6 @@ class ChatServiceInviteTest {
         existingLink.setChatRoom(groupChat);
 
         when(chatRoomRepository.findById(10L)).thenReturn(Optional.of(groupChat));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(adminUser));
         when(chatParticipantRepository.findByChatRoomIdAndUserId(10L, 1L)).thenReturn(Optional.of(adminParticipant));
         when(chatInviteLinkRepository.findByChatRoomId(10L)).thenReturn(Optional.of(existingLink));
 
@@ -107,7 +115,6 @@ class ChatServiceInviteTest {
     void createInviteLink_ShouldFail_IfUserNotAdmin() {
         adminParticipant.setRole(ParticipantRole.MEMBER);
         when(chatRoomRepository.findById(10L)).thenReturn(Optional.of(groupChat));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(adminUser));
         when(chatParticipantRepository.findByChatRoomIdAndUserId(10L, 1L)).thenReturn(Optional.of(adminParticipant));
 
         assertThrows(BusinessException.class, () -> chatService.createInviteLink(10L, 1L));
@@ -143,3 +150,4 @@ class ChatServiceInviteTest {
         assertThrows(BusinessException.class, () -> chatService.joinChatByLink("expired-token", 2L));
     }
 }
+

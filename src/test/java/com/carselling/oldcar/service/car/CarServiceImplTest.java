@@ -80,7 +80,7 @@ class CarServiceImplTest {
     void getVehicleById_Success_Owner() {
         // Arrange
         when(authService.getCurrentUserOrNull()).thenReturn(owner);
-        when(carRepository.findById(100L)).thenReturn(Optional.of(car));
+        when(carRepository.findWithDetailsById(100L)).thenReturn(Optional.of(car));
 
         // Act
         CarResponse response = carService.getVehicleById("100");
@@ -95,7 +95,7 @@ class CarServiceImplTest {
     void getVehicleById_Success_Public() {
         // Arrange
         when(authService.getCurrentUserOrNull()).thenReturn(null);
-        when(carRepository.findById(100L)).thenReturn(Optional.of(car));
+        when(carRepository.findWithDetailsById(100L)).thenReturn(Optional.of(car));
 
         // Act
         CarResponse response = carService.getVehicleById("100");
@@ -116,7 +116,7 @@ class CarServiceImplTest {
         car.setIsActive(false); // Not public
 
         when(authService.getCurrentUserOrNull()).thenReturn(admin);
-        when(carRepository.findById(100L)).thenReturn(Optional.of(car));
+        when(carRepository.findWithDetailsById(100L)).thenReturn(Optional.of(car));
 
         // Act
         CarResponse response = carService.getVehicleById("100");
@@ -130,7 +130,7 @@ class CarServiceImplTest {
     void getVehicleById_NotFound_Deleted() {
         // Arrange
         car.setStatus(CarStatus.DELETED);
-        when(carRepository.findById(100L)).thenReturn(Optional.of(car));
+        when(carRepository.findWithDetailsById(100L)).thenReturn(Optional.of(car));
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> carService.getVehicleById("100"));
@@ -146,7 +146,7 @@ class CarServiceImplTest {
         car.setIsActive(false); // Private car
 
         when(authService.getCurrentUserOrNull()).thenReturn(stranger);
-        when(carRepository.findById(100L)).thenReturn(Optional.of(car));
+        when(carRepository.findWithDetailsById(100L)).thenReturn(Optional.of(car));
 
         // Act & Assert
         assertThrows(ResourceNotFoundException.class, () -> carService.getVehicleById("100"));
