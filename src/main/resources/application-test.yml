@@ -1,0 +1,90 @@
+# Senior Engineer Level Test Configuration
+# Optimized for local development and CI/CD (GitHub Actions)
+
+spring:
+  main:
+    banner-mode: off  # Cleaner CI logs
+    allow-bean-definition-overriding: true
+
+  datasource:
+    # Use MODE=PostgreSQL for compatibility with prod schema
+    # DB_CLOSE_DELAY=-1 keeps the database alive as long as the VM/Context is alive
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      # create-drop is perfect for isolated integration tests
+      ddl-auto: create-drop
+    show-sql: false # Set to true only via environment variable for local debugging
+    open-in-view: false # Best practice to avoid hidden N+1 performance issues
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 20
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  # Mock Mail configuration
+  mail:
+    host: localhost
+    port: 3025
+    username: test
+    password: test
+
+# Random port prevents collisions during parallel test execution in CI
+server:
+  port: 0
+  error:
+    include-stacktrace: always
+
+# Disable or mock all external infra dependencies
+app:
+  redis:
+    enabled: false
+  firebase:
+    enabled: false
+    service-account-file: dummy-file.json
+  email:
+    enabled: false
+  jwt:
+    # Use a dummy secret that meets security requirements for tests
+    secret: ${JWT_SECRET:this-is-a-very-long-and-secure-dummy-jwt-secret-for-tests-only-12345}
+    access-token-expiration-ms: 3600000
+    refresh-token-expiration-ms: 86400000
+  upload:
+    path: ./build/test-uploads
+  rate-limit:
+    login-attempts: 100 # Relaxed for tests
+    lockout-duration: 0
+    otp-requests: 100
+
+# Logging optimized for CI readability
+logging:
+  level:
+    root: WARN
+    com.carselling.oldcar: INFO
+    org.springframework.web: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+
+# Health checks: disable external ones that would fail in isolated CI env
+management:
+  health:
+    redis:
+      enabled: false
+    mail:
+      enabled: false
+    db:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info

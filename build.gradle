@@ -102,7 +102,7 @@ dependencies {
     testImplementation 'org.springframework.graphql:spring-graphql-test'
     testImplementation 'org.springframework.security:spring-security-test'
    
-	testRuntimeOnly 'com.h2database:h2'
+	testImplementation 'com.h2database:h2'
 
 }
 
