@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: Sell-the-old-Car
+  profiles:
+    default: dev # Default to development profile if none is specified
+
+  messages:
+    basename: classpath:messages/messages
+    encoding: UTF-8
+
+  # Date format handling
+  mvc:
+    format:
+      date: yyyy-MM-dd
+      date-time: yyyy-MM-dd HH:mm:ss
+      time: HH:mm:ss
+  
+  # Jackson JSON formatting
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: UTC
+
+  # Mail Configuration (Default/Dev)
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: dev-email@example.com
+    password: password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# Actuator Endpoints (Common)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

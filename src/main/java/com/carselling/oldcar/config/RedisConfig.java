@@ -187,8 +187,8 @@ public class RedisConfig implements CachingConfigurer {
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
 
         // User cache - 30 minutes TTL
-        cacheConfigurations.put("users_v2", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
-        cacheConfigurations.put("usersById_v2", defaultCacheConfig.entryTtl(Duration.ofMinutes(5)));
+        cacheConfigurations.put("users_v3", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
+        cacheConfigurations.put("usersById_v3", defaultCacheConfig.entryTtl(Duration.ofMinutes(5)));
         cacheConfigurations.put("userPreferences", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
         cacheConfigurations.put("similarUsers", defaultCacheConfig.entryTtl(Duration.ofHours(2)));
 
@@ -232,7 +232,7 @@ public class RedisConfig implements CachingConfigurer {
 
         // Pre-configure cache names for consistency
         cacheManager.setCacheNames(java.util.Arrays.asList(
-                "users_v2", "usersById_v2", "userPreferences", "similarUsers",
+                "users_v3", "usersById_v3", "userPreferences", "similarUsers",
                 "vehicles", "vehicleSearch", "vehicleRecommendations", "vehicleStats",
                 "trendingVehicles", "trendingSearches",
                 "publicCars", "publicCarDetail",
