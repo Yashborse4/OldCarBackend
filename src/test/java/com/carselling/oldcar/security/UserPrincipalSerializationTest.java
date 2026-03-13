@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests that UserPrincipal can be serialized and deserialized using the same
@@ -81,6 +82,6 @@ class UserPrincipalSerializationTest {
         assertEquals("dealer@example.com", result.getEmail());
         assertEquals(Role.DEALER, result.getRole());
         assertEquals(lockedUntil, result.getLockedUntil());
-        assertEquals(true, result.isVerifiedDealer());
+        assertTrue(result.isVerifiedDealer());
     }
 }
