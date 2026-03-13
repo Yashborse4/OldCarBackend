@@ -30,7 +30,7 @@ public class UserPrincipal implements UserDetails {
     @JsonProperty("email")
     private String email;
 
-    @JsonIgnore
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     @JsonProperty("role")

@@ -168,6 +168,12 @@ public class RedisConfig implements CachingConfigurer {
         objectMapper.registerModule(new JavaTimeModule());
         // Add support for Spring Security classes (like authorities, etc.)
         objectMapper.registerModules(org.springframework.security.jackson2.SecurityJackson2Modules.getModules(getClass().getClassLoader()));
+
+        objectMapper.activateDefaultTyping(
+                LaissezFaireSubTypeValidator.instance,
+                ObjectMapper.DefaultTyping.NON_FINAL
+        );
+
         return objectMapper;
     }
 
