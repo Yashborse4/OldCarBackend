@@ -210,6 +210,7 @@ public class AuthServiceImpl implements AuthService {
     /**
      * Login user with device info tracking
      */
+    @Transactional
     public JwtAuthResponse loginUser(LoginRequest request) {
         if (request == null) {
             throw new InvalidInputException("Login request cannot be null");
@@ -259,6 +260,7 @@ public class AuthServiceImpl implements AuthService {
     /**
      * Request OTP for Email Verification
      */
+    @Transactional
     public void requestEmailVerificationOtp(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -292,6 +294,7 @@ public class AuthServiceImpl implements AuthService {
     /**
      * Request OTP for Login
      */
+    @Transactional
     public void requestLoginOtp(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new AuthenticationFailedException("User not found", AuthError.USER_NOT_FOUND));
@@ -310,6 +313,7 @@ public class AuthServiceImpl implements AuthService {
     /**
      * Login with OTP
      */
+    @Transactional
     public JwtAuthResponse loginWithOtp(String email, String otp) {
         boolean isValid = otpService.validateOtp(email, otp, OtpPurpose.LOGIN.name());
         if (!isValid) {
@@ -427,12 +431,17 @@ public class AuthServiceImpl implements AuthService {
         }
         RefreshToken storedToken = tokenOptional.get();
 
-        // 2. Check revocation
+        // 2. Check revocation with Grace Period (30 seconds)
         if (storedToken.isRevoked()) {
-            // Security Alert: Attempt to use revoked token. Potentially compromise.
-            // Revoke all tokens for this user?
-            refreshTokenRepository.deleteByUser(storedToken.getUser());
-            throw new AuthenticationFailedException("Refresh token was revoked", AuthError.TOKEN_INVALID);
+            LocalDateTime revokedAt = storedToken.getRevokedAt();
+            if (revokedAt != null && revokedAt.isAfter(LocalDateTime.now().minusSeconds(30))) {
+                log.info("Concurrent refresh request: allowing recently rotated token for user: {}", 
+                         storedToken.getUser().getUsername());
+            } else {
+                // Security Alert: Attempt to use revoked token outside grace period.
+                refreshTokenRepository.deleteByUser(storedToken.getUser());
+                throw new AuthenticationFailedException("Refresh token was revoked (outside grace period)", AuthError.TOKEN_INVALID);
+            }
         }
 
         // 3. Check Expiry
@@ -447,9 +456,13 @@ public class AuthServiceImpl implements AuthService {
             throw new AuthenticationFailedException("Invalid refresh token signature", AuthError.TOKEN_INVALID);
         }
 
-        // 5. Rotate Token (Security Best Practice)
-        // Revoke/Delete old token
-        refreshTokenRepository.delete(storedToken);
+        // 5. Rotate Token (Security Best Practice with Soft Revocation)
+        // Instead of immediate delete, we mark as revoked to support concurrency
+        if (!storedToken.isRevoked()) {
+            storedToken.setRevoked(true);
+            storedToken.setRevokedAt(LocalDateTime.now());
+            refreshTokenRepository.save(storedToken);
+        }
 
         // Generate new Pair
         User user = storedToken.getUser();

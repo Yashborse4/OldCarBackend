@@ -39,6 +39,9 @@ public class RefreshToken {
     @Builder.Default
     private boolean revoked = false;
 
+    @Column(name = "revoked_at")
+    private LocalDateTime revokedAt;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
