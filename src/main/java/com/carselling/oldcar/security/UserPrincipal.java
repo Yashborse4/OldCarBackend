@@ -12,7 +12,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -20,11 +19,17 @@ import java.util.List;
 import java.util.Objects;
 
 @Getter
-@NoArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@class")
 public class UserPrincipal implements UserDetails {
+
+    /**
+     * Explicit no-args constructor required for robust Jackson deserialization
+     * when values are read back from Redis cache.
+     */
+    public UserPrincipal() {
+    }
 
     @JsonProperty("id")
     private Long id;
