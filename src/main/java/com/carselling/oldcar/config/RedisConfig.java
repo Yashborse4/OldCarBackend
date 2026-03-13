@@ -64,8 +64,8 @@ public class RedisConfig implements CachingConfigurer {
 
             // Use Jackson JSON serializer for values
             ObjectMapper objectMapper = createObjectMapper();
-            Jackson2JsonRedisSerializer<Object> jackson2JsonRedisSerializer = new Jackson2JsonRedisSerializer<>(
-                    objectMapper, Object.class);
+            Jackson2JsonRedisSerializer<Object> jackson2JsonRedisSerializer = new Jackson2JsonRedisSerializer<>(Object.class);
+            jackson2JsonRedisSerializer.setObjectMapper(objectMapper);
 
             template.setValueSerializer(jackson2JsonRedisSerializer);
             template.setHashValueSerializer(jackson2JsonRedisSerializer);
@@ -110,8 +110,7 @@ public class RedisConfig implements CachingConfigurer {
                                     .fromSerializer(new StringRedisSerializer()))
                     .serializeValuesWith(
                             org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair
-                                    .fromSerializer(
-                                            new Jackson2JsonRedisSerializer<>(createObjectMapper(), Object.class)));
+                                    .fromSerializer(createJacksonSerializer()));
 
             Map<String, RedisCacheConfiguration> cacheConfigurations = createCacheConfigurations(defaultCacheConfig);
 
@@ -171,11 +170,16 @@ public class RedisConfig implements CachingConfigurer {
     private ObjectMapper createObjectMapper() {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        objectMapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL);
         objectMapper.registerModule(new JavaTimeModule());
         // Add support for Spring Security classes (like authorities, etc.)
         objectMapper.registerModules(org.springframework.security.jackson2.SecurityJackson2Modules.getModules(getClass().getClassLoader()));
         return objectMapper;
+    }
+
+    private Jackson2JsonRedisSerializer<Object> createJacksonSerializer() {
+        Jackson2JsonRedisSerializer<Object> serializer = new Jackson2JsonRedisSerializer<>(Object.class);
+        serializer.setObjectMapper(createObjectMapper());
+        return serializer;
     }
 
     private Map<String, RedisCacheConfiguration> createCacheConfigurations(RedisCacheConfiguration defaultCacheConfig) {
