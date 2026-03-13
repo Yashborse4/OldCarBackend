@@ -63,17 +63,12 @@ public class RedisConfig implements CachingConfigurer {
             template.setHashKeySerializer(new StringRedisSerializer());
 
             // Use Jackson JSON serializer for values
-            ObjectMapper objectMapper = createObjectMapper();
-            Jackson2JsonRedisSerializer<Object> jackson2JsonRedisSerializer = new Jackson2JsonRedisSerializer<>(Object.class);
-            jackson2JsonRedisSerializer.setObjectMapper(objectMapper);
+            Jackson2JsonRedisSerializer<Object> jackson2JsonRedisSerializer = createJacksonSerializer();
 
             template.setValueSerializer(jackson2JsonRedisSerializer);
             template.setHashValueSerializer(jackson2JsonRedisSerializer);
 
             template.afterPropertiesSet();
-
-            // Test Redis connection
-            testRedisConnection(template);
 
             log.info("RedisTemplate initialized successfully");
             return template;
@@ -169,7 +164,7 @@ public class RedisConfig implements CachingConfigurer {
 
     private ObjectMapper createObjectMapper() {
         ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        objectMapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
         objectMapper.registerModule(new JavaTimeModule());
         // Add support for Spring Security classes (like authorities, etc.)
         objectMapper.registerModules(org.springframework.security.jackson2.SecurityJackson2Modules.getModules(getClass().getClassLoader()));
@@ -241,20 +236,6 @@ public class RedisConfig implements CachingConfigurer {
         return cacheManager;
     }
 
-    private void testRedisConnection(RedisTemplate<String, Object> template) {
-        try {
-            template.opsForValue().set("redis:health:test", "OK", Duration.ofSeconds(5));
-            String result = (String) template.opsForValue().get("redis:health:test");
-            if (!"OK".equals(result)) {
-                throw new RuntimeException("Redis health check failed - value mismatch");
-            }
-            template.delete("redis:health:test");
-            log.debug("Redis connection test successful");
-        } catch (Exception e) {
-            log.error("Redis connection test failed: {}", e.getMessage());
-            throw e;
-        }
-    }
 
     private void testRedisConnectionFactory(RedisConnectionFactory connectionFactory) {
         try {
