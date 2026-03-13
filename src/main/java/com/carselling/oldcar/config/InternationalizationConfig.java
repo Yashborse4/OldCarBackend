@@ -53,7 +53,11 @@ public class InternationalizationConfig implements WebMvcConfigurer {
     public MessageSource messageSource() {
         ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
         messageSource.setBasenames(
-                "messages/messages" // General messages
+                "messages/messages",       // General messages
+                "messages/validation",     // Validation messages
+                "messages/email",          // Email messages
+                "messages/notifications",  // Notification messages
+                "messages/errors"          // Error messages
         );
         messageSource.setDefaultEncoding("UTF-8");
         messageSource.setUseCodeAsDefaultMessage(true);
