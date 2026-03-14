@@ -374,6 +374,10 @@ public class AuthServiceImpl implements AuthService {
      */
     @Transactional
     protected JwtAuthResponse generateAuthResponse(User user) {
+        // Evict cache to ensure that any session-linked data in Redis is synchronized 
+        // with the new token generation event.
+        evictUserCache(user);
+
         // 1. Generate Access Token (15 mins)
         String accessToken = jwtTokenProvider.generateAccessToken(user);
 
@@ -485,6 +489,12 @@ public class AuthServiceImpl implements AuthService {
 
         // Generate new Pair
         User user = storedToken.getUser();
+        
+        // Force cache eviction before returning new tokens, ensuring any subsequent
+        // requests based on the user principal will reload fresh data from DB
+        // rather than using potentially corrupted cached entry.
+        evictUserCache(user);
+        
         return generateAuthResponse(user);
     }
 
