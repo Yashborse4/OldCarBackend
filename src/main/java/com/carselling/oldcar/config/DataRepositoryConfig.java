@@ -11,7 +11,7 @@ import org.springframework.data.redis.repository.configuration.EnableRedisReposi
  * the "Could not safely identify store assignment for repository" warning.
  */
 @Configuration
-@EnableJpaRepositories(basePackages = "com.carselling.oldcar.repository")
+@EnableJpaRepositories(basePackages = {"com.carselling.oldcar.repository", "com.carselling.oldcar.scheduler"})
 @EnableRedisRepositories(basePackages = "com.carselling.oldcar.redis.repository")
 public class DataRepositoryConfig {
     // No explicit beans needed, just the annotations to partition the space
