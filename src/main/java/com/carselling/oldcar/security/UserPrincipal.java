@@ -10,54 +10,57 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.Getter;
 
+import java.io.Serial;
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Robust UserPrincipal for Spring Security and Redis Caching.
+ * 
+ * Uses an immutable pattern with a single @JsonCreator constructor to ensure
+ * reliable serialization/deserialization across different Jackson versions
+ * and caching providers.
+ */
 @Getter
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
-@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@class")
-public class UserPrincipal implements UserDetails {
+public class UserPrincipal implements UserDetails, Serializable {
 
-    /**
-     * Explicit no-args constructor required for robust Jackson deserialization
-     * when values are read back from Redis cache.
-     */
-    public UserPrincipal() {
-    }
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     @JsonProperty("id")
-    private Long id;
+    private final Long id;
 
     @JsonProperty("email")
-    private String email;
+    private final String email;
 
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-    private String password;
+    @JsonProperty(value = "password", access = JsonProperty.Access.WRITE_ONLY)
+    private final String password;
 
     @JsonProperty("role")
-    private Role role;
+    private final Role role;
 
     @JsonProperty("active")
-    private boolean active;
+    private final boolean active;
 
     @JsonProperty("emailVerified")
-    private boolean emailVerified;
+    private final boolean emailVerified;
 
     @JsonProperty("verifiedDealer")
-    private boolean verifiedDealer;
+    private final boolean verifiedDealer;
 
     @JsonProperty("lockedUntil")
-    private LocalDateTime lockedUntil;
+    private final LocalDateTime lockedUntil;
 
     /**
-     * Constructor for Jackson deserialization and internal use.
-     * Uses @JsonCreator and @JsonProperty to ensure reliable reconstitution from Redis/JSON.
+     * Primary constructor for Jackson deserialization and internal use.
+     * All fields are final to ensure immutability.
      */
     @JsonCreator
     public UserPrincipal(
@@ -90,7 +93,7 @@ public class UserPrincipal implements UserDetails {
                 user.getRole(),
                 user.isActive(),
                 Boolean.TRUE.equals(user.getIsEmailVerified()),
-                Boolean.TRUE.equals(user.isDealerVerified()),
+                user.isDealerVerified(),
                 user.getLockedUntil());
     }
 
@@ -109,9 +112,6 @@ public class UserPrincipal implements UserDetails {
                 new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
 
-    /**
-     * Username for authentication (email-based login)
-     */
     @Override
     @JsonIgnore
     public String getUsername() {
@@ -124,9 +124,6 @@ public class UserPrincipal implements UserDetails {
         return password;
     }
 
-    /**
-     * Account state checks
-     */
     @Override
     @JsonIgnore
     public boolean isAccountNonExpired() {
@@ -136,7 +133,6 @@ public class UserPrincipal implements UserDetails {
     @Override
     @JsonIgnore
     public boolean isAccountNonLocked() {
-        // Account is locked if lockedUntil is set and is in the future
         return lockedUntil == null || lockedUntil.isBefore(LocalDateTime.now());
     }
 
@@ -149,28 +145,17 @@ public class UserPrincipal implements UserDetails {
     @Override
     @JsonIgnore
     public boolean isEnabled() {
-        // User is enabled only if active AND email is verified
         return active && emailVerified;
     }
-
-    /**
-     * Custom getters (useful in controllers & security checks)
-     */
-    // Lombok @Getter provides these. Retaining only non-standard ones if any.
 
     public boolean isVerifiedDealer() {
         return verifiedDealer;
     }
 
-    /**
-     * Equality based on user ID (important for security context)
-     */
     @Override
     public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (!(o instanceof UserPrincipal that))
-            return false;
+        if (this == o) return true;
+        if (!(o instanceof UserPrincipal that)) return false;
         return Objects.equals(id, that.id);
     }
 

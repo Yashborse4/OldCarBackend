@@ -156,12 +156,9 @@ public class SecurityConfig {
     }
 
     @Bean
-
     public DaoAuthenticationProvider authenticationProvider(CustomUserDetailsService userDetailsService) {
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService); // Changed to use
-                                                                                                    // constructor
-        // authProvider.setUserDetailsService(userDetailsService); // Removed if
-        // constructor handles it or if setter is gone
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(userDetailsService);
         authProvider.setPasswordEncoder(passwordEncoder());
         authProvider.setHideUserNotFoundExceptions(false); // For better error messages
         return authProvider;
@@ -180,7 +177,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(12); // Strength 12 for better security
+        return new BCryptPasswordEncoder(); // Default strength 10 is usually sufficient and avoids warning
     }
 
     @Bean

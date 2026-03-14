@@ -8,6 +8,9 @@ spring:
     basename: classpath:messages/messages
     encoding: UTF-8
 
+  jpa:
+    open-in-view: false
+
   # Date format handling
   mvc:
     format:
