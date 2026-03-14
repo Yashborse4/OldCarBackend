@@ -19,6 +19,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,17 +45,20 @@ public class AuthServiceImpl implements AuthService {
     private final OtpService otpService;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final CacheManager cacheManager;
 
     public AuthServiceImpl(UserRepository userRepository, 
                            RefreshTokenRepository refreshTokenRepository, 
                            OtpService otpService, 
                            PasswordEncoder passwordEncoder, 
-                           JwtTokenProvider jwtTokenProvider) {
+                           JwtTokenProvider jwtTokenProvider,
+                           CacheManager cacheManager) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.otpService = otpService;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.cacheManager = cacheManager;
     }
 
     private static final String PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
@@ -134,6 +139,9 @@ public class AuthServiceImpl implements AuthService {
                 .build();
 
         user = userRepository.save(user);
+
+        // Evict cache to ensure clean state (though unlikely to be cached yet)
+        evictUserCache(user);
 
         // Send verification OTP once
         otpService.generateAndSendOtp(user.getEmail(), OtpPurpose.EMAIL_VERIFICATION);
@@ -252,6 +260,9 @@ public class AuthServiceImpl implements AuthService {
 
         // Update last login time and device info
         updateLoginStats(user, request.getDeviceInfo());
+        
+        // Evict cache after updating stats
+        evictUserCache(user);
 
         // Generate persistent tokens
         return generateAuthResponse(user);
@@ -288,7 +299,12 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         // Generate tokens for auto-login
-        return generateAuthResponse(user);
+        JwtAuthResponse response = generateAuthResponse(user);
+        
+        // Evict cache as user's verification state changed
+        evictUserCache(user);
+        
+        return response;
     }
 
     /**
@@ -330,6 +346,9 @@ public class AuthServiceImpl implements AuthService {
 
         // Update stats
         updateLoginStats(user, null);
+        
+        // Evict cache
+        evictUserCache(user);
 
         // Generate tokens
         return generateAuthResponse(user);
@@ -582,6 +601,9 @@ public class AuthServiceImpl implements AuthService {
 
         userRepository.save(user);
 
+        // Evict cache after password reset or lock change
+        evictUserCache(user);
+
         log.info("Password reset successful for user: {}", request.getUsername());
     }
 
@@ -661,6 +683,9 @@ public class AuthServiceImpl implements AuthService {
         }
 
         userRepository.save(user);
+        
+        // Evict cache after failed login attempt/lock
+        evictUserCache(user);
     }
 
     /**
@@ -709,6 +734,34 @@ public class AuthServiceImpl implements AuthService {
             return currentUser.getId().equals(userId);
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * Evict user from all relevant caches to ensure Redis consistency
+     */
+    private void evictUserCache(User user) {
+        if (user == null) return;
+        
+        try {
+            log.debug("Evicting user {} from caches", user.getUsername());
+            
+            // Evict from users_v4 (keyed by username/email)
+            Cache userCache = cacheManager.getCache("users_v4");
+            if (userCache != null) {
+                userCache.evict(user.getEmail());
+                userCache.evict(user.getUsername());
+            }
+            
+            // Evict from usersById_v4 (keyed by ID)
+            Cache userByIdCache = cacheManager.getCache("usersById_v4");
+            if (userByIdCache != null && user.getId() != null) {
+                userByIdCache.evict(user.getId());
+            }
+            
+            log.debug("Successfully evicted user {} from caches", user.getUsername());
+        } catch (Exception e) {
+            log.error("Failed to evict user {} from cache: {}", user.getUsername(), e.getMessage());
         }
     }
 

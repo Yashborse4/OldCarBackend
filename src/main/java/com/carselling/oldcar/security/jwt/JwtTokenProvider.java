@@ -15,6 +15,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -100,6 +101,7 @@ public class JwtTokenProvider {
                 .subject(user.getUsername())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + refreshTokenExpirationMs))
+                .id(UUID.randomUUID().toString()) // Add jti for uniqueness
                 .signWith(key)
                 .compact();
     }
@@ -129,6 +131,7 @@ public class JwtTokenProvider {
                 .subject(user.getUsername())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expirationMs))
+                .id(UUID.randomUUID().toString()) // Add jti for access tokens as well
                 .signWith(key)
                 .compact();
     }
