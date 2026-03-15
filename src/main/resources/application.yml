@@ -4,6 +4,11 @@ spring:
   profiles:
     default: dev # Default to development profile if none is specified
 
+  data:
+    redis:
+      repositories:
+        enabled: false
+
   messages:
     basename: classpath:messages/messages
     encoding: UTF-8

@@ -114,6 +114,8 @@ public class CarController {
         @Operation(summary = "Get vehicle details", description = "Retrieve full details of a specific vehicle")
         public ResponseEntity<ApiResponse<CarResponse>> getVehicleById(@PathVariable String id) {
                 log.debug("Getting vehicle by ID: {}", id);
+                
+                validateIdFormat(id);
 
                 CarResponse car = carService.getVehicleById(id);
 
@@ -127,6 +129,7 @@ public class CarController {
         @PreAuthorize("hasAnyRole('DEALER', 'ADMIN')")
         @Operation(summary = "Get vehicle analytics", description = "Retrieve analytics data for a specific vehicle (Dealer/Admin only)")
         public ResponseEntity<ApiResponse<CarAnalyticsResponse>> getVehicleAnalytics(@PathVariable String id) {
+                validateIdFormat(id);
                 Long currentUserId = SecurityUtils.getCurrentUserId();
                 CarAnalyticsResponse analytics = carService.getVehicleAnalytics(id, currentUserId);
 
@@ -186,6 +189,7 @@ public class CarController {
                         @Valid @RequestBody CarRequest request) {
 
                 log.info("Updating vehicle: {}", id);
+                validateIdFormat(id);
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
                 CarResponse updatedCar = carService.updateVehicle(id, request, currentUserId);
@@ -212,6 +216,7 @@ public class CarController {
                         @RequestParam(value = "hard", defaultValue = "false") boolean hard) {
 
                 log.info("Deleting vehicle: {} (hard: {})", id, hard);
+                validateIdFormat(id);
 
                 Long currentUserId = SecurityUtils.getCurrentUserId();
                 // Ownership check is enforced by Service
@@ -398,5 +403,15 @@ public class CarController {
 
                 carService.incrementCarStat(id, type);
                 return ResponseEntity.ok(ApiResponse.success("Stat incremented", null, null));
+        }
+
+        /**
+         * Robust Validation for Numeric IDs passed as Strings
+         */
+        private void validateIdFormat(String id) {
+            if (id == null || id.isBlank() || !id.matches("\\d+")) {
+                log.warn("Invalid ID format attempted in request: {}", id);
+                throw new com.carselling.oldcar.exception.BusinessException("Invalid vehicle ID format: " + id);
+            }
         }
 }

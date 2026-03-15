@@ -139,14 +139,18 @@ public class UserPreferenceService {
      * Deserialize a JSON string to a list of strings.
      */
     private List<String> fromJson(String json) {
-        if (json == null || json.isBlank()) {
+        if (json == null || json.isBlank() || "[]".equals(json.trim())) {
             return Collections.emptyList();
         }
         try {
+            // Using a fresh TypeReference for every call is safe but we could also use a constant.
+            // The key is to ensure we are specifically looking for List<String>.
             return objectMapper.readValue(json, new TypeReference<List<String>>() {
             });
-        } catch (JsonProcessingException e) {
-            log.error("Failed to deserialize JSON to list", e);
+        } catch (Exception e) {
+            log.error("Failed to deserialize JSON to list. Content: {}. Error: {}", json, e.getMessage());
+            // Fallback: If it's a simple string that might have been stored without quotes 
+            // or some other corruption, we return empty instead of crashing.
             return Collections.emptyList();
         }
     }

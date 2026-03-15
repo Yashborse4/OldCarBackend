@@ -32,9 +32,16 @@ build/
 .env
 .env.*
 *.env
-application*.yml
-application*.yaml
-application*.properties
+# Allow baseline and production configurations, exclude local/dev/test
+application-dev.yml
+application-dev.yaml
+application-dev.properties
+application-local.yml
+application-local.yaml
+application-local.properties
+application-test.yml
+application-test.yaml
+application-test.properties
 !docker-compose*.yml
 secrets/
 credentials/

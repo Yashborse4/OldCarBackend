@@ -54,24 +54,22 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
                      "AND (r.car.owner.id = :sellerId OR r.car.coOwner.id = :sellerId)")
        long countCarInquiryChatsForSeller(@Param("sellerId") Long sellerId);
 
-       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
-                     "car", "car.images" })
-       @Query("SELECT r FROM ChatRoom r " +
-                     "WHERE (r.car.owner.id = :dealerId OR r.car.coOwner.id = :dealerId) " +
-                     "AND r.type = com.carselling.oldcar.model.ChatRoom$ChatType.CAR_INQUIRY " +
-                     "ORDER BY r.lastActivityAt DESC")
-       Page<ChatRoom> findDealerInquiries(@Param("dealerId") Long dealerId, Pageable pageable);
+        // Removed EntityGraph to avoid Hibernate memory pagination warning with Join Fetch
+        @Query("SELECT r FROM ChatRoom r " +
+                      "WHERE (r.car.owner.id = :dealerId OR r.car.coOwner.id = :dealerId) " +
+                      "AND r.type = com.carselling.oldcar.model.ChatRoom$ChatType.CAR_INQUIRY " +
+                      "ORDER BY r.lastActivityAt DESC")
+        Page<ChatRoom> findDealerInquiries(@Param("dealerId") Long dealerId, Pageable pageable);
 
-       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
-                     "car", "car.images" })
-       @Query("SELECT r FROM ChatRoom r " +
-                     "WHERE (r.car.owner.id = :dealerId OR r.car.coOwner.id = :dealerId) " +
-                     "AND r.type = com.carselling.oldcar.model.ChatRoom$ChatType.CAR_INQUIRY " +
-                     "AND r.status = :status " +
-                     "ORDER BY r.lastActivityAt DESC")
-       Page<ChatRoom> findDealerInquiriesByStatus(@Param("dealerId") Long dealerId,
-                     @Param("status") ChatRoom.InquiryStatus status,
-                     Pageable pageable);
+        // Removed EntityGraph to avoid Hibernate memory pagination warning
+        @Query("SELECT r FROM ChatRoom r " +
+                      "WHERE (r.car.owner.id = :dealerId OR r.car.coOwner.id = :dealerId) " +
+                      "AND r.type = com.carselling.oldcar.model.ChatRoom$ChatType.CAR_INQUIRY " +
+                      "AND r.status = :status " +
+                      "ORDER BY r.lastActivityAt DESC")
+        Page<ChatRoom> findDealerInquiriesByStatus(@Param("dealerId") Long dealerId,
+                      @Param("status") ChatRoom.InquiryStatus status,
+                      Pageable pageable);
 
        // Optimized query to fetch Chat Rooms with Participant Count and optionally
        // Unread Count if joined
@@ -85,10 +83,9 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
        // Deprecated: Use findChatRoomIdsByParticipantUserId + findAllByIdIn
        // Keeping for signature compatibility if needed, but implementation should
        // change
-       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
-                     "car", "car.images" })
-       @Query("SELECT DISTINCT r FROM ChatRoom r JOIN r.participants p WHERE p.user.id = :userId ORDER BY r.lastActivityAt DESC")
-       Page<ChatRoom> findChatRoomsWithParticipants(@Param("userId") Long userId, Pageable pageable);
+        // Removed EntityGraph to avoid Hibernate memory pagination warning
+        @Query("SELECT DISTINCT r FROM ChatRoom r JOIN r.participants p WHERE p.user.id = :userId ORDER BY r.lastActivityAt DESC")
+        Page<ChatRoom> findChatRoomsWithParticipants(@Param("userId") Long userId, Pageable pageable);
 
        @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "participants", "participants.user",
                      "car", "car.images" })
