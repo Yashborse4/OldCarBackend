@@ -16,6 +16,22 @@ public class CustomCacheErrorHandler implements CacheErrorHandler {
     public void handleCacheGetError(RuntimeException exception, Cache cache, Object key) {
         log.warn("Cache GET error on cache '{}', key '{}': {}. Treating as cache miss.",
                 cache.getName(), key, exception.getMessage());
+
+        // Implement "delete-on-error" pattern to prevent persistent deserialization crashes
+        // This is especially useful after deployments where object structures have changed
+        if (exception.getMessage() != null &&
+                (exception.getMessage().contains("deserial") ||
+                 exception.getMessage().contains("Serialization") ||
+                 exception.getCause() instanceof java.io.InvalidClassException)) {
+            try {
+                log.info("Potential deserialization error detected for key '{}' in cache '{}'. Evicting to heal cache.",
+                        key, cache.getName());
+                cache.evict(key);
+            } catch (Exception e) {
+                log.error("Failed to evict key '{}' from cache '{}' after error: {}",
+                        key, cache.getName(), e.getMessage());
+            }
+        }
     }
 
     @Override

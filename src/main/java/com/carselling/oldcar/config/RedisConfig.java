@@ -22,7 +22,7 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
@@ -180,8 +180,8 @@ public class RedisConfig implements CachingConfigurer {
         return objectMapper;
     }
 
-    private Jackson2JsonRedisSerializer<Object> createJacksonSerializer() {
-        return new Jackson2JsonRedisSerializer<>(Object.class);
+    private GenericJackson2JsonRedisSerializer createJacksonSerializer() {
+        return new GenericJackson2JsonRedisSerializer(createObjectMapper());
     }
 
     private Map<String, RedisCacheConfiguration> createCacheConfigurations(RedisCacheConfiguration defaultCacheConfig) {
