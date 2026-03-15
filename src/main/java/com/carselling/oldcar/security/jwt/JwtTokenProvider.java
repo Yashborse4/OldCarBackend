@@ -29,10 +29,10 @@ public class JwtTokenProvider {
     @Value("${app.jwt.secret:defaultSecretKeyForDevelopmentOnlyDoNotUseInProduction1234567890}")
     private String jwtSecret;
 
-    @Value("${app.jwt.access-token-expiration-ms:86400000}")
+    @Value("${app.jwt.access-token-expiration-ms:2592000000}")
     private long jwtExpirationMs;
 
-    @Value("${app.jwt.refresh-token-expiration-ms:604800000}")
+    @Value("${app.jwt.refresh-token-expiration-ms:5184000000}")
     private long refreshTokenExpirationMs;
 
     private javax.crypto.SecretKey key;
