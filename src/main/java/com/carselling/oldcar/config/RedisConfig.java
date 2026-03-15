@@ -231,7 +231,21 @@ public class RedisConfig implements CachingConfigurer {
     // Helper methods
 
     private GenericJackson2JsonRedisSerializer createJacksonSerializer() {
-        return new GenericJackson2JsonRedisSerializer(objectMapper);
+        // Create a dedicated ObjectMapper for Redis to isolate polymorphic typing
+        ObjectMapper redisMapper = new ObjectMapper();
+        redisMapper.registerModule(new JavaTimeModule());
+        
+        // Use ANY visibility to match the global defaults but only for Redis
+        redisMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        
+        // Enable polymorphic typing ONLY for Redis
+        redisMapper.activateDefaultTyping(
+                LaissezFaireSubTypeValidator.instance,
+                ObjectMapper.DefaultTyping.NON_FINAL,
+                JsonTypeInfo.As.PROPERTY
+        );
+        
+        return new GenericJackson2JsonRedisSerializer(redisMapper);
     }
 
     private Map<String, RedisCacheConfiguration> createCacheConfigurations(RedisCacheConfiguration defaultCacheConfig) {

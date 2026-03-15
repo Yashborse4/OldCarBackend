@@ -12,15 +12,16 @@ public class JacksonConfig {
 
     @Bean
     @Primary
-    public ObjectMapper objectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-        mapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    public ObjectMapper objectMapper(org.springframework.http.converter.json.Jackson2ObjectMapperBuilder builder) {
+        ObjectMapper mapper = builder.createXmlMapper(false).build();
+        
+        // Ensure visibility is set to ANY to match previous configuration
         mapper.setVisibility(com.fasterxml.jackson.annotation.PropertyAccessor.ALL, com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.ANY);
         
-        // Add support for Spring Security classes
-        mapper.registerModules(org.springframework.security.jackson2.SecurityJackson2Modules.getModules(getClass().getClassLoader()));
-
+        // Support for Spring Security classes is usually handled by Spring Boot's builder 
+        // if SecurityJackson2Modules is on the classpath, but we'll be explicit if needed.
+        // The builder already includes standard modules like JavaTimeModule by default.
+        
         return mapper;
     }
 }

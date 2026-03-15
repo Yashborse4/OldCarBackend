@@ -411,7 +411,7 @@ public class CarController {
         private void validateIdFormat(String id) {
             if (id == null || id.isBlank() || !id.matches("\\d+")) {
                 log.warn("Invalid ID format attempted in request: {}", id);
-                throw new com.carselling.oldcar.exception.BusinessException("Invalid vehicle ID format: " + id);
+                throw new com.carselling.oldcar.exception.InvalidInputException("Invalid vehicle ID format: " + id);
             }
         }
 }
