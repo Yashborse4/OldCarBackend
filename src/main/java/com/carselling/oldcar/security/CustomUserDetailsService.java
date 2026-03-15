@@ -28,10 +28,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         log.debug("Loading user details for: {}", usernameOrEmail);
 
         try {
-            User user = userRepository.findByUsernameOrEmail(usernameOrEmail, usernameOrEmail)
-                    .orElseThrow(() -> new UsernameNotFoundException(
-                            String.format("User not found with username or email: %s", usernameOrEmail)));
-
+            User user = loadUserEntityByUsername(usernameOrEmail);
             log.debug("Successfully loaded user: {} with role: {}", user.getUsername(), user.getRole());
             return UserPrincipal.from(user);
 
@@ -42,19 +39,26 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     /**
+     * Load user entity by username or email (cached)
+     */
+    @Transactional(readOnly = true)
+    @org.springframework.cache.annotation.Cacheable(value = "userEntities", key = "#usernameOrEmail")
+    public User loadUserEntityByUsername(String usernameOrEmail) {
+        return userRepository.findByUsernameOrEmail(usernameOrEmail, usernameOrEmail)
+                .orElseThrow(() -> new UsernameNotFoundException(
+                        String.format("User not found with username or email: %s", usernameOrEmail)));
+    }
+
+    /**
      * Load user details by user ID
      * Used for JWT token authentication
      */
     @Transactional(readOnly = true)
-    @org.springframework.cache.annotation.Cacheable(value = "userDetailsById", key = "#userId")
     public UserDetails loadUserById(Long userId) {
         log.debug("Loading user details by ID: {}", userId);
 
         try {
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new UsernameNotFoundException(
-                            String.format("User not found with id: %s", userId)));
-
+            User user = loadUserEntityById(userId);
             log.debug("Successfully loaded user by ID: {} - {}", userId, user.getUsername());
             return UserPrincipal.from(user);
 
@@ -62,6 +66,17 @@ public class CustomUserDetailsService implements UserDetailsService {
             log.error("Error loading user details by ID: {}", userId, e);
             throw new UsernameNotFoundException("Failed to load user details by ID", e);
         }
+    }
+
+    /**
+     * Load user entity by ID (cached)
+     */
+    @Transactional(readOnly = true)
+    @org.springframework.cache.annotation.Cacheable(value = "userEntitiesById", key = "#userId")
+    public User loadUserEntityById(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException(
+                        String.format("User not found with id: %s", userId)));
     }
 
     /**
