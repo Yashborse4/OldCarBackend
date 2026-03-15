@@ -34,21 +34,26 @@ public class UserPrincipal implements UserDetails, Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private final Long id;
-    private final String email;
+    private Long id;
+    private String email;
 
     @JsonIgnore
-    private final String password;
+    private String password;
 
-    private final Role role;
-    private final boolean active;
-    private final boolean emailVerified;
-    private final boolean verifiedDealer;
-    private final LocalDateTime lockedUntil;
+    private Role role;
+    private boolean active;
+    private boolean emailVerified;
+    private boolean verifiedDealer;
+    private LocalDateTime lockedUntil;
+
+    /**
+     * Default constructor required by Jackson for Redis deserialization
+     */
+    protected UserPrincipal() {
+    }
 
     /**
      * Primary constructor for Jackson deserialization and internal use.
-     * All fields are final to ensure immutability.
      */
     @JsonCreator
     public UserPrincipal(
@@ -63,7 +68,7 @@ public class UserPrincipal implements UserDetails, Serializable {
         this.id = id;
         this.email = email;
         this.password = password;
-        this.role = Objects.requireNonNull(role, "Role cannot be null");
+        this.role = role;
         this.active = active;
         this.emailVerified = emailVerified;
         this.verifiedDealer = verifiedDealer;
