@@ -45,5 +45,7 @@ management:
         include: health,info,metrics
 # Application Specific Configuration
 app:
+  redis:
+    clear-on-startup: ${REDIS_CLEAR_ON_STARTUP:true}
   email:
     from: ${EMAIL_FROM:}

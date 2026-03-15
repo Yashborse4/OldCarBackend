@@ -136,11 +136,15 @@ app:
     lockout-duration: 900000 # 15 minutes
     otp-requests: 3
 
+  # Redis Configuration
+  redis:
+    clear-on-startup: ${REDIS_CLEAR_ON_STARTUP:true}
+
   # Email Configuration
   email:
     from: ${EMAIL_FROM:}
 
-  # Backblaze B2 Configuration
+
   # Backblaze B2 Configuration
   b2:
     applicationKeyId: ${B2_APPLICATION_KEY_ID}

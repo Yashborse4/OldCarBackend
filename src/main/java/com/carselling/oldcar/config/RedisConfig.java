@@ -22,7 +22,7 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
@@ -64,10 +64,10 @@ public class RedisConfig implements CachingConfigurer {
             template.setHashKeySerializer(new StringRedisSerializer());
 
             // Use Jackson JSON serializer for values
-            Jackson2JsonRedisSerializer<Object> jackson2JsonRedisSerializer = createJacksonSerializer();
+            GenericJackson2JsonRedisSerializer serializer = createJacksonSerializer();
 
-            template.setValueSerializer(jackson2JsonRedisSerializer);
-            template.setHashValueSerializer(jackson2JsonRedisSerializer);
+            template.setValueSerializer(serializer);
+            template.setHashValueSerializer(serializer);
 
             template.afterPropertiesSet();
 
@@ -170,17 +170,18 @@ public class RedisConfig implements CachingConfigurer {
         // Add support for Spring Security classes (like authorities, etc.)
         objectMapper.registerModules(org.springframework.security.jackson2.SecurityJackson2Modules.getModules(getClass().getClassLoader()));
 
-        objectMapper.activateDefaultTyping(
-                LaissezFaireSubTypeValidator.instance,
-                ObjectMapper.DefaultTyping.NON_FINAL,
-                JsonTypeInfo.As.PROPERTY
-        );
+        // REMOVED activateDefaultTyping to make serialization JSON-based instead of class-based
+        // objectMapper.activateDefaultTyping(
+        //         LaissezFaireSubTypeValidator.instance,
+        //         ObjectMapper.DefaultTyping.NON_FINAL,
+        //         JsonTypeInfo.As.PROPERTY
+        // );
 
         return objectMapper;
     }
 
-    private GenericJackson2JsonRedisSerializer createJacksonSerializer() {
-        return new GenericJackson2JsonRedisSerializer(createObjectMapper());
+    private Jackson2JsonRedisSerializer<Object> createJacksonSerializer() {
+        return new Jackson2JsonRedisSerializer<>(Object.class);
     }
 
     private Map<String, RedisCacheConfiguration> createCacheConfigurations(RedisCacheConfiguration defaultCacheConfig) {
