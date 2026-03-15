@@ -117,11 +117,12 @@ management:
 
 # Application Specific Configuration for Production
 app:
-  # JWT Configuration
+  # JWT Configuration (1 month expiration minimum)
   jwt:
     secret: ${JWT_SECRET} # Must be provided via environment variable
-    access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:86400000} # 24 hours default
-    refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000} # 7 days default
+    # 30 days for access token, 60 days for refresh token (1 month minimum as requested)
+    access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:2592000000} # 30 days default
+    refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:5184000000} # 60 days default
     
   # File Upload Configuration
   upload:
@@ -135,7 +136,11 @@ app:
     lockout-duration: 900000 # 15 minutes
     otp-requests: 3
 
-# Backblaze B2 Configuration
+  # Email Configuration
+  email:
+    from: ${EMAIL_FROM:}
+
+  # Backblaze B2 Configuration
   # Backblaze B2 Configuration
   b2:
     applicationKeyId: ${B2_APPLICATION_KEY_ID}
