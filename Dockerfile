@@ -58,9 +58,9 @@ COPY --from=builder /app/build/dependency/BOOT-INF/lib /app/lib
 COPY --from=builder /app/build/dependency/META-INF /app/META-INF
 COPY --from=builder /app/build/dependency/BOOT-INF/classes /app
 
-# Create directories for uploads and logs with proper permissions
-RUN mkdir -p /app/uploads /app/logs && \
-    chown -R appuser:appgroup /app
+# Create directories for uploads, app logs, and system/logback logs with proper permissions
+RUN mkdir -p /app/uploads /app/logs /var/log/sell-the-old-car && \
+    chown -R appuser:appgroup /app /var/log/sell-the-old-car
 
 # Switch to non-root user for security
 USER appuser
@@ -88,7 +88,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 EXPOSE 8080
 
 # Volume for persistent data (uploads, logs)
-VOLUME ["/app/uploads", "/app/logs"]
+VOLUME ["/app/uploads", "/app/logs", "/var/log/sell-the-old-car"]
 
 # Start application with optimized JVM settings
 ENTRYPOINT ["sh", "-c", \
