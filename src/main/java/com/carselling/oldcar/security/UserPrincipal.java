@@ -10,7 +10,6 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.Getter;
 
 import java.io.Serial;
@@ -30,7 +29,6 @@ import java.util.Objects;
 @Getter
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
-@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@class")
 public class UserPrincipal implements UserDetails, Serializable {
 
     @Serial
@@ -46,11 +44,10 @@ public class UserPrincipal implements UserDetails, Serializable {
     private final LocalDateTime lockedUntil;
 
     /**
-     * No-args constructor required for frameworks (e.g., Hibernate, some JSON libraries).
-     * Marked @JsonIgnore to prevent Jackson from using it - Jackson should use @JsonCreator.
+     * No-args constructor required for Jackson deserialization.
+     * Must be public for Jackson to access it.
      */
-    @JsonIgnore
-    private UserPrincipal() {
+    public UserPrincipal() {
         this.id = null;
         this.email = null;
         this.password = null;
