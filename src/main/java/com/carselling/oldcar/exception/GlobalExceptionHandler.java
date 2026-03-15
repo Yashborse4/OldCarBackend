@@ -514,12 +514,20 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ApiResponse<Object>> handleNoResourceFoundException(
                         NoResourceFoundException ex, HttpServletRequest request) {
 
-                log.warn("Static resource not found: {}", ex.getMessage());
+                String resourcePath = ex.getResourcePath();
+
+                // Health probe paths that miss the actuator base-path should not produce noisy WARNs.
+                // Log at DEBUG so they remain diagnosable without polluting production logs.
+                if (resourcePath != null && (resourcePath.contains("actuator") || resourcePath.contains("health"))) {
+                        log.debug("Health probe hit unregistered path (check actuator base-path config): {}", resourcePath);
+                } else {
+                        log.warn("Static resource not found: {}", ex.getMessage());
+                }
 
                 ApiResponse<Object> response = ApiResponse.builder()
                                 .timestamp(LocalDateTime.now())
                                 .message("Resource not found")
-                                .details(String.format("No static resource found for path: %s", ex.getResourcePath()))
+                                .details(String.format("No static resource found for path: %s", resourcePath))
                                 .success(false)
                                 .build();
 

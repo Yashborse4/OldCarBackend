@@ -64,6 +64,7 @@ spring:
 # Server Configuration for Production
 server:
   port: ${SERVER_PORT:8080}
+  forward-headers-strategy: native
   servlet:
     context-path: /
   compression:

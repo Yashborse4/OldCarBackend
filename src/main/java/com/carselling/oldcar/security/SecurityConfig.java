@@ -95,7 +95,9 @@ public class SecurityConfig {
 
                         // WebSocket & System
                         .requestMatchers("/ws/**", "/ws-native/**").permitAll()
-                        .requestMatchers("/actuator/health", "/management/health").permitAll()
+                        // Actuator base-path is /management (see application-prod.yml)
+                        // Only expose the health endpoint publicly; everything else requires ADMIN
+                        .requestMatchers("/management/health").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-resources/**").permitAll()
 
                         // Search API is public
@@ -135,7 +137,8 @@ public class SecurityConfig {
 
                         // Admin Only
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/actuator/**").hasRole("ADMIN")
+                        // /management/health is already permitted above; all other management endpoints require ADMIN
+                        .requestMatchers("/management/**").hasRole("ADMIN")
 
                         // Communication
                         .requestMatchers("/api/chat/**").authenticated()
