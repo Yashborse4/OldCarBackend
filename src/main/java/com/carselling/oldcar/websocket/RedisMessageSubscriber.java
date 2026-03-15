@@ -27,12 +27,14 @@ public class RedisMessageSubscriber {
     private final ObjectMapper objectMapper;
 
     /**
-     * Callback when a message is received from Redis.
-     * The serializer in RedisConfig ensures this is already converted to RedisChatMessage.
+     * Callback when a message is received from Redis as a JSON string.
      */
-    public void onMessage(RedisChatMessage redisMessage) {
+    public void onMessage(String messageJson) {
         try {
-            log.debug("Received Redis sync message: type={}, room={}", redisMessage.getType(), redisMessage.getChatRoomId());
+            log.debug("Received Redis sync JSON: {}", messageJson);
+            RedisChatMessage redisMessage = objectMapper.readValue(messageJson, RedisChatMessage.class);
+            
+            log.debug("Processed Redis sync message: type={}, room={}", redisMessage.getType(), redisMessage.getChatRoomId());
 
             String type = redisMessage.getType();
             Long chatRoomId = redisMessage.getChatRoomId();

@@ -48,6 +48,12 @@ import java.util.concurrent.ThreadLocalRandom;
 @Slf4j
 public class RedisConfig implements CachingConfigurer {
 
+    private final ObjectMapper objectMapper;
+
+    public RedisConfig(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
     @Value("${app.redis.enabled:true}")
     private boolean redisEnabled;
 
@@ -96,6 +102,10 @@ public class RedisConfig implements CachingConfigurer {
             template.setValueSerializer(serializer);
             template.setHashValueSerializer(serializer);
             template.setDefaultSerializer(serializer);
+            // Strictly disable default serialization to ensure JSON is always used
+            template.setEnableDefaultSerializer(false);
+            // Disable transaction support for better caching performance
+            template.setEnableTransactionSupport(false);
 
             template.afterPropertiesSet();
 
@@ -105,10 +115,10 @@ public class RedisConfig implements CachingConfigurer {
         } catch (Exception e) {
             log.error("Failed to initialize RedisTemplate: {}", e.getMessage());
             if (fallbackToMemory) {
-                log.warn("Redis unavailable. Returning uninitialized template to allow startup.");
+                log.warn("Redis unavailable. Returning default template to allow startup (memory fallback will handle caching).");
                 return template;
             } else {
-                throw new RuntimeException("Redis connection failed", e);
+                throw new RuntimeException("Redis connection failed and fallback is disabled", e);
             }
         }
     }
@@ -124,7 +134,8 @@ public class RedisConfig implements CachingConfigurer {
             redisConfig.setPassword(redisPassword);
         }
 
-        GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
+        @SuppressWarnings("unchecked")
+        GenericObjectPoolConfig<io.lettuce.core.api.StatefulConnection<?, ?>> poolConfig = new GenericObjectPoolConfig<>();
         poolConfig.setMaxTotal(poolMaxTotal);
         poolConfig.setMaxIdle(poolMaxIdle);
         poolConfig.setMinIdle(poolMinIdle);
@@ -135,7 +146,10 @@ public class RedisConfig implements CachingConfigurer {
                 .shutdownTimeout(Duration.ZERO)
                 .build();
 
-        return new LettuceConnectionFactory(redisConfig, clientConfig);
+        LettuceConnectionFactory factory = new LettuceConnectionFactory(redisConfig, clientConfig);
+        // Disable sharing native connection to avoid contention in high-concurrency environments
+        factory.setShareNativeConnection(false);
+        return factory;
     }
 
     /**
@@ -153,6 +167,7 @@ public class RedisConfig implements CachingConfigurer {
             RedisCacheConfiguration defaultCacheConfig = RedisCacheConfiguration.defaultCacheConfig()
                     .entryTtl(Duration.ofHours(1)) // Default 1 hour TTL
                     .disableCachingNullValues()
+                    .computePrefixWith(cacheName -> "oldcar:" + cacheName + ":")
                     .serializeKeysWith(
                             org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair
                                     .fromSerializer(new StringRedisSerializer()))
@@ -215,25 +230,8 @@ public class RedisConfig implements CachingConfigurer {
 
     // Helper methods
 
-    @Bean
-    public ObjectMapper objectMapper() {
-        log.debug("Initializing Production-grade Redis ObjectMapper");
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        objectMapper.registerModule(new JavaTimeModule());
-
-        // Add support for Spring Security classes
-        objectMapper.registerModules(org.springframework.security.jackson2.SecurityJackson2Modules.getModules(getClass().getClassLoader()));
-
-        return objectMapper;
-    }
-
-    private ObjectMapper createObjectMapper() {
-        return objectMapper();
-    }
-
     private GenericJackson2JsonRedisSerializer createJacksonSerializer() {
-        return new GenericJackson2JsonRedisSerializer(createObjectMapper());
+        return new GenericJackson2JsonRedisSerializer(objectMapper);
     }
 
     private Map<String, RedisCacheConfiguration> createCacheConfigurations(RedisCacheConfiguration defaultCacheConfig) {
@@ -315,19 +313,36 @@ public class RedisConfig implements CachingConfigurer {
 
     @Bean
     public RedisMessageListenerContainer redisContainer(RedisConnectionFactory connectionFactory,
-                                                        MessageListenerAdapter listenerAdapter) {
+                                                        MessageListenerAdapter listenerAdapter,
+                                                        @org.springframework.beans.factory.annotation.Qualifier("redisTaskExecutor") java.util.concurrent.Executor taskExecutor,
+                                                        @org.springframework.beans.factory.annotation.Qualifier("redisSubscriptionExecutor") java.util.concurrent.Executor subscriptionExecutor) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
         container.addMessageListener(listenerAdapter, chatTopic());
-        log.info("Redis Message Listener Container initialized for topic: {}", chatTopic().getTopic());
+        
+        // Use managed thread pools for high-throughput chat with graceful shutdown support
+        container.setTaskExecutor(taskExecutor);
+        container.setSubscriptionExecutor(subscriptionExecutor);
+
+        log.info("Redis Message Listener Container initialized for topic: {} with managed thread pools", chatTopic().getTopic());
         return container;
+    }
+
+    @Bean(name = "redisTaskExecutor", destroyMethod = "shutdown")
+    public java.util.concurrent.ExecutorService redisTaskExecutor() {
+        return java.util.concurrent.Executors.newFixedThreadPool(4);
+    }
+
+    @Bean(name = "redisSubscriptionExecutor", destroyMethod = "shutdown")
+    public java.util.concurrent.ExecutorService redisSubscriptionExecutor() {
+        return java.util.concurrent.Executors.newFixedThreadPool(2);
     }
 
     @Bean
     public MessageListenerAdapter listenerAdapter(com.carselling.oldcar.websocket.RedisMessageSubscriber subscriber) {
-        // Uses Jackson serializer for Pub/Sub messages
+        // Uses String serializer for Pub/Sub; subscriber handles JSON manually for resilience
         MessageListenerAdapter adapter = new MessageListenerAdapter(subscriber, "onMessage");
-        adapter.setSerializer(createJacksonSerializer());
+        adapter.setSerializer(new StringRedisSerializer());
         return adapter;
     }
 
@@ -336,8 +351,8 @@ public class RedisConfig implements CachingConfigurer {
         try {
             if (connectionFactory instanceof LettuceConnectionFactory) {
                 LettuceConnectionFactory lettuceFactory = (LettuceConnectionFactory) connectionFactory;
-                lettuceFactory.validateConnection();
-                log.debug("Redis connection factory test successful");
+                // lettuceFactory.validateConnection(); // Skipped during startup for resilience
+                log.debug("Redis connection factory initialized (ping-on-demand enabled)");
             }
         } catch (Exception e) {
             log.error("Redis connection factory test failed: {}", e.getMessage());

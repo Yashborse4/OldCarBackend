@@ -36,27 +36,15 @@ public class UserPrincipal implements UserDetails, Serializable {
 
     private final Long id;
     private final String email;
+
+    @JsonIgnore
     private final String password;
+
     private final Role role;
     private final boolean active;
     private final boolean emailVerified;
     private final boolean verifiedDealer;
     private final LocalDateTime lockedUntil;
-
-    /**
-     * No-args constructor required for Jackson deserialization.
-     * Must be public for Jackson to access it.
-     */
-    public UserPrincipal() {
-        this.id = null;
-        this.email = null;
-        this.password = null;
-        this.role = null;
-        this.active = false;
-        this.emailVerified = false;
-        this.verifiedDealer = false;
-        this.lockedUntil = null;
-    }
 
     /**
      * Primary constructor for Jackson deserialization and internal use.
@@ -66,7 +54,7 @@ public class UserPrincipal implements UserDetails, Serializable {
     public UserPrincipal(
             @JsonProperty("id") Long id,
             @JsonProperty("email") String email,
-            @JsonProperty("password") String password,
+            @JsonProperty(value = "password", access = JsonProperty.Access.WRITE_ONLY) String password,
             @JsonProperty("role") Role role,
             @JsonProperty("active") boolean active,
             @JsonProperty("emailVerified") boolean emailVerified,
@@ -75,7 +63,7 @@ public class UserPrincipal implements UserDetails, Serializable {
         this.id = id;
         this.email = email;
         this.password = password;
-        this.role = role;
+        this.role = Objects.requireNonNull(role, "Role cannot be null");
         this.active = active;
         this.emailVerified = emailVerified;
         this.verifiedDealer = verifiedDealer;
@@ -103,13 +91,15 @@ public class UserPrincipal implements UserDetails, Serializable {
     @Override
     @JsonIgnore
     public Collection<? extends GrantedAuthority> getAuthorities() {
+        String roleName = "ROLE_" + role.name();
+        
+        // Only add ROLE_DEALER if they are a verified dealer AND 
+        // their main role isn't already DEALER or ADMIN
         if (verifiedDealer && role != Role.DEALER && role != Role.ADMIN) {
-            return List.of(
-                    new SimpleGrantedAuthority("ROLE_" + role.name()),
-                    new SimpleGrantedAuthority("ROLE_DEALER"));
+            return List.of(new SimpleGrantedAuthority(roleName), new SimpleGrantedAuthority("ROLE_DEALER"));
         }
-        return List.of(
-                new SimpleGrantedAuthority("ROLE_" + role.name()));
+        
+        return List.of(new SimpleGrantedAuthority(roleName));
     }
 
     @Override
@@ -148,9 +138,7 @@ public class UserPrincipal implements UserDetails, Serializable {
         return active && emailVerified;
     }
 
-    public boolean isVerifiedDealer() {
-        return verifiedDealer;
-    }
+
 
     @Override
     public boolean equals(Object o) {
