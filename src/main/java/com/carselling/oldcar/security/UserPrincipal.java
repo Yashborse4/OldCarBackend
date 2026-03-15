@@ -10,6 +10,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.Getter;
 
 import java.io.Serial;
@@ -29,34 +30,36 @@ import java.util.Objects;
 @Getter
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
+@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@class")
 public class UserPrincipal implements UserDetails, Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
-    @JsonProperty("id")
     private final Long id;
-
-    @JsonProperty("email")
     private final String email;
-
-    @JsonProperty(value = "password", access = JsonProperty.Access.WRITE_ONLY)
     private final String password;
-
-    @JsonProperty("role")
     private final Role role;
-
-    @JsonProperty("active")
     private final boolean active;
-
-    @JsonProperty("emailVerified")
     private final boolean emailVerified;
-
-    @JsonProperty("verifiedDealer")
     private final boolean verifiedDealer;
-
-    @JsonProperty("lockedUntil")
     private final LocalDateTime lockedUntil;
+
+    /**
+     * No-args constructor required for frameworks (e.g., Hibernate, some JSON libraries).
+     * Marked @JsonIgnore to prevent Jackson from using it - Jackson should use @JsonCreator.
+     */
+    @JsonIgnore
+    private UserPrincipal() {
+        this.id = null;
+        this.email = null;
+        this.password = null;
+        this.role = null;
+        this.active = false;
+        this.emailVerified = false;
+        this.verifiedDealer = false;
+        this.lockedUntil = null;
+    }
 
     /**
      * Primary constructor for Jackson deserialization and internal use.

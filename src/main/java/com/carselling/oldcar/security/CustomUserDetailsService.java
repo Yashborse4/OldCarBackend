@@ -23,7 +23,7 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     @Transactional(readOnly = true)
-    @org.springframework.cache.annotation.Cacheable(value = "users_v4", key = "#usernameOrEmail")
+    @org.springframework.cache.annotation.Cacheable(value = "userDetails", key = "#usernameOrEmail")
     public UserDetails loadUserByUsername(String usernameOrEmail) throws UsernameNotFoundException {
         log.debug("Loading user details for: {}", usernameOrEmail);
 
@@ -46,7 +46,7 @@ public class CustomUserDetailsService implements UserDetailsService {
      * Used for JWT token authentication
      */
     @Transactional(readOnly = true)
-    @org.springframework.cache.annotation.Cacheable(value = "usersById_v4", key = "#userId")
+    @org.springframework.cache.annotation.Cacheable(value = "userDetailsById", key = "#userId")
     public UserDetails loadUserById(Long userId) {
         log.debug("Loading user details by ID: {}", userId);
 
