@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.util.Map;
 
@@ -19,12 +20,17 @@ import java.util.Map;
  * to local WebSocket subscribers. This enables real-time updates in a clustered environment.
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class RedisMessageSubscriber {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper;
+
+    public RedisMessageSubscriber(SimpMessagingTemplate messagingTemplate, 
+                                @Qualifier("redisObjectMapper") ObjectMapper objectMapper) {
+        this.messagingTemplate = messagingTemplate;
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * Callback when a message is received from Redis as a JSON string.

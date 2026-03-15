@@ -54,6 +54,28 @@ public class RedisConfig implements CachingConfigurer {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Dedicated ObjectMapper for Redis serialization with polymorphic typing.
+     * Shared across RedisTemplate, CacheManager, and Pub/Sub subscribers.
+     */
+    @Bean(name = "redisObjectMapper")
+    public ObjectMapper redisObjectMapper() {
+        ObjectMapper redisMapper = new ObjectMapper();
+        redisMapper.registerModule(new JavaTimeModule());
+        
+        // Use ANY visibility to match the global defaults but only for Redis
+        redisMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        
+        // Enable polymorphic typing ONLY for Redis
+        redisMapper.activateDefaultTyping(
+                LaissezFaireSubTypeValidator.instance,
+                ObjectMapper.DefaultTyping.NON_FINAL,
+                JsonTypeInfo.As.PROPERTY
+        );
+        
+        return redisMapper;
+    }
+
     @Value("${app.redis.enabled:true}")
     private boolean redisEnabled;
 
@@ -231,21 +253,7 @@ public class RedisConfig implements CachingConfigurer {
     // Helper methods
 
     private GenericJackson2JsonRedisSerializer createJacksonSerializer() {
-        // Create a dedicated ObjectMapper for Redis to isolate polymorphic typing
-        ObjectMapper redisMapper = new ObjectMapper();
-        redisMapper.registerModule(new JavaTimeModule());
-        
-        // Use ANY visibility to match the global defaults but only for Redis
-        redisMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        
-        // Enable polymorphic typing ONLY for Redis
-        redisMapper.activateDefaultTyping(
-                LaissezFaireSubTypeValidator.instance,
-                ObjectMapper.DefaultTyping.NON_FINAL,
-                JsonTypeInfo.As.PROPERTY
-        );
-        
-        return new GenericJackson2JsonRedisSerializer(redisMapper);
+        return new GenericJackson2JsonRedisSerializer(redisObjectMapper());
     }
 
     private Map<String, RedisCacheConfiguration> createCacheConfigurations(RedisCacheConfiguration defaultCacheConfig) {
@@ -321,11 +329,13 @@ public class RedisConfig implements CachingConfigurer {
     // ========================= Redis Pub/Sub for Chat Sync =========================
 
     @Bean
+    @ConditionalOnProperty(name = "app.redis.enabled", havingValue = "true", matchIfMissing = true)
     public ChannelTopic chatTopic() {
         return new ChannelTopic("chat_sync");
     }
 
     @Bean
+    @ConditionalOnProperty(name = "app.redis.enabled", havingValue = "true", matchIfMissing = true)
     public RedisMessageListenerContainer redisContainer(RedisConnectionFactory connectionFactory,
                                                         MessageListenerAdapter listenerAdapter,
                                                         @org.springframework.beans.factory.annotation.Qualifier("redisTaskExecutor") java.util.concurrent.Executor taskExecutor,
@@ -343,16 +353,19 @@ public class RedisConfig implements CachingConfigurer {
     }
 
     @Bean(name = "redisTaskExecutor", destroyMethod = "shutdown")
+    @ConditionalOnProperty(name = "app.redis.enabled", havingValue = "true", matchIfMissing = true)
     public java.util.concurrent.ExecutorService redisTaskExecutor() {
         return java.util.concurrent.Executors.newFixedThreadPool(4);
     }
 
     @Bean(name = "redisSubscriptionExecutor", destroyMethod = "shutdown")
+    @ConditionalOnProperty(name = "app.redis.enabled", havingValue = "true", matchIfMissing = true)
     public java.util.concurrent.ExecutorService redisSubscriptionExecutor() {
         return java.util.concurrent.Executors.newFixedThreadPool(2);
     }
 
     @Bean
+    @ConditionalOnProperty(name = "app.redis.enabled", havingValue = "true", matchIfMissing = true)
     public MessageListenerAdapter listenerAdapter(com.carselling.oldcar.websocket.RedisMessageSubscriber subscriber) {
         // Uses String serializer for Pub/Sub; subscriber handles JSON manually for resilience
         MessageListenerAdapter adapter = new MessageListenerAdapter(subscriber, "onMessage");
