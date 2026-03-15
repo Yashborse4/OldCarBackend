@@ -26,6 +26,9 @@ import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSeriali
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+import org.springframework.data.redis.listener.ChannelTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
+import org.springframework.data.redis.listener.adapter.MessageListenerAdapter;
 import org.springframework.cache.interceptor.CacheErrorHandler;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
@@ -300,6 +303,32 @@ public class RedisConfig implements CachingConfigurer {
                 "fraudDetection", "models", "adminDashboard", "systemStatistics"));
 
         return cacheManager;
+    }
+
+
+    // ========================= Redis Pub/Sub for Chat Sync =========================
+
+    @Bean
+    public ChannelTopic chatTopic() {
+        return new ChannelTopic("chat_sync");
+    }
+
+    @Bean
+    public RedisMessageListenerContainer redisContainer(RedisConnectionFactory connectionFactory,
+                                                        MessageListenerAdapter listenerAdapter) {
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(connectionFactory);
+        container.addMessageListener(listenerAdapter, chatTopic());
+        log.info("Redis Message Listener Container initialized for topic: {}", chatTopic().getTopic());
+        return container;
+    }
+
+    @Bean
+    public MessageListenerAdapter listenerAdapter(com.carselling.oldcar.websocket.RedisMessageSubscriber subscriber) {
+        // Uses Jackson serializer for Pub/Sub messages
+        MessageListenerAdapter adapter = new MessageListenerAdapter(subscriber, "onMessage");
+        adapter.setSerializer(createJacksonSerializer());
+        return adapter;
     }
 
 

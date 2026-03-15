@@ -26,17 +26,15 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class ChatWebSocketController {
 
-    // Deduplication set to prevent duplicate messages
-    // TODO: [PRODUCTION-READY & CONCURRENCY] Local Deduplication.
-    // Static ConcurrentHashMap only deduplicates messages hitting this specific JVM
-    // instance.
-    // In a clustered environment, use Redis for distributed deduplication.
-    private static final Set<String> recentlyProcessedMessages = ConcurrentHashMap.newKeySet();
 
     private final ChatService ChatService;
     private final UserService userService;
     private final SimpMessagingTemplate messagingTemplate;
     private final WebSocketSessionManager sessionManager;
+    private final org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
+    private final org.springframework.data.redis.listener.ChannelTopic chatTopic;
+
+    private static final String DEDUPE_PREFIX = "chat:dedupe:";
 
     // ========================= MESSAGE HANDLING =========================
 
@@ -63,20 +61,15 @@ public class ChatWebSocketController {
             Long userId = userPrincipal.getId();
             log.debug("User {} sending message to chat room {}", userId, chatRoomId);
 
-            // Check for duplicate message using clientMessageId
+            // Check for duplicate message using clientMessageId (Distributed Deduplication)
             String clientMessageId = messageRequest.getClientMessageId();
             if (clientMessageId != null) {
-                // Check if we've recently processed this message
-                String dedupeKey = userId + ":" + clientMessageId;
-                if (recentlyProcessedMessages.contains(dedupeKey)) {
-                    log.warn("Duplicate message detected and ignored: {}", clientMessageId);
+                String dedupeKey = DEDUPE_PREFIX + userId + ":" + clientMessageId;
+                // Atomic SETNX with 5 minute expiration
+                Boolean isNew = redisTemplate.opsForValue().setIfAbsent(dedupeKey, "1", java.time.Duration.ofMinutes(5));
+                if (Boolean.FALSE.equals(isNew)) {
+                    log.warn("Duplicate message detected (Redis) and ignored: {}", clientMessageId);
                     return;
-                }
-                // Add to processed set and clean old entries
-                recentlyProcessedMessages.add(dedupeKey);
-                // Keep only last 100 messages per user
-                if (recentlyProcessedMessages.size() > 100) {
-                    recentlyProcessedMessages.removeIf(key -> key.startsWith(userId + ":"));
                 }
             }
 
@@ -231,10 +224,8 @@ public class ChatWebSocketController {
                     .timestamp(java.time.LocalDateTime.now())
                     .build();
 
-            // Broadcast typing indicator to all participants except sender
-            messagingTemplate.convertAndSend(
-                    "/topic/chat/" + chatRoomId + "/typing",
-                    typingIndicator);
+            // Broadcast typing indicator via Redis Pub/Sub
+            publishToRedis("TYPING", chatRoomId, typingIndicator);
 
         } catch (Exception e) {
             log.error("Error handling typing indicator: {}", e.getMessage(), e);
@@ -263,9 +254,8 @@ public class ChatWebSocketController {
             readReceipt.setUserId(userId);
             readReceipt.setMessageIds(readRequest.getMessageIds());
 
-            messagingTemplate.convertAndSend(
-                    "/topic/chat/" + chatRoomId + "/read",
-                    readReceipt);
+            // Broadcast read receipts via Redis Pub/Sub
+            publishToRedis("READ", chatRoomId, readReceipt);
 
             // Update unread counts for the user
             sendUnreadCountUpdate(userId);
@@ -342,19 +332,45 @@ public class ChatWebSocketController {
     // ========================= UTILITY METHODS =========================
 
     /**
-     * Broadcast message to all participants in a chat room
+     * Broadcast message to all participants in a chat room via Redis Pub/Sub
      */
     private void broadcastMessageToChatRoom(Long chatRoomId, ChatMessageDto message) {
-        messagingTemplate.convertAndSend("/topic/chat/" + chatRoomId + "/messages", message);
-        log.debug("Broadcasted message {} to chat room {}", message.getId(), chatRoomId);
+        publishToRedis("MESSAGE", chatRoomId, message);
+        log.debug("Published message {} to Redis for chat room {}", message.getId(), chatRoomId);
     }
 
     /**
-     * Broadcast message updates (edit/delete) to chat room
+     * Broadcast message updates (edit/delete) to chat room via Redis Pub/Sub
      */
     private void broadcastMessageUpdateToChatRoom(Long chatRoomId, MessageUpdateDto updateDto) {
-        messagingTemplate.convertAndSend("/topic/chat/" + chatRoomId + "/updates", updateDto);
-        log.debug("Broadcasted message update to chat room {}", chatRoomId);
+        publishToRedis("UPDATE", chatRoomId, updateDto);
+        log.debug("Published message update to Redis for chat room {}", chatRoomId);
+    }
+
+    /**
+     * Helper to publish any chat event to Redis
+     */
+    private void publishToRedis(String type, Long chatRoomId, Object payload) {
+        try {
+            RedisChatMessage redisMessage = RedisChatMessage.builder()
+                    .type(type)
+                    .chatRoomId(chatRoomId)
+                    .payload(payload)
+                    .build();
+            
+            // Note: We use the dedicated redisTemplate for scaling, 
+            // but for Pub/Sub we can use a generic template or the one from RedisConfig.
+            // Since we need to serialize the object, it's better to use the template 
+            // that handles JSON.
+            redisTemplate.convertAndSend(chatTopic.getTopic(), redisMessage);
+        } catch (Exception e) {
+            log.error("Failed to publish message to Redis: {}", e.getMessage());
+            // Failover: if Redis fails, still try to send locally to this node's clients
+            // so things don't break entirely, although other nodes won't see it.
+            if ("MESSAGE".equals(type)) {
+                messagingTemplate.convertAndSend("/topic/chat/" + chatRoomId + "/messages", payload);
+            }
+        }
     }
 
     /**
@@ -381,10 +397,12 @@ public class ChatWebSocketController {
     private void sendUnreadCountUpdate(Long userId) {
         try {
             UnreadCountResponse unreadCount = ChatService.getUnreadMessageCount(userId);
-            messagingTemplate.convertAndSendToUser(
-                    userId.toString(),
-                    "/queue/unread-count",
-                    unreadCount);
+            
+            // Wrap in Redis message to sync across nodes
+            publishToRedis("UNREAD_COUNT", null, Map.of(
+                    "userId", userId,
+                    "unreadCount", unreadCount
+            ));
         } catch (Exception e) {
             log.error("Error sending unread count update to user {}: {}", userId, e.getMessage());
         }
