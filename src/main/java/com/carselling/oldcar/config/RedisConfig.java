@@ -25,10 +25,15 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+import org.springframework.cache.interceptor.CacheErrorHandler;
+import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
+
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import org.springframework.cache.interceptor.CacheErrorHandler;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Redis Configuration with Fallback Support
@@ -46,6 +51,24 @@ public class RedisConfig implements CachingConfigurer {
     @Value("${app.redis.fallback-to-memory:true}")
     private boolean fallbackToMemory;
 
+    @Value("${spring.data.redis.host:localhost}")
+    private String redisHost;
+
+    @Value("${spring.data.redis.port:6379}")
+    private int redisPort;
+
+    @Value("${spring.data.redis.password:}")
+    private String redisPassword;
+
+    @Value("${app.redis.pool.max-total:20}")
+    private int poolMaxTotal;
+
+    @Value("${app.redis.pool.max-idle:10}")
+    private int poolMaxIdle;
+
+    @Value("${app.redis.pool.min-idle:2}")
+    private int poolMinIdle;
+
     /**
      * Primary RedisTemplate bean - only created if Redis is available and enabled
      */
@@ -55,35 +78,61 @@ public class RedisConfig implements CachingConfigurer {
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         try {
-            log.info("Initializing RedisTemplate with connection factory");
+            log.info("Initializing Production-grade RedisTemplate");
 
             template.setConnectionFactory(connectionFactory);
 
             // Use String serializer for keys
-            template.setKeySerializer(new StringRedisSerializer());
-            template.setHashKeySerializer(new StringRedisSerializer());
+            StringRedisSerializer keySerializer = new StringRedisSerializer();
+            template.setKeySerializer(keySerializer);
+            template.setHashKeySerializer(keySerializer);
 
             // Use Jackson JSON serializer for values
             GenericJackson2JsonRedisSerializer serializer = createJacksonSerializer();
 
             template.setValueSerializer(serializer);
             template.setHashValueSerializer(serializer);
+            template.setDefaultSerializer(serializer);
 
             template.afterPropertiesSet();
 
-            log.info("RedisTemplate initialized successfully");
+            log.info("RedisTemplate initialized successfully with JSON serialization");
             return template;
 
         } catch (Exception e) {
-            log.error("Failed to initialize RedisTemplate connection: {}", e.getMessage());
+            log.error("Failed to initialize RedisTemplate: {}", e.getMessage());
             if (fallbackToMemory) {
-                log.warn(
-                        "Redis unavailable. Returning default RedisTemplate to satisfy dependencies, but Redis operations will fail. Fallbacks should handle this.");
-                return template; // Return the template anyway to prevent BeanCreationException in dependents
+                log.warn("Redis unavailable. Returning uninitialized template to allow startup.");
+                return template;
             } else {
-                throw new RuntimeException("Redis connection failed and fallback is disabled", e);
+                throw new RuntimeException("Redis connection failed", e);
             }
         }
+    }
+
+    @Bean
+    @Primary
+    @ConditionalOnProperty(name = "app.redis.enabled", havingValue = "true", matchIfMissing = true)
+    public LettuceConnectionFactory redisConnectionFactory() {
+        log.info("Creating pooled LettuceConnectionFactory for {}:{}", redisHost, redisPort);
+
+        RedisStandaloneConfiguration redisConfig = new RedisStandaloneConfiguration(redisHost, redisPort);
+        if (redisPassword != null && !redisPassword.isEmpty()) {
+            redisConfig.setPassword(redisPassword);
+        }
+
+        GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
+        poolConfig.setMaxTotal(poolMaxTotal);
+        poolConfig.setMaxIdle(poolMaxIdle);
+        poolConfig.setMinIdle(poolMinIdle);
+
+        LettucePoolingClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
+                .poolConfig(poolConfig)
+                .commandTimeout(Duration.ofSeconds(2))
+                .shutdownTimeout(Duration.ZERO)
+                .build();
+
+        return new LettuceConnectionFactory(redisConfig, clientConfig);
     }
 
     /**
@@ -163,21 +212,21 @@ public class RedisConfig implements CachingConfigurer {
 
     // Helper methods
 
-    private ObjectMapper createObjectMapper() {
+    @Bean
+    public ObjectMapper objectMapper() {
+        log.debug("Initializing Production-grade Redis ObjectMapper");
         ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
+        objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
         objectMapper.registerModule(new JavaTimeModule());
-        // Add support for Spring Security classes (like authorities, etc.)
+
+        // Add support for Spring Security classes
         objectMapper.registerModules(org.springframework.security.jackson2.SecurityJackson2Modules.getModules(getClass().getClassLoader()));
 
-        // REMOVED activateDefaultTyping to make serialization JSON-based instead of class-based
-        // objectMapper.activateDefaultTyping(
-        //         LaissezFaireSubTypeValidator.instance,
-        //         ObjectMapper.DefaultTyping.NON_FINAL,
-        //         JsonTypeInfo.As.PROPERTY
-        // );
-
         return objectMapper;
+    }
+
+    private ObjectMapper createObjectMapper() {
+        return objectMapper();
     }
 
     private GenericJackson2JsonRedisSerializer createJacksonSerializer() {
@@ -187,46 +236,54 @@ public class RedisConfig implements CachingConfigurer {
     private Map<String, RedisCacheConfiguration> createCacheConfigurations(RedisCacheConfiguration defaultCacheConfig) {
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
 
-        // User cache - 30 minutes TTL
-        cacheConfigurations.put("users_v4", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
-        cacheConfigurations.put("usersById_v4", defaultCacheConfig.entryTtl(Duration.ofMinutes(5)));
-        cacheConfigurations.put("userDetails", defaultCacheConfig.entryTtl(Duration.ofMinutes(5)));
-        cacheConfigurations.put("userDetailsById", defaultCacheConfig.entryTtl(Duration.ofMinutes(5)));
-        cacheConfigurations.put("userPreferences", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
-        cacheConfigurations.put("similarUsers", defaultCacheConfig.entryTtl(Duration.ofHours(2)));
+        // User cache - 30 minutes TTL + Jitter
+        cacheConfigurations.put("users_v4", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(30))));
+        cacheConfigurations.put("usersById_v4", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(5))));
+        cacheConfigurations.put("userDetails", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(5))));
+        cacheConfigurations.put("userDetailsById", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(5))));
+        cacheConfigurations.put("userPreferences", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(30))));
+        cacheConfigurations.put("similarUsers", defaultCacheConfig.entryTtl(withJitter(Duration.ofHours(2))));
 
-        // Vehicle cache - 2 hours TTL
-        cacheConfigurations.put("vehicles", defaultCacheConfig.entryTtl(Duration.ofHours(2)));
-        cacheConfigurations.put("vehicleSearch", defaultCacheConfig.entryTtl(Duration.ofMinutes(15)));
-        cacheConfigurations.put("vehicleRecommendations", defaultCacheConfig.entryTtl(Duration.ofHours(1)));
-        cacheConfigurations.put("vehicleStats", defaultCacheConfig.entryTtl(Duration.ofHours(4)));
-        cacheConfigurations.put("trendingVehicles", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
-        cacheConfigurations.put("trendingSearches", defaultCacheConfig.entryTtl(Duration.ofMinutes(30)));
+        // Vehicle cache - 2 hours TTL + Jitter
+        cacheConfigurations.put("vehicles", defaultCacheConfig.entryTtl(withJitter(Duration.ofHours(2))));
+        cacheConfigurations.put("vehicleSearch", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(15))));
+        cacheConfigurations.put("vehicleRecommendations", defaultCacheConfig.entryTtl(withJitter(Duration.ofHours(1))));
+        cacheConfigurations.put("vehicleStats", defaultCacheConfig.entryTtl(withJitter(Duration.ofHours(4))));
+        cacheConfigurations.put("trendingVehicles", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(30))));
+        cacheConfigurations.put("trendingSearches", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(30))));
 
         // High-throughput public car endpoints
-        cacheConfigurations.put("publicCars", defaultCacheConfig.entryTtl(Duration.ofMinutes(2)));
-        cacheConfigurations.put("publicCarDetail", defaultCacheConfig.entryTtl(Duration.ofMinutes(5)));
+        cacheConfigurations.put("publicCars", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(2))));
+        cacheConfigurations.put("publicCarDetail", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(5))));
 
         // Chat and messaging
-        cacheConfigurations.put("chatMessages", defaultCacheConfig.entryTtl(Duration.ofHours(1)));
-        cacheConfigurations.put("userChats", defaultCacheConfig.entryTtl(Duration.ofMinutes(15)));
+        cacheConfigurations.put("chatMessages", defaultCacheConfig.entryTtl(withJitter(Duration.ofHours(1))));
+        cacheConfigurations.put("userChats", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(15))));
 
         // System and metadata
-        cacheConfigurations.put("userActivity", defaultCacheConfig.entryTtl(Duration.ofHours(6)));
-        cacheConfigurations.put("systemConfig", defaultCacheConfig.entryTtl(Duration.ofHours(24)));
-        cacheConfigurations.put("fileMetadata", defaultCacheConfig.entryTtl(Duration.ofHours(12)));
+        cacheConfigurations.put("userActivity", defaultCacheConfig.entryTtl(withJitter(Duration.ofHours(6))));
+        cacheConfigurations.put("systemConfig", defaultCacheConfig.entryTtl(withJitter(Duration.ofHours(24))));
+        cacheConfigurations.put("fileMetadata", defaultCacheConfig.entryTtl(withJitter(Duration.ofHours(12))));
 
         // Fraud detection
-        cacheConfigurations.put("fraudDetection", defaultCacheConfig.entryTtl(Duration.ofHours(24)));
+        cacheConfigurations.put("fraudDetection", defaultCacheConfig.entryTtl(withJitter(Duration.ofHours(24))));
 
         // Car Master Data
-        cacheConfigurations.put("models", defaultCacheConfig.entryTtl(Duration.ofHours(24)));
+        cacheConfigurations.put("models", defaultCacheConfig.entryTtl(withJitter(Duration.ofHours(24))));
 
         // Admin Dashboards & Statistics
-        cacheConfigurations.put("adminDashboard", defaultCacheConfig.entryTtl(Duration.ofMinutes(5)));
-        cacheConfigurations.put("systemStatistics", defaultCacheConfig.entryTtl(Duration.ofMinutes(5)));
+        cacheConfigurations.put("adminDashboard", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(5))));
+        cacheConfigurations.put("systemStatistics", defaultCacheConfig.entryTtl(withJitter(Duration.ofMinutes(5))));
 
         return cacheConfigurations;
+    }
+
+    /**
+     * Adds random jitter to TTL to prevent cache stampede.
+     * Adds between 0 and 60 seconds to the provided duration.
+     */
+    private Duration withJitter(Duration base) {
+        return base.plusSeconds(ThreadLocalRandom.current().nextInt(60));
     }
 
     private CacheManager inMemoryFallbackCacheManager() {
