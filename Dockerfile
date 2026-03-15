@@ -6,26 +6,26 @@
 # ----------------------------------------------------------------------------
 # Stage 1: Build Stage
 # ----------------------------------------------------------------------------
-FROM eclipse-temurin:21-jdk-alpine AS builder
+FROM eclipse-temurin:21-jdk AS builder
 
 WORKDIR /app
 
-# Install dependencies for building
-RUN apk add --no-cache bash curl
+# Install dependencies for building (using apt for Debian-based builder)
+RUN apt-get update && apt-get install -y bash curl findutils && rm -rf /var/lib/apt/lists/*
 
 # Copy gradle wrapper and configuration first (better layer caching)
 COPY gradlew gradlew.bat ./
 COPY gradle/ gradle/
 COPY build.gradle settings.gradle ./
 
-# Download dependencies (cached layer - rarely changes)
-RUN ./gradlew dependencies --no-daemon || true
+# Download dependencies (cached layer - using help for faster verification)
+RUN chmod +x gradlew && ./gradlew help --no-daemon --info --console=plain
 
 # Copy source code (changes frequently)
 COPY src/ src/
 
 # Build the application (skip tests for faster build, run tests in CI)
-RUN ./gradlew bootJar -x test --no-daemon && \
+RUN ./gradlew bootJar -x test --no-daemon --info --console=plain && \
     mkdir -p build/dependency && \
     (cd build/dependency; jar -xf ../libs/*.jar)
 
@@ -33,6 +33,9 @@ RUN ./gradlew bootJar -x test --no-daemon && \
 # Stage 2: Production Runtime
 # ----------------------------------------------------------------------------
 FROM eclipse-temurin:21-jre-alpine AS production
+
+LABEL maintainer="Antigravity AI"
+LABEL description="Production image for Sell The Old Car Backend"
 
 # Security: Create non-root user
 RUN addgroup --system --gid 1000 appgroup && \
