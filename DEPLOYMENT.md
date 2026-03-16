@@ -151,7 +151,7 @@ curl http://localhost:8080/actuator/health
 - [ ] Generate secure JWT secret (256-bit)
 - [ ] Configure firewall rules (only expose 8080)
 - [ ] Set up SSL/TLS termination (use nginx/traefik)
-- [ ] Regular security updates: `docker-compose pull && docker-compose up -d`
+- [ ] Regular security updates: `docker-compose pull nginx postgres redis opensearch && docker-compose up -d`
 
 ### Performance
 - [ ] Monitor JVM heap usage
@@ -270,7 +270,7 @@ docker-compose up -d --scale app=3
 - Monitor resource utilization
 
 ### Monthly Tasks
-- Update base images: `docker-compose pull`
+- Update base images: `docker-compose pull nginx postgres redis opensearch`
 - Security patches
 - Backup verification
 - Performance review
@@ -281,8 +281,8 @@ docker-compose up -d --scale app=3
 # 1. Backup
 docker exec car-selling-postgres pg_dump -U car_user carselling > backup_$(date +%Y%m%d).sql
 
-# 2. Pull updates
-docker-compose pull
+# 2. Pull updates for external services
+docker-compose pull nginx postgres redis opensearch
 
 # 3. Rebuild
 docker-compose build --no-cache

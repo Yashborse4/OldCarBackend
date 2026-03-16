@@ -42,6 +42,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
+    image: car-selling-app:latest
+    pull_policy: never
     container_name: car-selling-app
     restart: unless-stopped
     mem_limit: 2g
