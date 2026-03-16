@@ -192,6 +192,8 @@ public class SecurityConfig {
                     .map(String::trim)
                     .filter(origin -> !origin.isEmpty())
                     .collect(Collectors.toList()));
+        } else {
+            configuration.setAllowedOriginPatterns(List.of("*"));
         }
 
         if (corsAllowedMethods != null && !corsAllowedMethods.isBlank()) {
@@ -199,6 +201,8 @@ public class SecurityConfig {
                     .map(String::trim)
                     .filter(method -> !method.isEmpty())
                     .collect(Collectors.toList()));
+        } else {
+            configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         }
 
         if (corsAllowedHeaders != null && !corsAllowedHeaders.isBlank()) {
@@ -210,6 +214,8 @@ public class SecurityConfig {
                         .filter(header -> !header.isEmpty())
                         .collect(Collectors.toList()));
             }
+        } else {
+            configuration.setAllowedHeaders(List.of("*"));
         }
 
         configuration.setExposedHeaders(Arrays.asList(

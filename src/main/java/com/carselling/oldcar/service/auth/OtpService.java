@@ -39,7 +39,6 @@ public class OtpService {
     /**
      * Generate and send OTP for email verification
      */
-    @Transactional
     public void generateAndSendOtp(String email, OtpPurpose purpose) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
