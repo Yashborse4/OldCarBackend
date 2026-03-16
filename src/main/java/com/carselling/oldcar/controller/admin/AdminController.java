@@ -394,6 +394,10 @@ public class AdminController {
                         @RequestBody @NotEmpty(message = "User ID list cannot be empty") List<Long> userIds,
                         @RequestParam(value = "reason", defaultValue = "Bulk administrative action") String reason) {
 
+                if (userIds.size() > 100) {
+                        throw new IllegalArgumentException("Cannot process more than 100 users per request");
+                }
+
                 log.info("Admin performing bulk ban on {} users", userIds.size());
 
                 adminService.bulkUpdateUsers(userIds, "BAN", reason);
@@ -410,6 +414,11 @@ public class AdminController {
         @PostMapping("/users/bulk-unban")
         public ResponseEntity<ApiResponse<Object>> bulkUnbanUsers(
                         @RequestBody @NotEmpty(message = "User ID list cannot be empty") List<Long> userIds) {
+                
+                if (userIds.size() > 100) {
+                        throw new IllegalArgumentException("Cannot process more than 100 users per request");
+                }
+                
                 log.info("Admin performing bulk unban on {} users", userIds.size());
 
                 adminService.bulkUpdateUsers(userIds, "UNBAN", null);
@@ -427,6 +436,10 @@ public class AdminController {
         public ResponseEntity<ApiResponse<Object>> bulkChangeUserRole(
                         @RequestBody @NotEmpty(message = "User ID list cannot be empty") List<Long> userIds,
                         @RequestParam(value = "newRole") String newRole) {
+
+                if (userIds.size() > 100) {
+                        throw new IllegalArgumentException("Cannot process more than 100 users per request");
+                }
 
                 log.info("Admin performing bulk role change to {} on {} users", newRole, userIds.size());
 

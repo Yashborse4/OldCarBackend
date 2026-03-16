@@ -67,6 +67,7 @@ public class AuthController {
          * // to prevent brute-force attacks and credential stuffing.
          */
         @PostMapping("/login")
+        @RateLimit(capacity = 5, refill = 1, refillPeriod = 60)
         @io.swagger.v3.oas.annotations.Operation(summary = "Login user", description = "Authenticate user and return JWT tokens")
         @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login successful"),
@@ -153,6 +154,7 @@ public class AuthController {
          * Apply strict rate limiting.
          */
         @PostMapping("/password/forgot/check-email")
+        @RateLimit(capacity = 10, refill = 1, refillPeriod = 60)
         public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkEmailForPasswordReset(
                         @RequestBody Map<String, String> request) {
 
@@ -265,6 +267,7 @@ public class AuthController {
          * // Add @RateLimit.
          */
         @GetMapping("/check-username/{username}")
+        @RateLimit(capacity = 20, refill = 5, refillPeriod = 60)
         public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkUsernameAvailability(
                         @PathVariable String username) {
 
@@ -288,6 +291,7 @@ public class AuthController {
          * // Add @RateLimit.
          */
         @GetMapping("/check-email/{email}")
+        @RateLimit(capacity = 20, refill = 5, refillPeriod = 60)
         public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkEmailAvailability(
                         @PathVariable String email) {
 
