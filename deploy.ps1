@@ -97,6 +97,17 @@ function Restart-Services {
     Start-Services
 }
 
+# Reload environment (fetch changes and rebuild)
+function Reload-Environment {
+    Write-Info "Reloading environment..."
+    Write-Info "Fetching latest changes from git..."
+    git pull
+    Write-Info "Rebuilding and starting services..."
+    Set-Location $ScriptDir
+    docker-compose up -d --build
+    Write-Success "Environment reloaded"
+}
+
 # View logs
 function Show-Logs {
     param([string]$ServiceName)
@@ -165,6 +176,7 @@ function Show-Help {
     Write-Host "  stop      - Stop all services"
     Write-Host "  restart   - Restart all services"
     Write-Host "  build     - Build Docker images"
+    Write-Host "  reload    - Fetch latest changes and rebuild services"
     Write-Host "  logs      - View logs (optional: service name)"
     Write-Host "  status    - Check service status"
     Write-Host "  clean     - Remove all containers, volumes, and images"
@@ -192,6 +204,10 @@ switch ($Command.ToLower()) {
     "build" {
         Test-Prerequisites
         Build-Images
+    }
+    "reload" {
+        Test-Prerequisites
+        Reload-Environment
     }
     "logs" {
         Show-Logs -ServiceName $Service

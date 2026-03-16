@@ -109,6 +109,17 @@ restart() {
     start
 }
 
+# Reload environment (fetch changes and rebuild)
+reload() {
+    log_info "Reloading environment..."
+    log_info "Fetching latest changes from git..."
+    git pull
+    log_info "Rebuilding and starting services..."
+    cd "$SCRIPT_DIR"
+    docker-compose up -d --build
+    log_success "Environment reloaded"
+}
+
 # View logs
 logs() {
     cd "$SCRIPT_DIR"
@@ -176,6 +187,7 @@ show_help() {
     echo "  stop      - Stop all services"
     echo "  restart   - Restart all services"
     echo "  build     - Build Docker images"
+    echo "  reload    - Fetch latest changes and rebuild services"
     echo "  logs      - View logs (optional: service name)"
     echo "  status    - Check service status"
     echo "  clean     - Remove all containers, volumes, and images"
@@ -204,6 +216,10 @@ main() {
         build)
             check_prerequisites
             build
+            ;;
+        reload)
+            check_prerequisites
+            reload
             ;;
         logs)
             logs "$2"
