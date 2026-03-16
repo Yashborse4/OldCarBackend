@@ -155,7 +155,7 @@ public class RedisConfig implements CachingConfigurer {
         return new RedisConnectionFactory() {
             @Override public org.springframework.data.redis.connection.RedisConnection getConnection() { return null; }
             @Override public org.springframework.data.redis.connection.RedisClusterConnection getClusterConnection() { return null; }
-            @Override public boolean getConvertPipelineAndNextResults() { return false; }
+            @Override public boolean getConvertPipelineAndTxResults() { return false; }
             @Override public org.springframework.data.redis.connection.RedisSentinelConnection getSentinelConnection() { return null; }
             @Override public org.springframework.dao.DataAccessException translateExceptionIfPossible(RuntimeException ex) { return null; }
         };
