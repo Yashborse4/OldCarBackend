@@ -87,6 +87,7 @@ logging:
 management:
   endpoints:
     web:
+      base-path: /management
       exposure:
         include: "*" # Expose all actuator endpoints in dev
   endpoint:

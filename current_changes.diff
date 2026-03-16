@@ -1,0 +1,20 @@
+diff --git a/docker/nginx/nginx.conf b/docker/nginx/nginx.conf
+index ecfe2bd..1bedb9e 100644
+--- a/docker/nginx/nginx.conf
++++ b/docker/nginx/nginx.conf
+@@ -65,15 +65,6 @@ server {
+         # Buffer settings
+         proxy_buffering on;
+         proxy_buffer_size 4k;
+-        proxy_buffers 8 4k;
+-    }
+-
+-    # GLOBAL HEALTH CHECK FIX: Map legacy actuator path to configured management base-path.
+-    # This stops the "Static resource not found" WARN spam from various probes.
+-    location = /actuator/health {
+-        proxy_pass http://app/management/health;
+-        proxy_set_header Host $host;
+-        access_log off;
+     }
+ 
+     # Static uploads - serve directly from nginx

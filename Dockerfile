@@ -34,7 +34,7 @@ RUN ./gradlew bootJar -x test --no-daemon --info --console=plain && \
 # ----------------------------------------------------------------------------
 FROM eclipse-temurin:21-jre-alpine AS production
 
-LABEL maintainer="Antigravity AI"
+LABEL maintainer="YAsh Borse"
 LABEL description="Production image for Sell The Old Car Backend"
 
 # Security: Create non-root user

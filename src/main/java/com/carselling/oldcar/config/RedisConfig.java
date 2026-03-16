@@ -145,10 +145,39 @@ public class RedisConfig implements CachingConfigurer {
         }
     }
 
-    @Bean
+    /**
+     * Fallback No-Op RedisConnectionFactory for tests or when Redis is disabled.
+     */
+    @Bean(name = "redisConnectionFactory")
+    @ConditionalOnProperty(name = "app.redis.enabled", havingValue = "false")
+    public RedisConnectionFactory noOpRedisConnectionFactory() {
+        log.info("Initializing No-Op RedisConnectionFactory (Redis is disabled)");
+        return new RedisConnectionFactory() {
+            @Override public org.springframework.data.redis.connection.RedisConnection getConnection() { return null; }
+            @Override public org.springframework.data.redis.connection.RedisClusterConnection getClusterConnection() { return null; }
+            @Override public boolean getConvertPipelineAndNextResults() { return false; }
+            @Override public org.springframework.data.redis.connection.RedisSentinelConnection getSentinelConnection() { return null; }
+            @Override public org.springframework.dao.DataAccessException translateExceptionIfPossible(RuntimeException ex) { return null; }
+        };
+    }
+
+    /**
+     * Fallback No-Op RedisTemplate for tests or when Redis is disabled.
+     * Prevents UnsatisfiedDependencyException in components using constructor injection.
+     */
+    @Bean(name = "redisTemplate")
+    @ConditionalOnProperty(name = "app.redis.enabled", havingValue = "false")
+    public RedisTemplate<String, Object> noOpRedisTemplate(RedisConnectionFactory connectionFactory) {
+        log.info("Initializing No-Op RedisTemplate (Redis is disabled)");
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+        return template;
+    }
+
+    @Bean(name = "redisConnectionFactory")
     @Primary
     @ConditionalOnProperty(name = "app.redis.enabled", havingValue = "true", matchIfMissing = true)
-    public LettuceConnectionFactory redisConnectionFactory() {
+    public LettuceConnectionFactory lettuceConnectionFactory() {
         log.info("Creating pooled LettuceConnectionFactory for {}:{}", redisHost, redisPort);
 
         RedisStandaloneConfiguration redisConfig = new RedisStandaloneConfiguration(redisHost, redisPort);
@@ -332,6 +361,16 @@ public class RedisConfig implements CachingConfigurer {
     @ConditionalOnProperty(name = "app.redis.enabled", havingValue = "true", matchIfMissing = true)
     public ChannelTopic chatTopic() {
         return new ChannelTopic("chat_sync");
+    }
+
+    /**
+     * Fallback No-Op ChannelTopic for tests or when Redis is disabled.
+     */
+    @Bean(name = "chatTopic")
+    @ConditionalOnProperty(name = "app.redis.enabled", havingValue = "false")
+    public ChannelTopic noOpChatTopic() {
+        log.info("Initializing No-Op ChannelTopic (Redis is disabled)");
+        return new ChannelTopic("no-op-topic");
     }
 
     @Bean

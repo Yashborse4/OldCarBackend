@@ -24,7 +24,7 @@ import java.util.List;
 @Table(name = "cars", indexes = {
         @Index(name = "idx_car_make", columnList = "make"),
         @Index(name = "idx_car_model", columnList = "model"),
-        @Index(name = "idx_car_year", columnList = "year"),
+        @Index(name = "idx_car_year", columnList = "\"year\""),
         @Index(name = "idx_car_price", columnList = "price"),
         @Index(name = "idx_car_owner", columnList = "owner_id"),
         @Index(name = "idx_car_created_at", columnList = "created_at"),

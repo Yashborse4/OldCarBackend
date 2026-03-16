@@ -46,6 +46,7 @@ spring:
 management:
   endpoints:
     web:
+      base-path: /management
       exposure:
         include: health,info,metrics
 # Application Specific Configuration
