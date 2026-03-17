@@ -18,6 +18,7 @@ services:
         max-file: "3"
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./docker/nginx:/etc/nginx/conf.d
       - ./ssl:/etc/nginx/ssl

@@ -34,10 +34,10 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "images" })
        List<Car> findByOwnerId(Long ownerId);
 
-       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "images" })
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner" })
        Page<Car> findByOwnerId(Long ownerId, Pageable pageable);
 
-       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "images", "coOwner" })
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "coOwner" })
        Page<Car> findByOwnerIdOrCoOwnerId(Long ownerId, Long coOwnerId, Pageable pageable);
 
        /**
@@ -479,11 +479,11 @@ public interface CarRepository extends JpaRepository<Car, Long>, JpaSpecificatio
        List<Car> findRecommendedCars(@Param("userId") Long userId, Pageable pageable);
 
        @Override
-       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "images" })
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner" })
        Page<Car> findAll(org.springframework.data.jpa.domain.Specification<Car> spec, Pageable pageable);
 
        // Incremental Indexing Support
-       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner", "images" })
+       @org.springframework.data.jpa.repository.EntityGraph(attributePaths = { "owner" })
        Page<Car> findByUpdatedAtAfter(LocalDateTime updatedAt, Pageable pageable);
 
        // Optimized startup query to find stuck processing cars without loading
