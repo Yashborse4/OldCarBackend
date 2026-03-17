@@ -21,7 +21,6 @@ services:
       - "443:443"
     volumes:
       - ./docker/nginx:/etc/nginx/conf.d
-      - ./ssl:/etc/nginx/ssl
       - uploads-data:/var/www/uploads:ro
     networks:
       - backend

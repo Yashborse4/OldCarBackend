@@ -74,30 +74,11 @@ build() {
     log_success "Build completed"
 }
 
-# Generate self-signed certificates if they don't exist
-generate_certs() {
-    log_info "Checking SSL certificates..."
-    SSL_DIR="$SCRIPT_DIR/ssl"
-    if [ ! -d "$SSL_DIR" ]; then
-        mkdir -p "$SSL_DIR"
-    fi
-    if [ ! -f "$SSL_DIR/nginx-selfsigned.crt" ] || [ ! -f "$SSL_DIR/nginx-selfsigned.key" ]; then
-        log_info "Generating self-signed SSL certificate for Nginx (Cloudflare will terminate real SSL)..."
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout "$SSL_DIR/nginx-selfsigned.key" \
-            -out "$SSL_DIR/nginx-selfsigned.crt" \
-            -subj "/C=US/ST=State/L=City/O=Organization/CN=api.wheeldeals.co.in" 2>/dev/null
-        log_success "Certificates generated"
-    else
-        log_info "SSL certificates already exist"
-    fi
-}
 
 # Start services
 start() {
     log_info "Starting services..."
     cd "$SCRIPT_DIR"
-    generate_certs
     docker-compose up -d
     log_success "Services started"
     

@@ -62,31 +62,12 @@ function Build-Images {
     Write-Success "Build completed"
 }
 
-# Generate self-signed certificates if they don't exist
-function Generate-Certs {
-    Write-Info "Checking SSL certificates..."
-    $SslDir = "$ScriptDir\ssl"
-    if (!(Test-Path $SslDir)) {
-        New-Item -ItemType Directory -Path $SslDir -Force | Out-Null
-    }
-    if (!(Test-Path "$SslDir\nginx-selfsigned.crt") -or !(Test-Path "$SslDir\nginx-selfsigned.key")) {
-        Write-Info "Generating self-signed SSL certificate for Nginx (Cloudflare will terminate real SSL)..."
-        # Using redirection to $null to hide expected openssl stderr output
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 `
-            -keyout "$SslDir\nginx-selfsigned.key" `
-            -out "$SslDir\nginx-selfsigned.crt" `
-            -subj "/C=US/ST=State/L=City/O=Organization/CN=api.wheeldeals.co.in" 2>$null
-        Write-Success "Certificates generated"
-    } else {
-        Write-Info "SSL certificates already exist"
-    }
-}
+
 
 # Start services
 function Start-Services {
     Write-Info "Starting services..."
     Set-Location $ScriptDir
-    Generate-Certs
     docker-compose up -d
     Write-Success "Services started"
     
