@@ -84,19 +84,24 @@ public class RateLimitingConfig {
     }
 
     public interface RateLimitService {
-        boolean isAllowed(String key);
+        CheckResult allow(String key);
 
-        boolean isAllowed(String key, String role);
+        CheckResult allow(String key, String role);
 
-        boolean isAllowed(String key, int tokens);
+        CheckResult allow(String key, int tokens);
 
-        boolean isAllowed(String key, int capacity, int refillTokens, int refillPeriod);
+        CheckResult allow(String key, int capacity, int refillTokens, int refillPeriod);
 
         long getRemainingTokens(String key);
 
         void reset(String key);
 
         void resetAll();
+
+        /**
+         * Result object to avoid double Redis calls (check + remaining)
+         */
+        record CheckResult(boolean allowed, long remaining) {}
     }
 
     // Role-based capacity configs mapped here to avoid repetition
@@ -137,6 +142,7 @@ public class RateLimitingConfig {
                     "local refillTokens = tonumber(ARGV[2])\n" +
                     "local refillPeriodSecs = tonumber(ARGV[3])\n" +
                     "local requested = tonumber(ARGV[4])\n" +
+                    "-- Using TIME is safe and better than local server time in a cluster\n" +
                     "local now = redis.call('TIME')[1]\n" +
                     "local bucket = redis.call('HMGET', key, 'tokens', 'lastRefill')\n" +
                     "local tokens = tonumber(bucket[1])\n" +
@@ -164,25 +170,36 @@ public class RateLimitingConfig {
         }
 
         @Override
-        public boolean isAllowed(String key) {
-            return isAllowed(key, 1);
+        public CheckResult allow(String key) {
+            return allow(key, 1);
         }
 
         @Override
-        public boolean isAllowed(String key, String role) {
+        public CheckResult allow(String key, String role) {
             int[] limits = getRoleLimits(role, defaultCapacity, defaultCapacity);
-            return isAllowed(key, limits[0], limits[1], defaultRefillPeriodMinutes);
+            return allow(key, limits[0], limits[1], defaultRefillPeriodMinutes);
         }
 
         @Override
-        public boolean isAllowed(String key, int tokens) {
-            return executeLua(key, defaultCapacity, defaultCapacity, defaultRefillPeriodMinutes, tokens) >= 0;
+        public CheckResult allow(String key, int tokens) {
+            long remaining = executeLua(key, defaultCapacity, defaultCapacity, defaultRefillPeriodMinutes, tokens);
+            return new CheckResult(remaining >= 0, Math.max(0, remaining));
         }
 
         @Override
-        public boolean isAllowed(String key, int capacity, int refillTokens, int refillPeriod) {
-            return executeLua(key, capacity, refillTokens, refillPeriod, 1) >= 0;
+        public CheckResult allow(String key, int capacity, int refillTokens, int refillPeriod) {
+            long remaining = executeLua(key, capacity, refillTokens, refillPeriod, 1);
+            return new CheckResult(remaining >= 0, Math.max(0, remaining));
         }
+
+        @Override
+        public boolean isAllowed(String key) { return allow(key).allowed(); }
+        @Override
+        public boolean isAllowed(String key, String role) { return allow(key, role).allowed(); }
+        @Override
+        public boolean isAllowed(String key, int tokens) { return allow(key, tokens).allowed(); }
+        @Override
+        public boolean isAllowed(String key, int capacity, int refillTokens, int refillPeriod) { return allow(key, capacity, refillTokens, refillPeriod).allowed(); }
 
         @Override
         public long getRemainingTokens(String key) {
@@ -200,6 +217,7 @@ public class RateLimitingConfig {
         public void resetAll() {
             log.warn("resetAll() called on RedisRateLimitService. Ignoring as it is unsafe for global cache.");
         }
+
 
         private long executeLua(String key, int capacity, int refillTokens, int refillPeriodMinutes,
                 int requestedTokens) {
@@ -234,30 +252,30 @@ public class RateLimitingConfig {
         }
 
         @Override
-        public boolean isAllowed(String key) {
-            return isAllowed(key, 1);
+        public CheckResult allow(String key) {
+            return allow(key, 1);
         }
 
         @Override
-        public boolean isAllowed(String key, int tokens) {
-            return isAllowed(key, defaultCapacity, defaultCapacity, defaultRefillPeriodMinutes, tokens);
+        public CheckResult allow(String key, int tokens) {
+            return allow(key, defaultCapacity, defaultCapacity, defaultRefillPeriodMinutes, tokens);
         }
 
         @Override
-        public boolean isAllowed(String key, String role) {
+        public CheckResult allow(String key, String role) {
             int[] limits = getRoleLimits(role, defaultCapacity, defaultCapacity);
-            return isAllowed(key, limits[0], limits[1], defaultRefillPeriodMinutes, 1);
+            return allow(key, limits[0], limits[1], defaultRefillPeriodMinutes, 1);
         }
 
         @Override
-        public boolean isAllowed(String key, int limitCapacity, int refillTokens, int refillPeriod) {
-            return isAllowed(key, limitCapacity, refillTokens, refillPeriod, 1);
+        public CheckResult allow(String key, int limitCapacity, int refillTokens, int refillPeriod) {
+            return allow(key, limitCapacity, refillTokens, refillPeriod, 1);
         }
 
-        private boolean isAllowed(String key, int limitCapacity, int refillTokens, int refillPeriod,
+        private CheckResult allow(String key, int limitCapacity, int refillTokens, int refillPeriod,
                 int tokensRequested) {
             if (!enabled)
-                return true;
+                return new CheckResult(true, limitCapacity);
             try {
                 Bucket bucket = buckets.computeIfAbsent(key, k -> Bucket.builder()
                         .addLimit(Bandwidth.builder()
@@ -265,12 +283,22 @@ public class RateLimitingConfig {
                                 .refillGreedy(refillTokens, Duration.ofMinutes(refillPeriod))
                                 .build())
                         .build());
-                return bucket.tryConsume(tokensRequested);
+                boolean allowed = bucket.tryConsume(tokensRequested);
+                return new CheckResult(allowed, bucket.getAvailableTokens());
             } catch (Exception e) {
                 log.error("Local rate limit error for key {}: {}", key, e.getMessage());
-                return true; // Fail open
+                return new CheckResult(true, limitCapacity); // Fail open
             }
         }
+
+        @Override
+        public boolean isAllowed(String key) { return allow(key).allowed(); }
+        @Override
+        public boolean isAllowed(String key, String role) { return allow(key, role).allowed(); }
+        @Override
+        public boolean isAllowed(String key, int tokens) { return allow(key, tokens).allowed(); }
+        @Override
+        public boolean isAllowed(String key, int capacity, int refillTokens, int refillPeriod) { return allow(key, capacity, refillTokens, refillPeriod).allowed(); }
 
         @Override
         public long getRemainingTokens(String key) {

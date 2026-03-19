@@ -91,14 +91,17 @@ public class RedisConfig implements CachingConfigurer {
     @Value("${spring.data.redis.password:}")
     private String redisPassword;
 
-    @Value("${app.redis.pool.max-total:20}")
+    @Value("${app.redis.pool.max-total:100}")
     private int poolMaxTotal;
 
-    @Value("${app.redis.pool.max-idle:10}")
+    @Value("${app.redis.pool.max-idle:20}")
     private int poolMaxIdle;
 
-    @Value("${app.redis.pool.min-idle:2}")
+    @Value("${app.redis.pool.min-idle:5}")
     private int poolMinIdle;
+
+    @Value("${app.redis.pool.max-wait:1000ms}")
+    private Duration poolMaxWait;
 
     /**
      * Primary RedisTemplate bean - only created if Redis is available and enabled
@@ -190,6 +193,9 @@ public class RedisConfig implements CachingConfigurer {
         poolConfig.setMaxTotal(poolMaxTotal);
         poolConfig.setMaxIdle(poolMaxIdle);
         poolConfig.setMinIdle(poolMinIdle);
+        poolConfig.setMaxWait(poolMaxWait);
+        // Ensure connections are validated to avoid using broken ones from the pool
+        poolConfig.setTestOnBorrow(true);
 
         LettucePoolingClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
                 .poolConfig(poolConfig)
@@ -198,6 +204,8 @@ public class RedisConfig implements CachingConfigurer {
                 .build();
 
         LettuceConnectionFactory factory = new LettuceConnectionFactory(redisConfig, clientConfig);
+        // Set validateConnection to true for better pool health
+        factory.setValidateConnection(true);
         // Disable sharing native connection to avoid contention in high-concurrency environments
         factory.setShareNativeConnection(false);
         return factory;

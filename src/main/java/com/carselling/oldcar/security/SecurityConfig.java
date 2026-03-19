@@ -180,7 +180,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(); // Default strength 10 is usually sufficient and avoids warning
+        return new BCryptPasswordEncoder(); // Default strength 10 for user passwords
     }
 
     @Bean

@@ -20,7 +20,6 @@ import java.util.Optional;
  * Service for OTP generation, validation, and management
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class OtpService {
 
@@ -28,7 +27,16 @@ public class OtpService {
     private final EmailService emailService;
     private final MobileOtpService mobileOtpService;
     private final com.carselling.oldcar.repository.UserRepository userRepository;
-    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+
+    public OtpService(OtpRepository otpRepository,
+            EmailService emailService,
+            MobileOtpService mobileOtpService,
+            com.carselling.oldcar.repository.UserRepository userRepository) {
+        this.otpRepository = otpRepository;
+        this.emailService = emailService;
+        this.mobileOtpService = mobileOtpService;
+        this.userRepository = userRepository;
+    }
 
     private static final int OTP_VALIDITY_MINUTES = 5;
     private static final int MAX_ATTEMPTS = 5;
@@ -76,18 +84,14 @@ public class OtpService {
         // 3. Generate plain 6-digit code
         String otpCode = String.valueOf(java.util.concurrent.ThreadLocalRandom.current().nextInt(100000, 999999));
 
-        // 4. Hash the OTP for secure storage (CRITICAL SECURITY STEP)
-        String otpHash = passwordEncoder.encode(otpCode);
+        log.info("Generated new OTP for user: {}", email);
 
-        log.debug("Generated OTP hash for user: {}", email);
-
-        // 5. Save to DB (With User association) - ONLY store the hash
+        // 4. Save to DB (With User association) - Store as plain text (Optimized)
         Otp otp = Otp.builder()
                 .email(user.getEmail())
                 .username(user.getUsername())
                 .user(user)
-                .otpHash(otpHash) // Store ONLY the hashed version
-                // .otpCode(otpCode) // NEVER store plain OTP
+                .otpCode(otpCode) // Primary storage
                 .purpose(purpose.name()) // Store as String in DB
                 .expiresAt(LocalDateTime.now().plusMinutes(OTP_VALIDITY_MINUTES))
                 .attempts(0)
@@ -161,11 +165,8 @@ public class OtpService {
                 inputOtp.length() >= 2 ? inputOtp.substring(0, 1) + "****" + inputOtp.substring(inputOtp.length() - 1)
                         : "****");
 
-        // Verify using BCrypt password matching (SECURE)
-        // TODO(SeniorEng): Security/Optimization - Implement a Redis-based circuit
-        // breaker to block IP/Email temporarily after X failed attempts to prevent DB
-        // load during brute-force attacks.
-        if (passwordEncoder.matches(inputOtp, otp.getOtpHash())) {
+        // Verify using direct string equality (Optimized/Requested)
+        if (inputOtp.equals(otp.getOtpCode())) {
             // Success
             otp.setUsed(true);
             otpRepository.save(otp);

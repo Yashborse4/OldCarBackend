@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "otps", indexes = {
-        @Index(name = "idx_otp_email_purpose", columnList = "email, purpose")
+        @Index(name = "idx_otp_email_purpose_used", columnList = "email, purpose, used")
 })
 @Data
 @NoArgsConstructor
@@ -42,21 +42,10 @@ public class Otp {
     private User user;
 
     /**
-     * Hashed OTP for secure storage
-     * This is the ONLY field that should be persisted for security
+     * Plain 6-digit OTP code for verification
      */
     @NotBlank
-    @Column(name = "otp_hash", nullable = false, length = 255)
-    private String otpHash;
-
-    /**
-     * Plain OTP code - DEPRECATED, should not be stored
-     * Kept as nullable for backward compatibility during migration
-     * 
-     * @deprecated Use otpHash instead for security
-     */
-    @Deprecated
-    @Column(name = "otp_code", nullable = true, length = 10)
+    @Column(name = "otp_code", nullable = false, length = 10)
     private String otpCode;
 
     @NotBlank

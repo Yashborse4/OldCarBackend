@@ -58,32 +58,28 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
                 bucketKey += "_" + requestPath; // Specific bucket for this endpoint
             }
 
-            // Check if this request is allowed using our custom rate limiting service
-            boolean isAllowed;
-
             // Extract role for rate limiting
             String role = com.carselling.oldcar.model.Role.ANONYMOUS.name();
             if (isAuthenticated()) {
                 role = getUserRole();
             }
 
+            RateLimitingConfig.RateLimitService.CheckResult result;
             if (rateLimitAnnotation != null) {
-                isAllowed = rateLimitService.isAllowed(bucketKey, rateLimitAnnotation.capacity(),
+                result = rateLimitService.allow(bucketKey, rateLimitAnnotation.capacity(),
                         rateLimitAnnotation.refill(), rateLimitAnnotation.refillPeriod());
             } else {
-                // Fix: Pass the role to use correct limits (DEALER/ADMIN vs ANONYMOUS)
-                isAllowed = rateLimitService.isAllowed(bucketKey, role);
+                result = rateLimitService.allow(bucketKey, role);
             }
 
-            if (isAllowed) {
+            if (result.allowed()) {
                 // Request allowed - add rate limit headers
-                long remainingTokens = rateLimitService.getRemainingTokens(bucketKey);
-                response.setHeader("X-Rate-Limit-Remaining", String.valueOf(remainingTokens));
+                response.setHeader("X-Rate-Limit-Remaining", String.valueOf(result.remaining()));
                 response.setHeader("X-Rate-Limit-Reset",
                         String.valueOf(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(1)));
 
                 log.debug("Rate limit check passed for client: {} on path: {} (remaining: {})",
-                        clientId, requestPath, remainingTokens);
+                        clientId, requestPath, result.remaining());
                 return true;
             } else {
                 // Rate limit exceeded
