@@ -168,6 +168,9 @@ public class B2FileService {
 
         log.info("Uploading file to B2: {}", fullPath);
 
+        // Ensure B2 path/prefix is valid (acts as directory check/creation in B2)
+        b2Client.ensureFolderExists(folder);
+
         // Build ownership metadata for B2 tagging
 
         java.util.Map<String, String> fileMetadata = new java.util.HashMap<>();
@@ -338,6 +341,9 @@ public class B2FileService {
 
         String b2FileName = fullPath;
 
+        // Ensure B2 path/prefix is valid
+        b2Client.ensureFolderExists(folder);
+
         // Metadata
 
         java.util.Map<String, String> fileMetadata = new java.util.HashMap<>();
@@ -495,6 +501,9 @@ public class B2FileService {
         String uniqueFileName = String.format("%d_%s_%s.%s", uploader.getId(), timestamp, uuid, extension);
 
         String b2FileName = "temp/" + uniqueFileName;
+
+        // Ensure temp folder prefix is valid
+        b2Client.ensureFolderExists("temp/");
 
         java.util.Map<String, String> fileMetadata = new java.util.HashMap<>();
 

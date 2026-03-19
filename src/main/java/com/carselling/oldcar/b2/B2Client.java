@@ -48,6 +48,9 @@ public class B2Client implements InitializingBean {
             this.cachedBucketId = resolveBucketIdInternal(properties.getBucketId());
             log.info("Cached B2 bucket ID: {}", cachedBucketId);
             this.initialized = true;
+
+            // Verify core storage paths at startup
+            initializeStorageFolders();
         } catch (Exception e) {
             log.error("Failed to initialize B2 SDK Client - File uploads will be unavailable. Error: {}",
                     e.getMessage());
@@ -60,6 +63,22 @@ public class B2Client implements InitializingBean {
         if (!initialized) {
             throw new RuntimeException(
                     "B2 Service is not initialized. Check your configuration (Application Key/ID/Bucket).");
+        }
+    }
+
+    /**
+     * Verify existence of core folders at startup.
+     * In B2, folders are virtual, so we just verify bucket write access/intent.
+     */
+    private void initializeStorageFolders() {
+        String[] requiredPrefixes = { "temp/", "cars/", "chat/" };
+        log.info("Initializing B2 storage folders: {}", java.util.Arrays.toString(requiredPrefixes));
+        for (String prefix : requiredPrefixes) {
+            try {
+                ensureFolderExists(prefix);
+            } catch (Exception e) {
+                log.warn("B2 prefix '{}' verification failed at startup: {}", prefix, e.getMessage());
+            }
         }
     }
 

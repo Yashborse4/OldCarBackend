@@ -600,6 +600,10 @@ public class ChatService {
                 .content(request.getContent())
                 .messageType(messageType)
                 .clientMessageId(request.getClientMessageId())
+                .fileUrl(request.getFileUrl())
+                .fileName(request.getFileName())
+                .fileSize(request.getFileSize())
+                .mimeType(request.getMimeType())
                 .build();
 
         // Handle reply
@@ -1280,22 +1284,24 @@ public class ChatService {
             Long senderId) {
         log.info("Sending file message to chat ID: {} by user ID: {}", chatId, senderId);
 
-        // Upload file first
+        // Upload file to B2 first
         FileUploadResponse uploadResponse = uploadChatFile(file, chatId, senderId);
 
-        // Create message with file info
+        // Create message with file info — metadata is persisted on the ChatMessage entity
         SendMessageRequest request = SendMessageRequest.builder()
                 .chatId(chatId)
                 .content(content != null ? content : "Sent a file: " + uploadResponse.getFileName())
                 .messageType("FILE")
                 .replyToId(replyToId)
+                .fileUrl(uploadResponse.getFileUrl())
+                .fileName(uploadResponse.getOriginalFileName() != null
+                        ? uploadResponse.getOriginalFileName()
+                        : uploadResponse.getFileName())
+                .fileSize(uploadResponse.getFileSize())
+                .mimeType(uploadResponse.getContentType())
                 .build();
 
-        ChatMessageDto message = sendMessage(request, senderId);
-
-        // Update message with file details (this would normally be done in the entity)
-        // For now, we'll return the message as is
-        return message;
+        return sendMessage(request, senderId);
     }
 
     /**

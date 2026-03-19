@@ -4,9 +4,9 @@ import com.carselling.oldcar.dto.car.CarResponse;
 import com.carselling.oldcar.dto.car.MediaUploadRequest;
 import com.carselling.oldcar.dto.car.UpdateMediaStatusRequest;
 import com.carselling.oldcar.dto.common.ApiResponse;
-import com.carselling.oldcar.model.UploadedFile;
+import com.carselling.oldcar.model.TemporaryFile;
+import com.carselling.oldcar.b2.B2FileService;
 import com.carselling.oldcar.service.car.CarService;
-import com.carselling.oldcar.service.file.TempFileStorageService;
 import com.carselling.oldcar.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +30,7 @@ import java.util.List;
 public class CarMediaController {
 
         private final CarService carService;
-        private final TempFileStorageService tempFileStorageService;
+        private final B2FileService b2FileService;
         private final com.carselling.oldcar.repository.UserRepository userRepository;
 
         /**
@@ -96,11 +96,11 @@ public class CarMediaController {
         // TODO(SeniorEng): Security - Ensure strict file type validation (magic bytes,
         // not just extension) and anti-virus scanning on temp uploads to prevent
         // malicious payloads.
-        public ResponseEntity<ApiResponse<UploadedFile>> uploadTempFile(
+        public ResponseEntity<ApiResponse<TemporaryFile>> uploadTempFile(
                         @PathVariable String id,
                         @RequestParam("file") MultipartFile file) {
 
-                log.info("Uploading temp file for car: {} (file: {})", id, file.getOriginalFilename());
+                log.info("Uploading temp file for car: {} (file: {}) directly to B2", id, file.getOriginalFilename());
 
                 try {
                         Long currentUserId = SecurityUtils.getCurrentUserId();
@@ -108,16 +108,16 @@ public class CarMediaController {
                                         .orElseThrow(() -> new com.carselling.oldcar.exception.ResourceNotFoundException(
                                                         "User", "id", currentUserId.toString()));
 
-                        // Store temp file with validation
-                        UploadedFile tempFile = tempFileStorageService.storeTempFile(
+                        // Upload directly to B2 temp/ prefix (creates TemporaryFile record)
+                        // MediaFinalizationService will later copy from temp/ to cars/{id}/images/
+                        TemporaryFile tempFile = b2FileService.uploadTempFile(
                                         file,
                                         currentUser,
-                                        com.carselling.oldcar.model.ResourceType.CAR_IMAGE,
                                         Long.parseLong(id));
 
                         return ResponseEntity.ok(ApiResponse.success(
                                         "Temp file uploaded successfully",
-                                        "File has been stored in temporary storage with validation",
+                                        "File has been uploaded to B2 temporary storage",
                                         tempFile));
 
                 } catch (IllegalArgumentException e) {
@@ -126,10 +126,10 @@ public class CarMediaController {
                                         "File validation failed",
                                         e.getMessage()));
                 } catch (IOException e) {
-                        log.error("Error storing temp file", e);
+                        log.error("Error uploading temp file to B2", e);
                         return ResponseEntity.internalServerError().body(ApiResponse.error(
-                                        "Error storing file",
-                                        "Failed to store file in temporary storage"));
+                                        "Error uploading file",
+                                        "Failed to upload file to B2 temporary storage"));
                 }
         }
 

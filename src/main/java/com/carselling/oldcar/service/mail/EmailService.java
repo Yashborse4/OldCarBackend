@@ -16,6 +16,9 @@ import org.springframework.stereotype.Service;
  * Uses spring.mail.username as the sender address with a fallback
  * to app.email.from or a hardcoded default to prevent AddressException
  * when the environment variable is empty.
+ *
+ * <p>All methods use the dedicated {@code emailTaskExecutor} thread pool
+ * to prevent slow SMTP connections from starving other async tasks.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -50,7 +53,7 @@ public class EmailService {
         log.info("Email sender address resolved to: {}", resolvedFromEmail);
     }
 
-    @Async
+    @Async("emailTaskExecutor")
     public void sendTextEmail(String to, String subject, String body) {
         try {
             log.info("Sending email to: {}", to);
@@ -71,7 +74,7 @@ public class EmailService {
         }
     }
 
-    @Async
+    @Async("emailTaskExecutor")
     public void sendHtmlEmail(String to, String subject, String htmlBody) {
         try {
             log.info("Sending HTML email to: {}", to);
@@ -90,7 +93,19 @@ public class EmailService {
         }
     }
 
-    @Async
+    /**
+     * Send OTP verification email with branded HTML template.
+     *
+     * <p>IMPORTANT: This method inlines the SMTP send logic directly rather than
+     * calling {@link #sendHtmlEmail} to avoid Spring's {@code @Async} self-invocation
+     * proxy bypass. Calling another {@code @Async} method within the same class
+     * bypasses the AOP proxy, causing the inner method to run synchronously.</p>
+     *
+     * @param to      recipient email address
+     * @param otpCode the plain-text OTP code to include in the email
+     * @param purpose the OTP purpose (EMAIL_VERIFICATION, PASSWORD_RESET, LOGIN)
+     */
+    @Async("emailTaskExecutor")
     public void sendOtpEmail(String to, String otpCode, String purpose) {
         if (to == null || to.isBlank()) {
             log.warn("Skipping OTP email send because recipient address is blank");
@@ -180,7 +195,22 @@ public class EmailService {
                     .replace("{{OTP_CODE}}", otpCode)
                     .replace("{{CURRENT_YEAR}}", String.valueOf(java.time.Year.now().getValue()));
 
-            sendHtmlEmail(to, subject, htmlContent);
+            // IMPORTANT: Inline SMTP send here instead of calling sendHtmlEmail()
+            // to avoid @Async self-invocation proxy bypass (Spring AOP limitation).
+            // Self-calls within the same class bypass the proxy, causing the inner
+            // @Async method to run synchronously on the same thread.
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(resolvedFromEmail);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+            log.info("OTP email sent successfully to: {}", to);
+        } catch (MessagingException e) {
+            log.error("Failed to send OTP email to {}: {}", to, e.getMessage(), e);
         } catch (Exception e) {
             log.error("Unexpected error while preparing OTP email for {}: {}", to, e.getMessage(), e);
         }

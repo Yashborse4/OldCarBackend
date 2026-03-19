@@ -59,8 +59,8 @@ COPY --from=builder /app/build/dependency/META-INF /app/META-INF
 COPY --from=builder /app/build/dependency/BOOT-INF/classes /app
 
 # Create directories for uploads, app logs, and system/logback logs with proper permissions
-RUN mkdir -p /app/uploads /app/logs /var/log/sell-the-old-car && \
-    chown -R appuser:appgroup /app /var/log/sell-the-old-car
+RUN mkdir -p /app/uploads /app/logs /var/log/sell-the-old-car /tmp/car-uploads && \
+    chown -R appuser:appgroup /app /var/log/sell-the-old-car /tmp/car-uploads
 
 # Switch to non-root user for security
 USER appuser
