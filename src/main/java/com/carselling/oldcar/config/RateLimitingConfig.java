@@ -92,6 +92,14 @@ public class RateLimitingConfig {
 
         CheckResult allow(String key, int capacity, int refillTokens, int refillPeriod);
 
+        boolean isAllowed(String key);
+
+        boolean isAllowed(String key, String role);
+
+        boolean isAllowed(String key, int tokens);
+
+        boolean isAllowed(String key, int capacity, int refillTokens, int refillPeriod);
+
         long getRemainingTokens(String key);
 
         void reset(String key);
@@ -101,7 +109,8 @@ public class RateLimitingConfig {
         /**
          * Result object to avoid double Redis calls (check + remaining)
          */
-        record CheckResult(boolean allowed, long remaining) {}
+        record CheckResult(boolean allowed, long remaining) {
+        }
     }
 
     // Role-based capacity configs mapped here to avoid repetition
