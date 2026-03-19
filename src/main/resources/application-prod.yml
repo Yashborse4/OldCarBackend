@@ -15,9 +15,13 @@ spring:
           auth: true
           starttls:
             enable: true
-          connectiontimeout: 5000
-          timeout: 5000
-          writetimeout: 5000
+            required: true
+          connectiontimeout: 15000
+          timeout: 15000
+          writetimeout: 15000
+          # Connection pooling for faster subsequent sends
+          socketFactory:
+            fallback: true
 
   # Database Configuration for Production
   datasource:

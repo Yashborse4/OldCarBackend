@@ -70,8 +70,50 @@ check_prerequisites() {
 build() {
     log_info "Building Docker images with BuildKit..."
     cd "$SCRIPT_DIR"
-    DOCKER_BUILDKIT=1 docker-compose build
+    DOCKER_BUILDKIT=1 docker compose build
     log_success "Build completed"
+}
+
+# Clean Deploy (Full rebuild from scratch — production release)
+clean_deploy() {
+    log_info "========================================"
+    log_info "CLEAN DEPLOY — Full production rebuild"
+    log_info "========================================"
+    cd "$SCRIPT_DIR"
+
+    log_info "Step 1/5: Stopping all services..."
+    docker compose down
+    log_success "Services stopped"
+
+    log_info "Step 2/5: Flushing Redis cache..."
+    if docker ps -a --format '{{.Names}}' | grep -q 'car-selling-redis'; then
+        docker compose up -d redis
+        sleep 3
+        docker exec car-selling-redis redis-cli FLUSHALL || log_warn "Redis flush skipped"
+        docker compose stop redis
+    else
+        log_warn "Redis container not found, skipping flush"
+    fi
+    log_success "Redis flushed"
+
+    log_info "Step 3/5: Pruning Docker images..."
+    docker image prune -af
+    log_success "Docker images pruned"
+
+    log_info "Step 4/5: Building from scratch (no cache)..."
+    DOCKER_BUILDKIT=1 docker compose build --no-cache
+    log_success "Build completed"
+
+    log_info "Step 5/5: Starting all services..."
+    docker compose up -d
+    log_success "Services started"
+
+    log_info "Waiting for health checks (30s)..."
+    sleep 30
+    docker compose ps
+    log_success "========================================"
+    log_success "CLEAN DEPLOY COMPLETE"
+    log_success "========================================"
 }
 
 
@@ -79,7 +121,7 @@ build() {
 start() {
     log_info "Starting services..."
     cd "$SCRIPT_DIR"
-    docker-compose up -d
+    docker compose up -d
     log_success "Services started"
     
     log_info "Waiting for health checks..."
@@ -99,7 +141,7 @@ start() {
 stop() {
     log_info "Stopping services..."
     cd "$SCRIPT_DIR"
-    docker-compose down
+    docker compose down
     log_success "Services stopped"
 }
 
@@ -117,7 +159,7 @@ reload() {
     git pull
     log_info "Rebuilding and starting services..."
     cd "$SCRIPT_DIR"
-    docker-compose up -d --build
+    docker compose up -d --build
     log_success "Environment reloaded"
 }
 
@@ -125,16 +167,16 @@ reload() {
 logs() {
     cd "$SCRIPT_DIR"
     if [ -n "$1" ]; then
-        docker-compose logs -f "$1"
+        docker compose logs -f "$1"
     else
-        docker-compose logs -f
+        docker compose logs -f
     fi
 }
 
 # Check status
 status() {
     cd "$SCRIPT_DIR"
-    docker-compose ps
+    docker compose ps
 }
 
 # Clean everything
@@ -143,7 +185,7 @@ clean() {
     read -p "Are you sure? (y/N): " confirm
     if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
         cd "$SCRIPT_DIR"
-        docker-compose down -v --rmi all
+        docker compose down -v --rmi all
         log_success "Cleanup completed"
     else
         log_info "Cleanup cancelled"
@@ -188,9 +230,10 @@ show_help() {
     echo "  stop      - Stop all services"
     echo "  restart   - Restart all services"
     echo "  build     - Build Docker images"
-    echo "  reload    - Fetch latest changes and rebuild services"
-    echo "  logs      - View logs (optional: service name)"
-    echo "  status    - Check service status"
+    echo "  reload       - Fetch latest changes and rebuild services"
+    echo "  clean-deploy - Full clean rebuild (stop, flush, prune, build, start)"
+    echo "  logs         - View logs (optional: service name)"
+    echo "  status       - Check service status"
     echo "  clean     - Remove all containers, volumes, and images"
     echo "  backup    - Backup database and uploads"
     echo "  help      - Show this help message"
@@ -221,6 +264,10 @@ main() {
         reload)
             check_prerequisites
             reload
+            ;;
+        clean-deploy)
+            check_prerequisites
+            clean_deploy
             ;;
         logs)
             logs "$2"

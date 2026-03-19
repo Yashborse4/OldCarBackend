@@ -4,6 +4,15 @@ on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+    inputs:
+      deploy_type:
+        description: 'Deployment type'
+        required: true
+        type: choice
+        options:
+          - standard
+          - clean
+        default: 'standard'
 
 jobs:
   deploy:
@@ -21,22 +30,30 @@ jobs:
         username: ${{ secrets.VPS_USERNAME }}
         key: ${{ secrets.VPS_SSH_KEY }}
         port: ${{ secrets.VPS_PORT || '22' }}
-        timeout: 60s
+        timeout: 300s
+        command_timeout: 600s
         script: |
-          # Ensure we are in the project directory
-          # Note: Adjust 'OldCarBackend' below if your repository was cloned to a different directory name on the VPS
+          set -e
+
           cd OldCarBackend
-          
+
           echo "==== Pulling latest changes ===="
           git pull origin main
-          
-          # Ensure the deployment script has execution permissions
+
           chmod +x deploy.sh
-          
-          echo "==== Building new Docker images ===="
-          ./deploy.sh build
-          
-          echo "==== Restarting services ===="
-          ./deploy.sh restart
-          
+
+          DEPLOY_TYPE="${{ github.event.inputs.deploy_type || 'standard' }}"
+
+          if [ "$DEPLOY_TYPE" = "clean" ]; then
+            echo "==== CLEAN DEPLOY (full rebuild) ===="
+            ./deploy.sh clean-deploy
+          else
+            echo "==== STANDARD DEPLOY (build + restart) ===="
+            ./deploy.sh build
+            ./deploy.sh restart
+          fi
+
+          echo "==== Verifying deployment ===="
+          sleep 15
+          docker compose ps
           echo "==== Deployment Completed Successfully ===="
