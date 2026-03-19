@@ -416,7 +416,7 @@ public class GlobalExceptionHandler {
         public ResponseEntity<ApiResponse<Object>> handleHttpRequestMethodNotSupportedException(
                         HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
 
-                log.error("Method not supported: {}", ex.getMessage(), ex);
+                log.error("Method not supported: {} {} - {}", request.getMethod(), request.getRequestURI(), ex.getMessage());
 
                 ApiResponse<Object> response = ApiResponse.builder()
                                 .timestamp(LocalDateTime.now())
