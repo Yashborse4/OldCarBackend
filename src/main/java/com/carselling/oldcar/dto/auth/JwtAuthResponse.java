@@ -24,10 +24,18 @@ public class JwtAuthResponse {
     private String email;
     private String role;
     private String location;
+    private String address;
+    private String showroomName;
+    private String phoneNumber;
+    private Double latitude;
+    private Double longitude;
+    private String profileImageUrl;
     private Boolean emailVerified;
     private Boolean verifiedDealer;
-    private String dealerStatus; // Added to support granular status display
-    private Boolean onboardingCompleted; // Whether user has completed preference onboarding
+    private String dealerStatus; 
+    private String dealerStatusDisplayName;
+    private String dealerStatusReason;
+    private Boolean onboardingCompleted; 
     private String verificationReminder; // Reminder message for unverified dealers
     private LocalDateTime expiresAt;
     private LocalDateTime refreshExpiresAt;

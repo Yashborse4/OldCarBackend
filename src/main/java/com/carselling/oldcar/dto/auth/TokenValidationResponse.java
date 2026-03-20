@@ -37,6 +37,8 @@ public class TokenValidationResponse {
          */
         private Boolean verifiedDealer;
         private String dealerStatus; // Added to support granular status display
+        private String dealerStatusDisplayName;
+        private String dealerStatusReason;
         private Boolean onboardingCompleted; // Whether user completed preference onboarding
     }
 }

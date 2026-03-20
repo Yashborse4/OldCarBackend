@@ -103,6 +103,9 @@ public class User {
     @Pattern(regexp = "^[+]?[1-9]\\d{1,14}$", message = "Please provide a valid phone number")
     private String phoneNumber;
 
+    @Column(name = "gst_number", length = 20)
+    private String gstNumber;
+
     @Column(name = "is_active")
     @Builder.Default
     private Boolean isActive = true;

@@ -88,8 +88,22 @@ public class DealerVerificationService {
 
         DealerVerificationRequest saved = verificationRepository.save(request);
 
+        // SYNC: Immediately update dealer profile with verification details
+        dealer.setShowroomName(dto.getBusinessName());
+        dealer.setAddress(dto.getBusinessAddress());
+        dealer.setLocation(dto.getFormattedAddress());
+        dealer.setPhoneNumber(dto.getPhoneNumber());
+        dealer.setGstNumber(dto.getGstNumber());
+        dealer.setLatitude(dto.getLatitude());
+        dealer.setLongitude(dto.getLongitude());
+        
+        // Use showroom exterior as profile image for the dealer dealership
+        if (dto.getShowroomExteriorImage() != null) {
+            dealer.setProfileImageUrl(dto.getShowroomExteriorImage());
+        }
+
         // Update dealer status to PENDING (UNVERIFIED with pending request)
-        dealer.updateDealerStatus(DealerStatus.UNVERIFIED, "Verification request submitted");
+        dealer.updateDealerStatus(DealerStatus.UNVERIFIED, "UNDER_REVIEW");
         userRepository.save(dealer);
 
         log.info("Verification request {} created for dealer {}", saved.getId(), dealerId);
@@ -145,6 +159,22 @@ public class DealerVerificationService {
         existing.setReviewedBy(null);
 
         DealerVerificationRequest saved = verificationRepository.save(existing);
+        
+        // SYNC: Immediately update dealer profile with verification details
+        dealer.setShowroomName(dto.getBusinessName());
+        dealer.setAddress(dto.getBusinessAddress());
+        dealer.setLocation(dto.getFormattedAddress());
+        dealer.setPhoneNumber(dto.getPhoneNumber());
+        dealer.setGstNumber(dto.getGstNumber());
+        dealer.setLatitude(dto.getLatitude());
+        dealer.setLongitude(dto.getLongitude());
+
+        // Use showroom exterior as profile image for the dealer dealership
+        if (dto.getShowroomExteriorImage() != null) {
+            dealer.setProfileImageUrl(dto.getShowroomExteriorImage());
+        }
+
+        userRepository.save(dealer);
         log.info("Verification request {} updated and resubmitted", saved.getId());
 
         return convertToResponseDto(saved);
@@ -273,6 +303,11 @@ public class DealerVerificationService {
         log.info("DealerVerificationAudit action=REJECT requestId={} dealerId={} adminId={} reason={}",
                 requestId, request.getDealer().getId(), adminId, reason);
 
+        // Update dealer status to REJECTED with reason
+        User dealer = request.getDealer();
+        dealer.updateDealerStatus(DealerStatus.REJECTED, reason);
+        userRepository.save(dealer);
+
         return convertToResponseDto(saved);
     }
 
@@ -306,7 +341,7 @@ public class DealerVerificationService {
                 .showroomExteriorImage(request.getShowroomExteriorImage())
                 .showroomInteriorImage(request.getShowroomInteriorImage())
                 .visitingCardImage(request.getVisitingCardImage())
-                .showroomImages(request.getShowroomImages())
+                .showroomImages(request.getShowroomImages() != null ? new ArrayList<>(request.getShowroomImages()) : new ArrayList<>())
                 .status(request.getStatus().name())
                 .statusDisplayName(request.getStatus().getDisplayName())
                 .adminNotes(request.getAdminNotes())

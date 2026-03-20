@@ -146,6 +146,9 @@ public class AuthServiceImpl implements AuthService {
         // Send verification OTP once
         otpService.generateAndSendOtp(user.getEmail(), OtpPurpose.EMAIL_VERIFICATION);
 
+        long jwtExpirationSeconds = jwtTokenProvider.getJwtExpirationMs() / 1000;
+        long refreshExpirationSeconds = jwtTokenProvider.getRefreshTokenExpirationMs() / 1000;
+
         // DO NOT generate tokens here. Enforce email verification flow.
         return JwtAuthResponse.builder()
                 .accessToken(null)
@@ -159,11 +162,13 @@ public class AuthServiceImpl implements AuthService {
                 .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                 .verifiedDealer(Boolean.TRUE.equals(user.getDealerStatus() == DealerStatus.VERIFIED))
                 .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
+                .dealerStatusDisplayName(user.getDealerStatus() != null ? user.getDealerStatus().getDisplayName() : null)
+                .dealerStatusReason(user.getDealerStatusReason())
                 .onboardingCompleted(user.getOnboardingCompleted() != null ? user.getOnboardingCompleted() : false)
                 .expiresAt(null)
                 .refreshExpiresAt(null)
-                .expiresIn(900L)
-                .refreshExpiresIn(604800L)
+                .expiresIn(jwtExpirationSeconds)
+                .refreshExpiresIn(refreshExpirationSeconds)
                 .build();
     }
 
@@ -378,20 +383,19 @@ public class AuthServiceImpl implements AuthService {
         // with the new token generation event.
         evictUserCache(user);
 
-        // 1. Generate Access Token (15 mins)
+        long jwtExpirationMs = jwtTokenProvider.getJwtExpirationMs();
+        long refreshExpirationMs = jwtTokenProvider.getRefreshTokenExpirationMs();
+        long jwtExpirationSeconds = jwtExpirationMs / 1000;
+        long refreshExpirationSeconds = refreshExpirationMs / 1000;
+
+        // 1. Generate Access Token (Using configured duration)
         String accessToken = jwtTokenProvider.generateAccessToken(user);
 
-        // 2. Generate Refresh Token (7 days)
+        // 2. Generate Refresh Token (Using configured duration)
         String refreshTokenString = jwtTokenProvider.generateRefreshToken(user);
 
         // 3. Persist Refresh Token
-        // First invalidating previous tokens for strict single-session (optional, can
-        // adjust policy)
-        // For now, let's keep it simple: insert new.
-        // If you want single-session, do: refreshTokenRepository.deleteByUser(user);
-        // refreshTokenRepository.deleteByUser(user); // Uncomment for single session
-
-        LocalDateTime refreshExpiresAt = LocalDateTime.now().plusSeconds(604800); // 7 days
+        LocalDateTime refreshExpiresAt = LocalDateTime.now().plusNanos(refreshExpirationMs * 1000000L);
         RefreshToken refreshTokenEntity = RefreshToken.builder()
                 .user(user)
                 .token(refreshTokenString)
@@ -401,7 +405,7 @@ public class AuthServiceImpl implements AuthService {
 
         refreshTokenRepository.save(refreshTokenEntity);
 
-        LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(900); // 15 minutes
+        LocalDateTime expiresAt = LocalDateTime.now().plusNanos(jwtExpirationMs * 1000000L);
 
         return JwtAuthResponse.builder()
                 .accessToken(accessToken)
@@ -412,9 +416,17 @@ public class AuthServiceImpl implements AuthService {
                 .email(user.getEmail())
                 .role(user.getRole().name())
                 .location(user.getLocation())
+                .address(user.getAddress())
+                .showroomName(user.getShowroomName())
+                .phoneNumber(user.getPhoneNumber())
+                .latitude(user.getLatitude())
+                .longitude(user.getLongitude())
+                .profileImageUrl(user.getProfileImageUrl())
                 .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                 .verifiedDealer(user.getDealerStatus() == DealerStatus.VERIFIED)
                 .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
+                .dealerStatusDisplayName(user.getDealerStatus() != null ? user.getDealerStatus().getDisplayName() : null)
+                .dealerStatusReason(user.getDealerStatusReason())
                 .onboardingCompleted(user.getOnboardingCompleted() != null ? user.getOnboardingCompleted() : false)
                 .verificationReminder(
                         (user.getRole() == Role.DEALER
@@ -424,8 +436,8 @@ public class AuthServiceImpl implements AuthService {
                                                 : null)
                 .expiresAt(expiresAt)
                 .refreshExpiresAt(refreshExpiresAt)
-                .expiresIn(900L)
-                .refreshExpiresIn(604800L)
+                .expiresIn(jwtExpirationSeconds)
+                .refreshExpiresIn(refreshExpirationSeconds)
                 .build();
     }
 
@@ -530,6 +542,8 @@ public class AuthServiceImpl implements AuthService {
                     .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                     .verifiedDealer(user.getDealerStatus() == DealerStatus.VERIFIED)
                     .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
+                    .dealerStatusDisplayName(user.getDealerStatus() != null ? user.getDealerStatus().getDisplayName() : null)
+                    .dealerStatusReason(user.getDealerStatusReason())
                     .onboardingCompleted(Boolean.TRUE.equals(user.getOnboardingCompleted()))
                     .build();
 
