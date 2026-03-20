@@ -35,6 +35,14 @@ public class JwtTokenProvider {
     @Value("${app.jwt.refresh-token-expiration-ms:5184000000}")
     private long refreshTokenExpirationMs;
 
+    public long getJwtExpirationMs() {
+        return jwtExpirationMs;
+    }
+
+    public long getRefreshTokenExpirationMs() {
+        return refreshTokenExpirationMs;
+    }
+
     private javax.crypto.SecretKey key;
 
     // TODO: [PRODUCTION-READY & CONCURRENCY] Local Token Blacklist.
