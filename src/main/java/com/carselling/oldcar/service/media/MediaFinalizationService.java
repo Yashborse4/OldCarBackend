@@ -350,20 +350,20 @@ public class MediaFinalizationService {
         uploadedFileRepository.deleteByOwnerTypeAndOwnerId(ResourceType.CAR_IMAGE, carId);
 
         // 2. Delete TemporaryFile records (Temp DB records)
-        // Construct prefix: domain + "/temp/cars/" + carId
+        // Construct prefix: domain + "/temp/" + carId
         String domain = properties.getCdnDomain();
         if (domain.endsWith("/")) {
             domain = domain.substring(0, domain.length() - 1);
         }
-        String tempPrefix = domain + "/temp/cars/" + carId + "/";
+        String tempPrefix = domain + "/temp/" + carId + "/";
         temporaryFileRepository.deleteByFileUrlStartingWith(tempPrefix);
 
         // 3. Clean B2 Folders (Physical files)
         try {
             // Permanent folder
             b2Client.deleteFilesWithPrefix("cars/" + carId + "/");
-            // Temp folder
-            b2Client.deleteFilesWithPrefix("temp/cars/" + carId + "/");
+            // Temp folder (matches upload path: temp/{carId}/)
+            b2Client.deleteFilesWithPrefix("temp/" + carId + "/");
         } catch (Exception e) {
             log.error("Failed to cleanup B2 folders for car {}: {}", carId, e.getMessage());
             // Consume error so DB transaction can commit

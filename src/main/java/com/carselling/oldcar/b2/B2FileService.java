@@ -500,10 +500,12 @@ public class B2FileService {
 
         String uniqueFileName = String.format("%d_%s_%s.%s", uploader.getId(), timestamp, uuid, extension);
 
-        String b2FileName = "temp/" + uniqueFileName;
+        // Organize temp files by car ID: temp/{carId}/{fileName}
+        String tempFolder = "temp/" + (carId != null ? carId : "unknown") + "/";
+        String b2FileName = tempFolder + uniqueFileName;
 
-        // Ensure temp folder prefix is valid
-        b2Client.ensureFolderExists("temp/");
+        // Ensure temp/{carId}/ folder prefix is valid
+        b2Client.ensureFolderExists(tempFolder);
 
         java.util.Map<String, String> fileMetadata = new java.util.HashMap<>();
 
@@ -801,9 +803,9 @@ public class B2FileService {
 
             if (carId != null && !carId.isBlank()) {
 
-                // Preserve subfolder: cars/{id}/images → temp/cars/{id}/images
+                // Preserve subfolder: cars/{id}/images → temp/{id}/images
 
-                // cars/{id}/videos → temp/cars/{id}/videos
+                // cars/{id}/videos → temp/{id}/videos
 
                 String carPrefix = "cars/" + carId;
 
@@ -813,11 +815,11 @@ public class B2FileService {
 
                         : "/images"; // Default to /images if no subfolder specified
 
-                tempFolder = "temp/cars/" + carId + suffix;
+                tempFolder = "temp/" + carId + suffix;
 
             } else {
 
-                tempFolder = "temp/cars";
+                tempFolder = "temp/unknown";
 
             }
 

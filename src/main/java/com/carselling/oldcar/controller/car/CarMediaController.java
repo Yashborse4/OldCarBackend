@@ -5,6 +5,7 @@ import com.carselling.oldcar.dto.car.MediaUploadRequest;
 import com.carselling.oldcar.dto.car.UpdateMediaStatusRequest;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.model.TemporaryFile;
+import com.carselling.oldcar.dto.file.TempFileResponse;
 import com.carselling.oldcar.b2.B2FileService;
 import com.carselling.oldcar.service.car.CarService;
 import com.carselling.oldcar.util.SecurityUtils;
@@ -96,7 +97,7 @@ public class CarMediaController {
         // TODO(SeniorEng): Security - Ensure strict file type validation (magic bytes,
         // not just extension) and anti-virus scanning on temp uploads to prevent
         // malicious payloads.
-        public ResponseEntity<ApiResponse<TemporaryFile>> uploadTempFile(
+        public ResponseEntity<ApiResponse<TempFileResponse>> uploadTempFile(
                         @PathVariable String id,
                         @RequestParam("file") MultipartFile file) {
 
@@ -108,17 +109,21 @@ public class CarMediaController {
                                         .orElseThrow(() -> new com.carselling.oldcar.exception.ResourceNotFoundException(
                                                         "User", "id", currentUserId.toString()));
 
-                        // Upload directly to B2 temp/ prefix (creates TemporaryFile record)
-                        // MediaFinalizationService will later copy from temp/ to cars/{id}/images/
+                        // Upload directly to B2 temp/{carId}/ prefix (creates TemporaryFile record)
+                        // MediaFinalizationService will later copy from temp/{carId}/ to cars/{carId}/images/
                         TemporaryFile tempFile = b2FileService.uploadTempFile(
                                         file,
                                         currentUser,
                                         Long.parseLong(id));
 
+                        // Return DTO instead of entity to prevent LazyInitializationException
+                        // (User.cars is LAZY and session is closed by serialization time)
+                        TempFileResponse response = TempFileResponse.fromEntity(tempFile);
+
                         return ResponseEntity.ok(ApiResponse.success(
                                         "Temp file uploaded successfully",
                                         "File has been uploaded to B2 temporary storage",
-                                        tempFile));
+                                        response));
 
                 } catch (IllegalArgumentException e) {
                         log.error("File validation failed: {}", e.getMessage());
