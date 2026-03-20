@@ -71,7 +71,7 @@ public class B2Client implements InitializingBean {
      * In B2, folders are virtual, so we just verify bucket write access/intent.
      */
     private void initializeStorageFolders() {
-        String[] requiredPrefixes = { "temp/", "cars/", "chat/" };
+        String[] requiredPrefixes = { "temp/", "cars/", "chat/", "users/", "dealer-verification/" };
         log.info("Initializing B2 storage folders: {}", java.util.Arrays.toString(requiredPrefixes));
         for (String prefix : requiredPrefixes) {
             try {
@@ -444,27 +444,47 @@ public class B2Client implements InitializingBean {
 
     /**
      * Ensures that the "folder" (prefix) exists or is writable.
-     * In B2, folders are virtual, so we just verify bucket access and log the
-     * intent.
+     * In B2, folders are virtual, so we verify existence by checking for any file with this prefix.
+     * If no files exist, we create a zero-byte .keep file to "create" the folder in B2 console.
      */
     public void ensureFolderExists(String prefix) {
         checkInitialized();
+        // Ensure prefix ends with /
+        String folderPrefix = prefix.endsWith("/") ? prefix : prefix + "/";
         try {
             String bucketId = getCachedBucketId();
-            // Perform a lightweight check (e.g., list 1 file) to ensure connectivity and
-            // bucket existence
-            // This satisfies the "create directory if not exists" requirement by ensuring
-            // the path is valid for writing.
+            
+            // 1. Check if folder already has any files (including placeholders)
             B2ListFileVersionsRequest request = B2ListFileVersionsRequest
                     .builder(bucketId)
-                    .setPrefix(prefix)
+                    .setPrefix(folderPrefix)
                     .setMaxFileCount(1)
                     .build();
-            client.fileVersions(request).iterator().hasNext(); // Just trigger the call
-            log.info("Storage path verified: {}", prefix);
+            
+            boolean exists = client.fileVersions(request).iterator().hasNext();
+            
+            if (exists) {
+                log.info("B2 storage path verified (exists): {}", folderPrefix);
+            } else {
+                log.info("B2 storage path empty, creating placeholder: {}", folderPrefix);
+                // 2. Create a .keep placeholder file to make the folder "real" in B2
+                String placeholderName = folderPrefix + ".keep";
+                byte[] content = "KEEP".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                
+                com.backblaze.b2.client.contentSources.B2ContentSource source = 
+                        com.backblaze.b2.client.contentSources.B2ByteArrayContentSource.build(content);
+                
+                com.backblaze.b2.client.structures.B2UploadFileRequest uploadRequest = 
+                        com.backblaze.b2.client.structures.B2UploadFileRequest
+                                .builder(bucketId, placeholderName, "text/plain", source)
+                                .build();
+                
+                client.uploadSmallFile(uploadRequest);
+                log.info("Successfully initialized B2 folder with placeholder: {}", placeholderName);
+            }
         } catch (Exception e) {
-            log.error("Failed to verify storage path: {}", prefix, e);
-            throw new RuntimeException("Storage unavailable for path: " + prefix, e);
+            log.error("Failed to verify/initialize storage path: {}", folderPrefix, e);
+            throw new RuntimeException("Storage initialization failed for path: " + folderPrefix, e);
         }
     }
 

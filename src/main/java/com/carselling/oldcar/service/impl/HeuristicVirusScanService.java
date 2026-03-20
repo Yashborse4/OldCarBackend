@@ -33,13 +33,25 @@ public class HeuristicVirusScanService implements VirusScanService {
     public void scanFile(MultipartFile file) {
         try {
             byte[] fileBytes = file.getBytes();
-            scanBytes(fileBytes);
-
-            // Additional check for polyglot files in images if needed
-            // (scanBytes covers general patterns, but context matters)
             String filename = file.getOriginalFilename();
-            if (filename != null && isImageFile(filename) && containsScriptContent(fileBytes)) {
-                throw new SecurityException("Image file contains embedded scripts");
+
+            // For verified image/video files, skip the generic binary string scan.
+            // Binary media data (JPEG, PNG, MP4, etc.) naturally contains byte sequences
+            // like 0x3C 0x25 ("<%") in their compressed data, causing false positives.
+            // By this point, FileValidationService has already validated magic numbers and
+            // content types via Tika, so we know the file is a genuine media file.
+            boolean isMedia = filename != null && (isImageFile(filename) || isVideoFile(filename));
+
+            if (isMedia) {
+                // For images, only check for polyglot script injection (the real threat)
+                if (isImageFile(filename) && containsScriptContent(fileBytes)) {
+                    throw new SecurityException("Image file contains embedded scripts");
+                }
+                // Videos: skip heuristic text scanning entirely (binary noise is inevitable)
+                log.debug("Skipping heuristic pattern scan for media file: {}", filename);
+            } else {
+                // For non-media files (documents, etc.), run the full scan
+                scanBytes(fileBytes);
             }
 
         } catch (IOException e) {
@@ -116,5 +128,12 @@ public class HeuristicVirusScanService implements VirusScanService {
         return lower.endsWith(".jpg") || lower.endsWith(".jpeg") ||
                 lower.endsWith(".png") || lower.endsWith(".gif") ||
                 lower.endsWith(".webp");
+    }
+
+    private boolean isVideoFile(String filename) {
+        String lower = filename.toLowerCase();
+        return lower.endsWith(".mp4") || lower.endsWith(".mov") ||
+                lower.endsWith(".avi") || lower.endsWith(".mkv") ||
+                lower.endsWith(".webm") || lower.endsWith(".3gp");
     }
 }
