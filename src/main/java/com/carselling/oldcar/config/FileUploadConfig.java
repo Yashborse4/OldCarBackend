@@ -58,8 +58,16 @@ public class FileUploadConfig {
     private boolean validateContentType = true;
     private boolean validateFileExtension = true;
     private boolean validateMagicNumbers = true;
+    private String path = "./uploads/dev"; // Default if not specified
 
     // Getters and Setters
+    public String getPath() {
+        return path;
+    }
+
+    public void setPath(String path) {
+        this.path = path;
+    }
     public int getMaxFileSizeMB() {
         return maxFileSizeMB;
     }
