@@ -36,6 +36,17 @@ log_info "Updating system packages..."
 sudo apt-get update && sudo apt-get upgrade -y
 sudo apt-get install -y ca-certificates curl gnupg git nano ufw
 
+# 1.1 Configure Firewall (UFW)
+log_info "Configuring firewall (UFW)..."
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow 8080/tcp
+echo "y" | sudo ufw enable
+log_success "Firewall configured and enabled. Ports 22, 80, 443, 8080 allowed."
+
 # 2. Install Docker
 log_info "Checking Docker installation..."
 if ! command -v docker &> /dev/null; then

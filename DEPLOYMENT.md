@@ -149,9 +149,32 @@ curl http://localhost:8080/actuator/health
 ### Security
 - [ ] Change all default passwords in `.env`
 - [ ] Generate secure JWT secret (256-bit)
-- [ ] Configure firewall rules (only expose 8080)
+- [ ] Configure firewall rules (see [Firewall Configuration](#firewall-configuration))
 - [ ] Set up SSL/TLS termination (use nginx/traefik)
 - [ ] Regular security updates: `docker-compose pull nginx postgres redis opensearch && docker-compose up -d`
+
+### Firewall Configuration
+
+To ensure your VPS is secure while allowing deployment and application traffic, run these commands using **UFW** (Uncomplicated Firewall):
+
+```bash
+# 1. Set default policies
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+# 2. Allow essential ports
+sudo ufw allow 22/tcp    # SSH (Critical for Deployment)
+sudo ufw allow 80/tcp    # HTTP (Let's Encrypt / Redirection)
+sudo ufw allow 443/tcp   # HTTPS (Main API Traffic)
+sudo ufw allow 8080/tcp  # App Port (Optional, if not using Nginx)
+
+# 3. Enable firewall
+echo "y" | sudo ufw enable
+sudo ufw status
+```
+
+> [!WARNING]
+> Always ensure Port 22 (SSH) is allowed before enabling UFW, or you will be locked out of your VPS.
 
 ### Performance
 - [ ] Monitor JVM heap usage

@@ -23,6 +23,15 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
+    - name: Check VPS Connectivity
+      run: |
+        echo "Testing connection to ${{ secrets.VPS_HOST }}:22..."
+        timeout 10s nc -zv ${{ secrets.VPS_HOST }} 22 || {
+          echo "ERROR: Could not connect to the VPS on port 22."
+          echo "Please ensure the firewall is configured to allow SSH."
+          exit 1
+        }
+
     - name: Execute Deployment Script via SSH
       uses: appleboy/ssh-action@v1.0.3
       with:
