@@ -143,9 +143,6 @@ app:
   upload:
     path: ${UPLOAD_PATH:/var/uploads/car-selling}
     
-  # Google Auth Configuration
-  google:
-    client-id: 595835372424-aqpkjclgki2muocr79fq4q2ljpt96he3.apps.googleusercontent.com
     
   # Rate Limiting (strict for production)
   rate-limit:
