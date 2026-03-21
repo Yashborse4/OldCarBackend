@@ -49,8 +49,6 @@ jobs:
           echo "==== Pulling latest changes ===="
           git pull origin main
 
-          chmod +x deploy.sh
-
           DEPLOY_TYPE="${{ github.event.inputs.deploy_type || 'standard' }}"
 
           if [ "$DEPLOY_TYPE" = "clean" ]; then
