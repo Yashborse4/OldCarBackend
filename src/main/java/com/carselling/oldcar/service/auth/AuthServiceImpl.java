@@ -10,6 +10,7 @@ import com.carselling.oldcar.model.User;
 import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.model.DealerStatus;
 import com.carselling.oldcar.model.RefreshToken;
+import com.carselling.oldcar.model.AuthProvider;
 import com.carselling.oldcar.repository.UserRepository;
 import com.carselling.oldcar.repository.RefreshTokenRepository;
 import com.carselling.oldcar.security.jwt.JwtTokenProvider;
@@ -43,6 +44,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final OtpService otpService;
+    private final GoogleAuthService googleAuthService;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final CacheManager cacheManager;
@@ -50,12 +52,14 @@ public class AuthServiceImpl implements AuthService {
     public AuthServiceImpl(UserRepository userRepository, 
                            RefreshTokenRepository refreshTokenRepository, 
                            OtpService otpService, 
+                           GoogleAuthService googleAuthService,
                            PasswordEncoder passwordEncoder, 
                            JwtTokenProvider jwtTokenProvider,
                            CacheManager cacheManager) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.otpService = otpService;
+        this.googleAuthService = googleAuthService;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.cacheManager = cacheManager;
@@ -129,6 +133,7 @@ public class AuthServiceImpl implements AuthService {
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(rawPassword))
                 .role(role)
+                .authProvider(AuthProvider.LOCAL)
                 .dealerStatus(role == Role.DEALER ? DealerStatus.UNVERIFIED : null)
                 .isActive(true)
                 .isEmailVerified(false) // In production, send verification email
@@ -274,6 +279,130 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
+     * Login with Google
+     */
+    @Override
+    @Transactional
+    public JwtAuthResponse loginWithGoogle(GoogleLoginRequest request) {
+        if (request == null || request.getIdToken() == null) {
+            throw new InvalidInputException("Google login request or token cannot be null");
+        }
+
+        com.google.api.client.googleapis.auth.oauth2.GoogleIdToken.Payload payload = 
+            googleAuthService.verifyToken(request.getIdToken());
+
+        if (payload == null) {
+            throw new AuthenticationFailedException("Invalid Google ID Token", AuthError.TOKEN_INVALID);
+        }
+
+        String email = payload.getEmail();
+        String googleId = payload.getSubject();
+        String name = (String) payload.get("name");
+        String pictureUrl = (String) payload.get("picture");
+        String givenName = (String) payload.get("given_name");
+        String familyName = (String) payload.get("family_name");
+        String phoneNumber = (String) payload.get("phone_number");
+        Boolean emailVerified = payload.getEmailVerified();
+
+        if (Boolean.FALSE.equals(emailVerified)) {
+            log.warn("Google login rejected: Email not verified for {}", email);
+            throw new AuthenticationFailedException("Google email not verified", AuthError.EMAIL_NOT_VERIFIED);
+        }
+
+        log.info("Google login attempt for email: {}, name: {}, googleId: {}", email, name, googleId);
+
+        // Check if user exists by googleId first (most secure)
+        Optional<User> userByGoogleId = userRepository.findByGoogleId(googleId);
+        User user;
+
+        if (userByGoogleId.isPresent()) {
+            user = userByGoogleId.get();
+        } else {
+            // Check by email
+            Optional<User> userByEmail = userRepository.findByEmail(email);
+            if (userByEmail.isPresent()) {
+                user = userByEmail.get();
+                user.setGoogleId(googleId); // Link googleId
+            } else {
+                log.info("Creating new user for Google email: {}", email);
+                
+                String baseUsername = SecurityUtils.extractUsernameFromEmail(email);
+                String username = generateUniqueUsername(baseUsername);
+
+                user = User.builder()
+                        .username(username)
+                        .email(email)
+                        .googleId(googleId)
+                        .firstName(givenName)
+                        .lastName(familyName)
+                        .phoneNumber(phoneNumber)
+                        .password(passwordEncoder.encode(generateRandomPassword(16)))
+                        .role(Role.USER)
+                        .authProvider(AuthProvider.GOOGLE)
+                        .isActive(true)
+                        .isEmailVerified(true)
+                        .emailVerifiedAt(LocalDateTime.now())
+                        .isAccountNonLocked(true)
+                        .failedLoginAttempts(0)
+                        .profileImageUrl(pictureUrl)
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(LocalDateTime.now())
+                        .onboardingCompleted(true)
+                        .build();
+                
+                user = userRepository.save(user);
+            }
+        }
+
+        // Sync details for existing/found users
+        boolean updated = false;
+        if (user.getAuthProvider() != AuthProvider.GOOGLE) {
+            user.setAuthProvider(AuthProvider.GOOGLE);
+            updated = true;
+        }
+        if (user.getGoogleId() == null) {
+            user.setGoogleId(googleId);
+            updated = true;
+        }
+        if (user.getFirstName() == null && givenName != null) {
+            user.setFirstName(givenName);
+            updated = true;
+        }
+        if (user.getLastName() == null && familyName != null) {
+            user.setLastName(familyName);
+            updated = true;
+        }
+        if (user.getProfileImageUrl() == null && pictureUrl != null) {
+            user.setProfileImageUrl(pictureUrl);
+            updated = true;
+        }
+        if (user.getPhoneNumber() == null && phoneNumber != null) {
+            user.setPhoneNumber(phoneNumber);
+            updated = true;
+        }
+        if (Boolean.FALSE.equals(user.getIsEmailVerified())) {
+            user.setIsEmailVerified(true);
+            user.setEmailVerifiedAt(LocalDateTime.now());
+            updated = true;
+        }
+
+        if (updated) {
+            user.setUpdatedAt(LocalDateTime.now());
+            user = userRepository.save(user);
+        }
+
+        if (!user.isAccountNonLocked()) {
+            throw new AuthenticationFailedException("Account is locked", AuthError.ACCOUNT_LOCKED);
+        }
+
+        // Update last login
+        updateLoginStats(user, request.getDeviceInfo());
+        evictUserCache(user);
+
+        return generateAuthResponse(user);
+    }
+
+    /**
      * Request OTP for Email Verification
      */
     @Transactional
@@ -351,6 +480,12 @@ public class AuthServiceImpl implements AuthService {
 
         // Update stats
         updateLoginStats(user, null);
+
+        // Sync auth provider if not set
+        if (user.getAuthProvider() == AuthProvider.LOCAL) { // Default is LOCAL, change to PHONE
+            user.setAuthProvider(AuthProvider.PHONE);
+            userRepository.save(user);
+        }
         
         // Evict cache
         evictUserCache(user);

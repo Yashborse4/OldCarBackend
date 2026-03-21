@@ -93,6 +93,7 @@ dependencies {
     // implementation 'org.eclipse.parsson:parsson:1.1.7'
 
     // Lombok
+    implementation 'org.projectlombok:lombok:1.18.34'
     compileOnly 'org.projectlombok:lombok:1.18.34'
     annotationProcessor 'org.projectlombok:lombok:1.18.34'
     testCompileOnly 'org.projectlombok:lombok:1.18.34'
@@ -104,6 +105,9 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
    
 	testImplementation 'com.h2database:h2'
+
+    // Google Auth
+    implementation 'com.google.api-client:google-api-client:2.2.0'
 
 }
 

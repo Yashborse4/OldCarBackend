@@ -35,6 +35,7 @@ public class UserResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String profileImageUrl; // URL endpoint to fetch the profile image blob
+    private String showroomImageUrl; // URL to the showroom image
 
     // Dealer status fields (only relevant for DEALER role)
     private String dealerStatus;
