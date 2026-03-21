@@ -63,9 +63,6 @@ public class RateLimitingConfig {
     @Autowired(required = false)
     private RedisConnectionFactory redisConnectionFactory;
 
-    @Autowired(required = false)
-    private InMemoryCacheService inMemoryCacheService;
-
     public enum RateLimitPriority {
         CRITICAL(1.0),      // Never throttled unless system is Down
         NORMAL(0.8),        // Standard traffic

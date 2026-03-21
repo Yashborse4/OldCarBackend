@@ -5,6 +5,7 @@ import org.springframework.boot.actuate.health.HealthComponent;
 import org.springframework.boot.actuate.health.HealthEndpoint;
 import org.springframework.boot.actuate.health.Status;
 import org.springframework.boot.actuate.metrics.MetricsEndpoint;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
@@ -20,9 +21,9 @@ public class SystemHealthMonitor {
     private final HealthEndpoint healthEndpoint;
     private final MetricsEndpoint metricsEndpoint;
 
-    public SystemHealthMonitor(HealthEndpoint healthEndpoint, MetricsEndpoint metricsEndpoint) {
+    public SystemHealthMonitor(HealthEndpoint healthEndpoint, ObjectProvider<MetricsEndpoint> metricsEndpointProvider) {
         this.healthEndpoint = healthEndpoint;
-        this.metricsEndpoint = metricsEndpoint;
+        this.metricsEndpoint = metricsEndpointProvider.getIfAvailable();
     }
 
     /**
@@ -55,6 +56,9 @@ public class SystemHealthMonitor {
     }
 
     private Double getCpuUsage() {
+        if (metricsEndpoint == null) {
+            return null;
+        }
         try {
             var cpuMeter = metricsEndpoint.metric("system.cpu.usage", Collections.emptyList());
             if (cpuMeter != null && cpuMeter.getMeasurements() != null && !cpuMeter.getMeasurements().isEmpty()) {
