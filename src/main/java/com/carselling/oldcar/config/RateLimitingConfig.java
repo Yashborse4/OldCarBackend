@@ -37,6 +37,26 @@ public class RateLimitingConfig {
     @Value("${app.rate-limit.refill-period-minutes:1}")
     private int refillPeriodMinutes;
 
+    @Value("${app.rate-limit.levels.anonymous.capacity:100}")
+    private int anonCapacity;
+    @Value("${app.rate-limit.levels.anonymous.refill-tokens:20}")
+    private int anonRefill;
+
+    @Value("${app.rate-limit.levels.user.capacity:1000}")
+    private int userCapacity;
+    @Value("${app.rate-limit.levels.user.refill-tokens:200}")
+    private int userRefill;
+
+    @Value("${app.rate-limit.levels.dealer.capacity:5000}")
+    private int dealerCapacity;
+    @Value("${app.rate-limit.levels.dealer.refill-tokens:1000}")
+    private int dealerRefill;
+
+    @Value("${app.rate-limit.levels.admin.capacity:10000}")
+    private int adminCapacity;
+    @Value("${app.rate-limit.levels.admin.refill-tokens:2000}")
+    private int adminRefill;
+
     @Value("${app.redis.enabled:true}")
     private boolean redisEnabled;
 
@@ -45,6 +65,8 @@ public class RateLimitingConfig {
 
     @Autowired(required = false)
     private InMemoryCacheService inMemoryCacheService;
+
+    public record RoleLimitsConfig(int adminCap, int adminRefill, int dealerCap, int dealerRefill, int userCap, int userRefill, int anonCap, int anonRefill) {}
 
     @Bean
     public StringRedisTemplate rateLimitRedisTemplate() {
@@ -58,6 +80,8 @@ public class RateLimitingConfig {
     public RateLimitService rateLimitService(
             @Autowired(required = false) StringRedisTemplate rateLimitRedisTemplate) {
 
+        RoleLimitsConfig roleLimits = new RoleLimitsConfig(adminCapacity, adminRefill, dealerCapacity, dealerRefill, userCapacity, userRefill, anonCapacity, anonRefill);
+
         boolean useRedis = redisEnabled && rateLimitRedisTemplate != null;
         if (useRedis) {
             try {
@@ -65,7 +89,7 @@ public class RateLimitingConfig {
                 rateLimitRedisTemplate.getConnectionFactory().getConnection().ping();
                 log.info(
                         "Redis is available. Using GLOBAL REST-based token bucket for Rate Limiting (NGINX cluster safe).");
-                return new RedisRateLimitService(capacity, refillPeriodMinutes, rateLimitRedisTemplate,
+                return new RedisRateLimitService(roleLimits, capacity, refillPeriodMinutes, rateLimitRedisTemplate,
                         rateLimitingEnabled);
             } catch (Exception e) {
                 log.warn("Redis ping failed, falling back to local Bucket4j memory cache: {}", e.getMessage());
@@ -76,7 +100,7 @@ public class RateLimitingConfig {
                     "Redis disabled or unavailable. Using LOCAL Bucket4j memory cache. BEWARE: Local Rate Limiting Multiplier effect behind NGINX.");
         }
 
-        return new LocalBucket4jRateLimitService(capacity, refillPeriodMinutes, rateLimitingEnabled);
+        return new LocalBucket4jRateLimitService(roleLimits, capacity, refillPeriodMinutes, rateLimitingEnabled);
     }
 
     public boolean isRateLimitingEnabled() {
@@ -114,15 +138,16 @@ public class RateLimitingConfig {
     }
 
     // Role-based capacity configs mapped here to avoid repetition
-    private static int[] getRoleLimits(String role, int defaultCap, int defaultRefill) {
+    private static int[] getRoleLimits(RoleLimitsConfig config, String role, int defaultCap, int defaultRefill) {
+        if (config == null) return new int[] { defaultCap, defaultRefill };
         if ("ADMIN".equalsIgnoreCase(role))
-            return new int[] { 2000, 500 };
+            return new int[] { config.adminCap(), config.adminRefill() };
         if ("DEALER".equalsIgnoreCase(role))
-            return new int[] { 500, 100 };
+            return new int[] { config.dealerCap(), config.dealerRefill() };
         if ("USER".equalsIgnoreCase(role))
-            return new int[] { 100, 20 };
+            return new int[] { config.userCap(), config.userRefill() };
         if ("ANONYMOUS".equalsIgnoreCase(role))
-            return new int[] { 20, 5 };
+            return new int[] { config.anonCap(), config.anonRefill() };
         return new int[] { defaultCap, defaultRefill };
     }
 
@@ -132,14 +157,16 @@ public class RateLimitingConfig {
      * NGINX.
      */
     public static class RedisRateLimitService implements RateLimitService {
+        private final RoleLimitsConfig roleLimits;
         private final int defaultCapacity;
         private final int defaultRefillPeriodMinutes;
         private final StringRedisTemplate redisTemplate;
         private final boolean enabled;
         private final DefaultRedisScript<Long> tokenBucketScript;
 
-        public RedisRateLimitService(int capacity, int refillPeriodMinutes, StringRedisTemplate redisTemplate,
+        public RedisRateLimitService(RoleLimitsConfig roleLimits, int capacity, int refillPeriodMinutes, StringRedisTemplate redisTemplate,
                 boolean enabled) {
+            this.roleLimits = roleLimits;
             this.defaultCapacity = capacity;
             this.defaultRefillPeriodMinutes = refillPeriodMinutes;
             this.redisTemplate = redisTemplate;
@@ -185,7 +212,7 @@ public class RateLimitingConfig {
 
         @Override
         public CheckResult allow(String key, String role) {
-            int[] limits = getRoleLimits(role, defaultCapacity, defaultCapacity);
+            int[] limits = getRoleLimits(roleLimits, role, defaultCapacity, defaultCapacity);
             return allow(key, limits[0], limits[1], defaultRefillPeriodMinutes);
         }
 
@@ -249,12 +276,14 @@ public class RateLimitingConfig {
      * Bypass global limits in a cluster setting.
      */
     public static class LocalBucket4jRateLimitService implements RateLimitService {
+        private final RoleLimitsConfig roleLimits;
         private final int defaultCapacity;
         private final int defaultRefillPeriodMinutes;
         private final boolean enabled;
         private final ConcurrentMap<String, Bucket> buckets = new ConcurrentHashMap<>();
 
-        public LocalBucket4jRateLimitService(int capacity, int refillPeriodMinutes, boolean enabled) {
+        public LocalBucket4jRateLimitService(RoleLimitsConfig roleLimits, int capacity, int refillPeriodMinutes, boolean enabled) {
+            this.roleLimits = roleLimits;
             this.defaultCapacity = capacity;
             this.defaultRefillPeriodMinutes = refillPeriodMinutes;
             this.enabled = enabled;
@@ -272,7 +301,7 @@ public class RateLimitingConfig {
 
         @Override
         public CheckResult allow(String key, String role) {
-            int[] limits = getRoleLimits(role, defaultCapacity, defaultCapacity);
+            int[] limits = getRoleLimits(roleLimits, role, defaultCapacity, defaultCapacity);
             return allow(key, limits[0], limits[1], defaultRefillPeriodMinutes, 1);
         }
 

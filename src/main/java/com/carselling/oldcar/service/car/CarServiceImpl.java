@@ -57,8 +57,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.data.jpa.domain.Specification;
 import com.carselling.oldcar.service.file.ViewCountService;
-import com.carselling.oldcar.service.analytics.UserPreferenceScoreService;
-import com.carselling.oldcar.model.UserPreferenceScore;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -80,8 +78,6 @@ public class CarServiceImpl implements CarService {
     private final com.carselling.oldcar.repository.UploadedFileRepository uploadedFileRepository;
     private final com.carselling.oldcar.repository.TemporaryFileRepository temporaryFileRepository;
     private final MediaFinalizationService mediaFinalizationService;
-    private final UserPreferenceScoreService preferenceScoreService;
-
     private final AuditLogService auditLogService;
     private final ViewCountService viewCountService;
     private final PlatformTransactionManager transactionManager;
@@ -1341,42 +1337,7 @@ public class CarServiceImpl implements CarService {
                 .filter(this::isVehicleVisible) // Ensure basic visibility rules still apply
                 .map(this::convertToResponseV2)
                 .collect(Collectors.toList());
-
-        // In-memory boosting based on user preferences (if no explicit sort is
-        // requested)
-        if (pageable.getSort().isUnsorted()) {
-            User currentUser = authService.getCurrentUserOrNull();
-            if (currentUser != null) {
-                List<UserPreferenceScore> topPrefs = preferenceScoreService.getUserTopPreferences(currentUser.getId());
-                if (!topPrefs.isEmpty()) {
-                    carResponses.sort((c1, c2) -> {
-                        double s1 = calculateBoostScore(c1, topPrefs);
-                        double s2 = calculateBoostScore(c2, topPrefs);
-                        return Double.compare(s2, s1); // Descending
-                    });
-                }
-            }
-        }
-
         return new PageImpl<>(carResponses, pageable, cars.getTotalElements());
-    }
-
-    private double calculateBoostScore(CarResponse car, List<UserPreferenceScore> prefs) {
-        double score = 0.0;
-        for (UserPreferenceScore pref : prefs) {
-            boolean match = false;
-            switch (pref.getAttributeType()) {
-                case MAKE -> match = pref.getAttributeValue().equalsIgnoreCase(car.getMake());
-                case CATEGORY -> match = pref.getAttributeValue().equalsIgnoreCase(car.getCategory());
-                case FUEL_TYPE -> match = pref.getAttributeValue().equalsIgnoreCase(
-                        car.getSpecifications() != null ? car.getSpecifications().getFuelType() : null);
-            }
-            if (match) {
-                // Diminishing returns the lower the rank of the preference
-                score += pref.getScore();
-            }
-        }
-        return score;
     }
 
     /**

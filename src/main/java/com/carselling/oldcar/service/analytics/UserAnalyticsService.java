@@ -11,7 +11,6 @@ import com.carselling.oldcar.repository.CarInteractionEventRepository;
 import com.carselling.oldcar.repository.UserAnalyticsEventRepository;
 import com.carselling.oldcar.repository.UserSessionRepository;
 import com.carselling.oldcar.repository.CarRepository;
-import com.carselling.oldcar.service.analytics.UserPreferenceScoreService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -41,8 +40,6 @@ public class UserAnalyticsService {
     private final com.carselling.oldcar.repository.ChatParticipantRepository chatParticipantRepository;
     private final com.carselling.oldcar.service.car.CarService carService;
     private final com.carselling.oldcar.repository.UserRepository userRepository;
-    private final UserPreferenceScoreService scoreService;
-
     // Rate limiting: track events per session per minute
     // TODO: [PRODUCTION-READY & CONCURRENCY] In-memory rate limiting will allow N
     // times the capacity
@@ -147,15 +144,6 @@ public class UserAnalyticsService {
             UserAnalyticsEvent event = convertToEntity(userId, batch, dto);
             if (event != null) {
                 events.add(event);
-
-                // Track Behavioral Preferences
-                if (userId != null && event.getMetadata() != null) {
-                    if (event.getEventType() == EventType.SEARCH_QUERY) {
-                        scoreService.updateScoreFromMetadata(userId, event.getMetadata(), 3.0);
-                    } else if (event.getEventType() == EventType.SEARCH_FILTER_APPLY) {
-                        scoreService.updateScoreFromMetadata(userId, event.getMetadata(), 4.0);
-                    }
-                }
 
                 // Track unique cars and screens
                 if (event.getTargetType() == TargetType.CAR && event.getEventType() == EventType.CAR_VIEW) {
@@ -765,22 +753,5 @@ public class UserAnalyticsService {
 
         int deletedSessions = sessionRepository.deleteOldSessions(cutoffDate);
         log.info("Deleted {} sessions older than {} days", deletedSessions, RETENTION_DAYS);
-    }
-
-    /**
-     * Decay behavioral preference scores (10% weekly for scores older than 7 days)
-     */
-    @Scheduled(cron = "0 30 3 * * *") // 3:30 AM daily
-    @Transactional
-    public void decayOldPreferenceScores() {
-        LocalDateTime cutoffDate = LocalDateTime.now().minusDays(7);
-        double decayFactor = 0.90; // Decay by 10%
-
-        int decayed = scoreService.decayScores(cutoffDate, decayFactor);
-        log.info("Decayed {} behavioral preference scores older than 7 days", decayed);
-
-        // Cleanup noise (scores < 1.0)
-        int cleaned = scoreService.deleteScoresBelowThreshold(1.0);
-        log.info("Cleaned up {} preference scores below threshold 1.0", cleaned);
     }
 }

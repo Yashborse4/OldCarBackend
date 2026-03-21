@@ -48,22 +48,18 @@ public class RecommendationController {
     /**
      * Get personalized recommendations (requires auth)
      */
-    @GetMapping("/personalized")
-    @Operation(summary = "Get personalized feed", description = "Get recommendations based on user history")
+    @PostMapping("/personalized")
+    @Operation(summary = "Get personalized feed", description = "Get recommendations based on frontend preferences")
     public ResponseEntity<ApiResponse<List<VehicleRecommendationDto>>> getPersonalizedRecommendations(
             Authentication authentication,
+            @RequestBody UserPreferenceDto userPreferences,
             @RequestParam(value = "city", required = false) String city) {
         if (authentication == null || !authentication.isAuthenticated()) {
-            // Return trending if not auth? Or simple empty. Auth is optional?
-            // Usually /personalized implies auth
-            // If we want public trending, maybe another endpoint or handle null here.
-            // Let's enforce auth for "personalized".
             return ResponseEntity.status(401).body(ApiResponse.error("Authentication required for personalized feed"));
         }
 
-        UserPrincipal user = (UserPrincipal) authentication.getPrincipal(); // Assuming principal is UserPrincipal
         List<VehicleRecommendationDto> recommendations = recommendationService
-                .getPersonalizedRecommendations(user.getId(), city);
+                .getRecommendationsBasedOnPreferences(userPreferences, city);
 
         return ResponseEntity.ok(ApiResponse.success("Personalized recommendations retrieved", recommendations));
     }
@@ -82,7 +78,7 @@ public class RecommendationController {
             @RequestParam(value = "city", required = false) String city) {
 
         log.info("Fetching guest recommendations with preferences: {}", guestPreferences);
-        List<VehicleRecommendationDto> seq = recommendationService.getGuestRecommendations(guestPreferences, city);
+        List<VehicleRecommendationDto> seq = recommendationService.getRecommendationsBasedOnPreferences(guestPreferences, city);
         return ResponseEntity.ok(ApiResponse.success("Guest recommendations retrieved", seq));
     }
 }

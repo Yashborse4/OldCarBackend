@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ChatMessageController {
 
         private final ChatService chatService;
-        private final com.carselling.oldcar.service.RateLimitingService rateLimitingService;
+        private final com.carselling.oldcar.config.RateLimitingConfig.RateLimitService rateLimitingService;
 
         // ========================= MESSAGE MANAGEMENT =========================
 
@@ -52,7 +52,8 @@ public class ChatMessageController {
                         @org.springframework.security.core.annotation.AuthenticationPrincipal com.carselling.oldcar.security.UserPrincipal currentUser) {
 
                 // Rate Limiting Check
-                if (!rateLimitingService.tryConsumeMessageLimit(currentUser.getId(), chatRoomId)) {
+                String rateLimitKey = "chat_msg:" + currentUser.getId() + ":" + chatRoomId;
+                if (!rateLimitingService.isAllowed(rateLimitKey, 20, 20, 1)) {
                         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                                         .body(ApiResponse.error("Rate limit exceeded for this room. Please wait.",
                                                         "RATE_LIMIT_EXCEEDED"));
@@ -84,7 +85,8 @@ public class ChatMessageController {
                         @org.springframework.security.core.annotation.AuthenticationPrincipal com.carselling.oldcar.security.UserPrincipal currentUser) {
 
                 // Rate Limiting Check (Per Room)
-                if (!rateLimitingService.tryConsumeMessageLimit(currentUser.getId(), chatRoomId)) {
+                String rateLimitKey = "chat_msg:" + currentUser.getId() + ":" + chatRoomId;
+                if (!rateLimitingService.isAllowed(rateLimitKey, 20, 20, 1)) {
                         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                                         .body(ApiResponse.error("Rate limit exceeded for this room. Please wait.",
                                                         "RATE_LIMIT_EXCEEDED"));
