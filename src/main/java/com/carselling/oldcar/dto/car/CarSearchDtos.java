@@ -66,6 +66,7 @@ public class CarSearchDtos {
         private String transmission;
         private Boolean verifiedDealer;
         private String thumbnailUrl;
+        private String primaryImage;
         private String sellerType;
         private String ownerName;
         private String condition;
@@ -89,6 +90,7 @@ public class CarSearchDtos {
                     .transmission(doc.getTransmission())
                     .verifiedDealer(doc.isDealerVerified())
                     .thumbnailUrl(doc.getThumbnailImageUrl())
+                    .primaryImage(doc.getThumbnailImageUrl())
                     // Fields from document
                     .sellerType(doc.isDealerVerified() ? "DEALER" : "USER")
                     .ownerName(null) // Not typically in search document for privacy

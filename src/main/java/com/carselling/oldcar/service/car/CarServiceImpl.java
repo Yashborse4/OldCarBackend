@@ -8,6 +8,7 @@ import com.carselling.oldcar.dto.car.CarSearchCriteria;
 import com.carselling.oldcar.dto.car.CarAnalyticsResponse;
 import com.carselling.oldcar.dto.CarStatistics;
 import com.carselling.oldcar.dto.user.UserSummary;
+import com.carselling.oldcar.listener.VehicleSearchSyncListener.VehicleIndexEvent;
 import com.carselling.oldcar.model.Role;
 import com.carselling.oldcar.model.CarStatus;
 import com.carselling.oldcar.model.DealerStatus;
@@ -431,11 +432,12 @@ public class CarServiceImpl implements CarService {
         // No temp files — car is ready immediately. Auto-activate for verified dealers.
         autoActivateIfEligible(savedCar);
         savedCar = carRepository.save(savedCar);
-
-        log.info("Created new vehicle with ID: {} (status: {}) for user: {}", savedCar.getId(), savedCar.getStatus(),
-                currentUserId);
+        log.info("Created vehicle with ID: {} for user: {}", savedCar.getId(), currentUserId);
         auditLogService.logDataAccess("Car", savedCar.getId(), "CREATE", owner.getUsername(),
                 "Vehicle created by user " + currentUserId);
+
+        // Trigger search index sync
+        applicationEventPublisher.publishEvent(new VehicleIndexEvent(savedCar.getId(), "INDEX"));
 
         return convertToResponseV2(savedCar);
     }
@@ -752,6 +754,9 @@ public class CarServiceImpl implements CarService {
         auditLogService.logDataAccess("Car", updatedCar.getId(), "UPDATE", getUsername(currentUserId),
                 "Vehicle updated by user " + currentUserId);
 
+        // Trigger search index sync
+        applicationEventPublisher.publishEvent(new VehicleIndexEvent(updatedCar.getId(), "UPDATE"));
+
         return convertToResponseV2(updatedCar);
     }
 
@@ -797,16 +802,19 @@ public class CarServiceImpl implements CarService {
         // 2. Hard Cleanup of Storage (Folder level)
         // Executed OUTSIDE the transaction to prevent optimistic locking failures if
         // this takes time
-        try {
-            log.info("Cleaning up all media for deleted car: {}", id);
-            mediaFinalizationService.cleanupCarMedia(carId);
-        } catch (Exception e) {
-            log.error("Error during storage cleanup for car {}: {}", id, e.getMessage());
-            // Continue; DB is already consistent
-        }
+            try {
+                log.info("Cleaning up all media for deleted car: {}", id);
+                mediaFinalizationService.cleanupCarMedia(carId);
+            } catch (Exception e) {
+                log.error("Error during storage cleanup for car {}: {}", id, e.getMessage());
+                // Continue; DB is already consistent
+            }
 
-        log.info("Soft deleted vehicle with ID: {} by user: {}", id, currentUserId);
-    }
+            // Trigger search index removal
+            applicationEventPublisher.publishEvent(new VehicleIndexEvent(carId, "DELETE"));
+
+            log.info("Soft deleted vehicle with ID: {} by user: {}", id, currentUserId);
+        }
 
     /**
      * Soft delete all cars for a specific user (Admin only internal use)
@@ -903,8 +911,12 @@ public class CarServiceImpl implements CarService {
 
         car.setUpdatedAt(LocalDateTime.now());
         Car updatedCar = carRepository.save(car);
+        log.info("Updated vehicle status for ID: {} to {} by user: {}", id, status, currentUserId);
         auditLogService.logDataAccess("Car", updatedCar.getId(), "STATUS_UPDATE", getUsername(currentUserId),
-                "Vehicle status updated to " + status + " by user " + currentUserId);
+                "Status updated to " + status + " by user " + currentUserId);
+
+        // Trigger search index sync
+        applicationEventPublisher.publishEvent(new VehicleIndexEvent(updatedCar.getId(), "UPDATE"));
 
         return convertToResponseV2(updatedCar);
     }
@@ -1409,6 +1421,10 @@ public class CarServiceImpl implements CarService {
         Car updatedCar = carRepository.save(car);
         auditLogService.logDataAccess("Car", updatedCar.getId(), "FEATURE_TOGGLE", getUsername(currentUserId),
                 "Vehicle featured flag set to " + featured + " by user " + currentUserId);
+
+        // Trigger search index sync
+        applicationEventPublisher.publishEvent(new VehicleIndexEvent(updatedCar.getId(), "UPDATE"));
+
         return convertToResponseV2(updatedCar);
     }
 
@@ -1717,6 +1733,9 @@ public class CarServiceImpl implements CarService {
                 break;
             case "share":
                 car.incrementShareCount();
+                break;
+            case "view":
+                car.incrementViewCount();
                 break;
             default:
                 throw new IllegalArgumentException("Invalid stat type: " + statType);

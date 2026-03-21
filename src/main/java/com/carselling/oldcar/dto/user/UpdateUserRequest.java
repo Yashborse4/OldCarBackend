@@ -43,4 +43,5 @@ public class UpdateUserRequest {
 
     private Double latitude;
     private Double longitude;
+    private String showroomImageUrl;
 }

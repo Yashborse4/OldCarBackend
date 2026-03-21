@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import com.carselling.oldcar.listener.VehicleSearchSyncListener.VehicleIndexEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class InventoryService {
 
     private final CarRepository carRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Get inventory for a dealer with filtering
@@ -115,6 +118,9 @@ public class InventoryService {
 
             carRepository.save(car);
 
+            // Trigger search index sync
+            eventPublisher.publishEvent(new VehicleIndexEvent(car.getId(), "UPDATE"));
+
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid status: " + newStatus);
         }
@@ -140,5 +146,8 @@ public class InventoryService {
         car.setPrice(soldPrice);
 
         carRepository.save(car);
+
+        // Trigger search index sync
+        eventPublisher.publishEvent(new VehicleIndexEvent(car.getId(), "UPDATE"));
     }
 }

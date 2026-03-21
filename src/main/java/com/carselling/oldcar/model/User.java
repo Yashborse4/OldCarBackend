@@ -47,6 +47,9 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    @Column(name = "google_id", unique = true, length = 100)
+    private String googleId;
+
     @Size(max = 50, message = "First name must not exceed 50 characters")
     @Column(name = "first_name", length = 50)
     private String firstName;
@@ -59,6 +62,11 @@ public class User {
     @Column(nullable = false)
     @Builder.Default
     private Role role = Role.USER;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "auth_provider", nullable = false, length = 20)
+    @Builder.Default
+    private AuthProvider authProvider = AuthProvider.LOCAL;
 
     // Dealer status for verification workflow (only relevant for DEALER role)
     @Enumerated(EnumType.STRING)
@@ -142,6 +150,9 @@ public class User {
 
     @Column(name = "profile_image_url", length = 500)
     private String profileImageUrl; // Profile image URL from storage service
+
+    @Column(name = "showroom_image_url", length = 500)
+    private String showroomImageUrl; // Showroom image URL from storage service
 
     @Column(name = "onboarding_completed")
     @Builder.Default

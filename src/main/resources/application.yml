@@ -58,3 +58,5 @@ app:
     clear-on-startup: ${REDIS_CLEAR_ON_STARTUP:true}
   email:
     from: ${EMAIL_FROM:}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:your-google-client-id.apps.googleusercontent.com}

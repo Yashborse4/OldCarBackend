@@ -14,6 +14,8 @@ public interface AuthService {
 
     JwtAuthResponse loginUser(LoginRequest request);
 
+    JwtAuthResponse loginWithGoogle(GoogleLoginRequest request);
+
     void requestEmailVerificationOtp(String email);
 
     JwtAuthResponse verifyEmailOtp(String email, String otp);

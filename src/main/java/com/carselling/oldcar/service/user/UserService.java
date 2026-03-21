@@ -145,6 +145,11 @@ public class UserService {
             updated = true;
         }
 
+        if (StringUtils.hasText(request.getShowroomImageUrl())) {
+            user.setShowroomImageUrl(request.getShowroomImageUrl());
+            updated = true;
+        }
+
         if (updated) {
             user = userRepository.save(user);
             log.info("User profile updated successfully for user: {}", user.getUsername());
@@ -406,6 +411,7 @@ public class UserService {
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .profileImageUrl(user.getProfileImageUrl())
+                .showroomImageUrl(user.getShowroomImageUrl())
                 // Dealer status fields
                 .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
                 .dealerStatusUpdatedAt(user.getDealerStatusUpdatedAt())
@@ -428,17 +434,12 @@ public class UserService {
     }
 
     private boolean canViewUserProfile(User currentUser, User targetUser) {
-        // Admin can view any profile
-        if (currentUser.hasRole(Role.ADMIN)) {
+        // Dealers can be viewed by anyone (Public Profile)
+        if (targetUser.getRole() == Role.DEALER) {
             return true;
         }
 
-        // Users can view their own profile
-        if (currentUser.getId().equals(targetUser.getId())) {
-            return true;
-        }
-
-        // Restrict to Admin or Self
+        // Restrict others to Admin or Self
         return false;
     }
 
