@@ -57,8 +57,8 @@ public class SystemHealthMonitor {
 
     private Double getCpuUsage() {
         try {
-            MetricsEndpoint.MetricResponse cpuMetric = metricsEndpoint.metric("system.cpu.usage", Collections.emptyList());
-            if (cpuMetric != null && !cpuMetric.getMeasurements().isEmpty()) {
+            MetricsEndpoint.MetricDescriptor cpuMetric = metricsEndpoint.metric("system.cpu.usage", Collections.emptyList());
+            if (cpuMetric != null && cpuMetric.getMeasurements() != null && !cpuMetric.getMeasurements().isEmpty()) {
                 return cpuMetric.getMeasurements().get(0).getValue();
             }
         } catch (Exception e) {
