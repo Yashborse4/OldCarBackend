@@ -67,7 +67,7 @@ public class AuthController {
          * // to prevent brute-force attacks and credential stuffing.
          */
         @PostMapping("/login")
-        @RateLimit(capacity = 5, refill = 1, refillPeriod = 60)
+        @RateLimit(capacity = 5, refill = 1, refillPeriod = 60, priority = "CRITICAL")
         @io.swagger.v3.oas.annotations.Operation(summary = "Login user", description = "Authenticate user and return JWT tokens")
         @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login successful"),
@@ -92,7 +92,7 @@ public class AuthController {
          * POST /api/auth/google
          */
         @PostMapping("/google")
-        @RateLimit(capacity = 5, refill = 1, refillPeriod = 60)
+        @RateLimit(capacity = 5, refill = 1, refillPeriod = 60, priority = "CRITICAL")
         @io.swagger.v3.oas.annotations.Operation(summary = "Login with Google", description = "Authenticate user using Google ID token")
         @io.swagger.v3.oas.annotations.responses.ApiResponses(value = {
                         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login successful"),

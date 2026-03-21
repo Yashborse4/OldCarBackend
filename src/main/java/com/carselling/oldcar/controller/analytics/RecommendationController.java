@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.carselling.oldcar.annotation.RateLimit;
+
 import java.util.List;
 
 /**
@@ -37,6 +39,7 @@ public class RecommendationController {
      * Get similar cars
      */
     @GetMapping("/similar/{carId}")
+    @RateLimit(capacity = 20, refill = 5, refillPeriod = 60, priority = "BACKGROUND")
     @Operation(summary = "Get similar cars", description = "Get cars similar to specific listing")
     public ResponseEntity<ApiResponse<List<VehicleRecommendationDto>>> getSimilarCars(
             @PathVariable Long carId,
@@ -49,6 +52,7 @@ public class RecommendationController {
      * Get personalized recommendations (requires auth)
      */
     @PostMapping("/personalized")
+    @RateLimit(capacity = 10, refill = 2, refillPeriod = 60, priority = "BACKGROUND")
     @Operation(summary = "Get personalized feed", description = "Get recommendations based on frontend preferences")
     public ResponseEntity<ApiResponse<List<VehicleRecommendationDto>>> getPersonalizedRecommendations(
             Authentication authentication,
@@ -69,6 +73,7 @@ public class RecommendationController {
      * POST /api/recommendations/guest
      */
     @PostMapping("/guest")
+    @RateLimit(capacity = 5, refill = 1, refillPeriod = 60, priority = "BACKGROUND")
     @Operation(summary = "Get guest feed", description = "Get recommendations based on explicit guest preferences")
     // TODO(SeniorEng): Security - Guest endpoint lacks rate limiting. Add
     // @RateLimit or Bot protection to prevent abuse by scrapers fetching raw

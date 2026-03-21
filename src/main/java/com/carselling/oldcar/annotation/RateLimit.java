@@ -11,5 +11,12 @@ public @interface RateLimit {
     int capacity() default 100;
     int refill() default 10;
     int refillPeriod() default 1;
+    
+    /**
+     * Priority of the request. 
+     * Higher priority requests are favored during system load.
+     * Default is NORMAL.
+     */
+    String priority() default "NORMAL"; 
 }
 

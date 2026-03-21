@@ -2,6 +2,8 @@ package com.carselling.oldcar.interceptor;
 
 import com.carselling.oldcar.annotation.RateLimit;
 import com.carselling.oldcar.config.RateLimitingConfig;
+import com.carselling.oldcar.security.UserPrincipal;
+import com.carselling.oldcar.service.SystemHealthMonitor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,16 +18,15 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
-import com.carselling.oldcar.security.UserPrincipal;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
- * Rate limiting interceptor for API endpoints
+ * Rate limiting interceptor for API endpoints.
+ * Implements Netflix-style adaptive load shedding and prioritization.
  */
 @Component
 @RequiredArgsConstructor
@@ -33,7 +34,9 @@ import java.util.concurrent.TimeUnit;
 public class RateLimitingInterceptor implements HandlerInterceptor {
 
     private final RateLimitingConfig rateLimitingConfig;
+    private final RateLimitingConfig.RoleLimitsConfig roleLimitsConfig;
     private final RateLimitingConfig.RateLimitService rateLimitService;
+    private final SystemHealthMonitor systemHealthMonitor;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -45,70 +48,88 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
         }
 
         String clientId = getClientIdentifier(request);
-        String bucketKey = "rate_limit_" + clientId;
         String requestPath = request.getRequestURI();
+        double healthScore = systemHealthMonitor.getHealthScore();
 
         try {
             // Check for @RateLimit annotation on the handler method
             RateLimit rateLimitAnnotation = getRateLimitAnnotation(handler);
+            
+            // 1. Determine priority
+            RateLimitingConfig.RateLimitPriority priority = RateLimitingConfig.RateLimitPriority.NORMAL;
+            String priorityStr = "NORMAL";
+            if (rateLimitAnnotation != null) {
+                priorityStr = rateLimitAnnotation.priority();
+                try {
+                    priority = RateLimitingConfig.RateLimitPriority.valueOf(priorityStr);
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid priority '{}' on endpoint {}, defaulting to NORMAL", 
+                            priorityStr, requestPath);
+                }
+            }
 
-            // Generate bucket key based on annotation presence to allow separate buckets
-            // for sensitive endpoints
+            // 2. GLOBAL LOAD SHEDDING (Netflix Strategy)
+            // If system is in critical load (health < 0.3), block everything except CRITICAL
+            if (healthScore < 0.3 && priority != RateLimitingConfig.RateLimitPriority.CRITICAL) {
+                log.warn("CRITICAL LOAD SHEDDING: Rejecting {} priority request on {} (Health: {})", 
+                        priority, requestPath, healthScore);
+                sendRateLimitExceededResponse(response, clientId, 30, "System under heavy load. Please try again later.");
+                return false;
+            }
+
+            // 3. Generate bucket key
+            String bucketKey = "rate_limit_" + clientId;
             if (rateLimitAnnotation != null) {
                 bucketKey += "_" + requestPath; // Specific bucket for this endpoint
             }
 
-            // Extract role for rate limiting
+            // 4. Extract role for default limits
             String role = com.carselling.oldcar.model.Role.ANONYMOUS.name();
             if (isAuthenticated()) {
                 role = getUserRole();
             }
 
+            // 5. Check Rate Limit with Adaptive Logic
             RateLimitingConfig.RateLimitService.CheckResult result;
             if (rateLimitAnnotation != null) {
                 result = rateLimitService.allow(bucketKey, rateLimitAnnotation.capacity(),
-                        rateLimitAnnotation.refill(), rateLimitAnnotation.refillPeriod());
+                        rateLimitAnnotation.refill(), rateLimitAnnotation.refillPeriod(), 
+                        priority, healthScore);
             } else {
-                result = rateLimitService.allow(bucketKey, role);
+                // For default role-based limits, we still apply adaptive health scaling
+                int[] roleLimits = getRoleLimits(role);
+                result = rateLimitService.allow(bucketKey, roleLimits[0], roleLimits[1], 1,
+                        priority, healthScore);
             }
 
+            // 6. Set Headers (RFC Compliant)
+            response.setHeader("X-Rate-Limit-Remaining", String.valueOf(result.remaining()));
+            response.setHeader("X-Rate-Limit-Reset", String.valueOf(result.resetTimeMs() / 1000));
+            
             if (result.allowed()) {
-                // Request allowed - add rate limit headers
-                response.setHeader("X-Rate-Limit-Remaining", String.valueOf(result.remaining()));
-                response.setHeader("X-Rate-Limit-Reset",
-                        String.valueOf(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(1)));
-
-                log.debug("Rate limit check passed for client: {} on path: {} (remaining: {})",
-                        clientId, requestPath, result.remaining());
+                log.debug("Rate limit passed: {} on {} (remaining: {})", clientId, requestPath, result.remaining());
                 return true;
             } else {
-                // Rate limit exceeded
-                long retryAfterSeconds = 60; // Default 1 minute retry
+                long retryAfterSeconds = (result.resetTimeMs() - System.currentTimeMillis()) / 1000;
+                if (retryAfterSeconds <= 0) retryAfterSeconds = 1;
 
-                // Set rate limit headers
-                response.setHeader("X-Rate-Limit-Retry-After", String.valueOf(retryAfterSeconds));
-                response.setHeader("X-Rate-Limit-Remaining", "0");
-
-                // Send error response
-                sendRateLimitExceededResponse(response, clientId, retryAfterSeconds);
-
-                log.warn("Rate limit exceeded for client: {} on path: {} (retry after: {}s)",
-                        clientId, requestPath, retryAfterSeconds);
+                response.setHeader("Retry-After", String.valueOf(retryAfterSeconds));
+                sendRateLimitExceededResponse(response, clientId, retryAfterSeconds, "Too many requests. Please try again later.");
+                
+                log.warn("Rate limit exceeded: {} on {} (retry after: {}s)", clientId, requestPath, retryAfterSeconds);
                 return false;
             }
 
         } catch (Exception e) {
-            log.error("Error checking rate limit for client: {} on path: {}", clientId, requestPath, e);
-            // Fail open - allow request to proceed if rate limiting encounters an error
-            // In production, you might want to fail closed for security
-            return true;
+            log.error("Rate limit check error: {} on {}", clientId, requestPath, e);
+            return true; // Fail open
         }
     }
 
     /**
      * Send rate limit exceeded response with proper JSON format
      */
-    private void sendRateLimitExceededResponse(HttpServletResponse response, String clientId, long retryAfterSeconds) {
+    private void sendRateLimitExceededResponse(HttpServletResponse response, String clientId, long retryAfterSeconds, String message) {
         try {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
@@ -116,7 +137,7 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
 
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("error", "Rate limit exceeded");
-            errorResponse.put("message", "Too many requests. Please try again later.");
+            errorResponse.put("message", message);
             errorResponse.put("retryAfter", retryAfterSeconds);
             errorResponse.put("timestamp", System.currentTimeMillis());
 
@@ -126,18 +147,16 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
 
         } catch (IOException e) {
             log.error("Failed to write rate limit exceeded response for client: {}", clientId, e);
-            // Fallback to simple text response
-            try {
-                response.getWriter().write("Rate limit exceeded. Please try again later.");
-            } catch (IOException fallbackException) {
-                log.error("Failed to write fallback response", fallbackException);
-            }
         }
     }
 
-    /**
-     * Helper to extract RateLimit annotation from handler method
-     */
+    private int[] getRoleLimits(String role) {
+        if ("ADMIN".equals(role)) return new int[]{roleLimitsConfig.adminCap(), roleLimitsConfig.adminRefill()};
+        if ("DEALER".equals(role)) return new int[]{roleLimitsConfig.dealerCap(), roleLimitsConfig.dealerRefill()};
+        if ("USER".equals(role)) return new int[]{roleLimitsConfig.userCap(), roleLimitsConfig.userRefill()};
+        return new int[]{roleLimitsConfig.anonCap(), roleLimitsConfig.anonRefill()};
+    }
+
     private RateLimit getRateLimitAnnotation(Object handler) {
         if (handler instanceof HandlerMethod) {
             HandlerMethod handlerMethod = (HandlerMethod) handler;
@@ -146,61 +165,30 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
         return null;
     }
 
-    /**
-     * Extract client identifier from request headers and remote address
-     * Prioritizes real client IP over proxy addresses
-     */
     private String getClientIdentifier(HttpServletRequest request) {
-        // 1. Check for Authenticated User
         try {
-            Authentication auth = SecurityContextHolder
-                    .getContext().getAuthentication();
-
-            if (auth != null && auth.isAuthenticated() &&
-                    !(auth instanceof AnonymousAuthenticationToken)) {
-
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
                 Object principal = auth.getPrincipal();
                 if (principal instanceof UserPrincipal) {
-                    Long userId = ((UserPrincipal) principal).getId();
-                    return "user:" + userId;
+                    return "user:" + ((UserPrincipal) principal).getId();
                 } else if (principal instanceof UserDetails) {
-                    return "user:"
-                            + ((UserDetails) principal).getUsername();
-                } else {
-                    return "user:" + auth.getName();
+                    return "user:" + ((UserDetails) principal).getUsername();
                 }
+                return "user:" + auth.getName();
             }
         } catch (Exception e) {
-            // Ignore security context errors, fall back to IP
             log.trace("Could not retrieve user from security context", e);
         }
 
-        // 2. Fall back to IP-based identification
-        // Check for X-Forwarded-For header (common with proxies/load balancers)
         String forwardedFor = request.getHeader("X-Forwarded-For");
         if (forwardedFor != null && !forwardedFor.trim().isEmpty()) {
-            // Take the first IP in the chain (original client)
-            String clientIp = forwardedFor.split(",")[0].trim();
-            if (!clientIp.isEmpty() && !"unknown".equalsIgnoreCase(clientIp)) {
-                return "ip:" + clientIp;
-            }
+            return "ip:" + forwardedFor.split(",")[0].trim();
         }
-
-        // Check for X-Real-IP header (common with Nginx)
         String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.trim().isEmpty() && !"unknown".equalsIgnoreCase(realIp)) {
-            return "ip:" + realIp;
-        }
-
-        // Check for Cloudflare specific header
-        String cfConnectingIp = request.getHeader("CF-Connecting-IP");
-        if (cfConnectingIp != null && !cfConnectingIp.trim().isEmpty()) {
-            return "ip:" + cfConnectingIp;
-        }
-
-        // Fall back to remote address
-        String remoteAddr = request.getRemoteAddr();
-        return "ip:" + (remoteAddr != null ? remoteAddr : "unknown");
+        if (realIp != null) return "ip:" + realIp;
+        
+        return "ip:" + request.getRemoteAddr();
     }
 
     private boolean isAuthenticated() {
@@ -210,15 +198,11 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
 
     private String getUserRole() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null)
-            return com.carselling.oldcar.model.Role.ANONYMOUS.name();
-
+        if (auth == null) return com.carselling.oldcar.model.Role.ANONYMOUS.name();
         Object principal = auth.getPrincipal();
         if (principal instanceof UserPrincipal) {
             return ((UserPrincipal) principal).getRole().name();
         }
-
-        // Fallback to authorities
         return auth.getAuthorities().stream()
                 .filter(a -> a.getAuthority().startsWith("ROLE_"))
                 .map(a -> a.getAuthority().replace("ROLE_", ""))

@@ -66,7 +66,22 @@ public class RateLimitingConfig {
     @Autowired(required = false)
     private InMemoryCacheService inMemoryCacheService;
 
+    public enum RateLimitPriority {
+        CRITICAL(1.0),      // Never throttled unless system is Down
+        NORMAL(0.8),        // Standard traffic
+        BACKGROUND(0.5);    // Aggressively throttled during load
+        
+        private final double weight;
+        RateLimitPriority(double weight) { this.weight = weight; }
+        public double getWeight() { return weight; }
+    }
+
     public record RoleLimitsConfig(int adminCap, int adminRefill, int dealerCap, int dealerRefill, int userCap, int userRefill, int anonCap, int anonRefill) {}
+
+    @Bean
+    public RoleLimitsConfig roleLimitsConfig() {
+        return new RoleLimitsConfig(adminCapacity, adminRefill, dealerCapacity, dealerRefill, userCapacity, userRefill, anonCapacity, anonRefill);
+    }
 
     @Bean
     public StringRedisTemplate rateLimitRedisTemplate() {
@@ -78,9 +93,8 @@ public class RateLimitingConfig {
 
     @Bean
     public RateLimitService rateLimitService(
-            @Autowired(required = false) StringRedisTemplate rateLimitRedisTemplate) {
-
-        RoleLimitsConfig roleLimits = new RoleLimitsConfig(adminCapacity, adminRefill, dealerCapacity, dealerRefill, userCapacity, userRefill, anonCapacity, anonRefill);
+            @Autowired(required = false) StringRedisTemplate rateLimitRedisTemplate,
+            RoleLimitsConfig roleLimits) {
 
         boolean useRedis = redisEnabled && rateLimitRedisTemplate != null;
         if (useRedis) {
@@ -116,6 +130,12 @@ public class RateLimitingConfig {
 
         CheckResult allow(String key, int capacity, int refillTokens, int refillPeriod);
 
+        /**
+         * Enhanced allow for Netflix-style adaptive rate limiting
+         */
+        CheckResult allow(String key, int capacity, int refillTokens, int refillPeriod, 
+                         RateLimitPriority priority, double healthScore);
+
         boolean isAllowed(String key);
 
         boolean isAllowed(String key, String role);
@@ -133,7 +153,10 @@ public class RateLimitingConfig {
         /**
          * Result object to avoid double Redis calls (check + remaining)
          */
-        record CheckResult(boolean allowed, long remaining) {
+        record CheckResult(boolean allowed, long remaining, long resetTimeMs) {
+            public CheckResult(boolean allowed, long remaining) {
+                this(allowed, remaining, System.currentTimeMillis() + 60000);
+            }
         }
     }
 
@@ -218,14 +241,12 @@ public class RateLimitingConfig {
 
         @Override
         public CheckResult allow(String key, int tokens) {
-            long remaining = executeLua(key, defaultCapacity, defaultCapacity, defaultRefillPeriodMinutes, tokens);
-            return new CheckResult(remaining >= 0, Math.max(0, remaining));
+            return allow(key, defaultCapacity, defaultCapacity, defaultRefillPeriodMinutes, RateLimitPriority.NORMAL, 1.0);
         }
 
         @Override
         public CheckResult allow(String key, int capacity, int refillTokens, int refillPeriod) {
-            long remaining = executeLua(key, capacity, refillTokens, refillPeriod, 1);
-            return new CheckResult(remaining >= 0, Math.max(0, remaining));
+            return allow(key, capacity, refillTokens, refillPeriod, RateLimitPriority.NORMAL, 1.0);
         }
 
         @Override
@@ -254,6 +275,26 @@ public class RateLimitingConfig {
             log.warn("resetAll() called on RedisRateLimitService. Ignoring as it is unsafe for global cache.");
         }
 
+
+        @Override
+        public CheckResult allow(String key, int capacity, int refillTokens, int refillPeriod, 
+                                 RateLimitPriority priority, double healthScore) {
+            // Adaptive multiplier: System stress reduces capacity/refill for lower priorities
+            double adaptiveMultiplier = (priority == RateLimitPriority.CRITICAL) ? 1.0 : healthScore;
+            
+            // Priority weight: Background tasks get further reduced
+            double priorityWeight = priority.getWeight();
+            
+            int effectiveCapacity = Math.max(1, (int) (capacity * adaptiveMultiplier * priorityWeight));
+            int effectiveRefill = Math.max(1, (int) (refillTokens * adaptiveMultiplier * priorityWeight));
+            
+            long result = executeLua(key, effectiveCapacity, effectiveRefill, refillPeriod, 1);
+            
+            // Calculate reset time (approximate)
+            long resetTime = System.currentTimeMillis() + (long) refillPeriod * 60 * 1000;
+            
+            return new CheckResult(result >= 0, Math.max(0, result), resetTime);
+        }
 
         private long executeLua(String key, int capacity, int refillTokens, int refillPeriodMinutes,
                 int requestedTokens) {
@@ -296,21 +337,34 @@ public class RateLimitingConfig {
 
         @Override
         public CheckResult allow(String key, int tokens) {
-            return allow(key, defaultCapacity, defaultCapacity, defaultRefillPeriodMinutes, tokens);
+            return allow(key, defaultCapacity, defaultCapacity, defaultRefillPeriodMinutes, RateLimitPriority.NORMAL, 1.0);
         }
 
         @Override
         public CheckResult allow(String key, String role) {
             int[] limits = getRoleLimits(roleLimits, role, defaultCapacity, defaultCapacity);
-            return allow(key, limits[0], limits[1], defaultRefillPeriodMinutes, 1);
+            return allow(key, limits[0], limits[1], defaultRefillPeriodMinutes, RateLimitPriority.NORMAL, 1.0);
         }
 
         @Override
         public CheckResult allow(String key, int limitCapacity, int refillTokens, int refillPeriod) {
-            return allow(key, limitCapacity, refillTokens, refillPeriod, 1);
+            return allow(key, limitCapacity, refillTokens, refillPeriod, RateLimitPriority.NORMAL, 1.0);
         }
 
-        private CheckResult allow(String key, int limitCapacity, int refillTokens, int refillPeriod,
+        @Override
+        public CheckResult allow(String key, int capacity, int refillTokens, int refillPeriod, 
+                                 RateLimitPriority priority, double healthScore) {
+            // Adaptive multiplier
+            double multiplier = (priority == RateLimitPriority.CRITICAL) ? 1.0 : healthScore;
+            double weight = priority.getWeight();
+            
+            int effectiveCapacity = Math.max(1, (int) (capacity * multiplier * weight));
+            int effectiveRefill = Math.max(1, (int) (refillTokens * multiplier * weight));
+            
+            return allowInternal(key, effectiveCapacity, effectiveRefill, refillPeriod, 1);
+        }
+
+        private CheckResult allowInternal(String key, int limitCapacity, int refillTokens, int refillPeriod,
                 int tokensRequested) {
             if (!enabled)
                 return new CheckResult(true, limitCapacity);
@@ -322,7 +376,8 @@ public class RateLimitingConfig {
                                 .build())
                         .build());
                 boolean allowed = bucket.tryConsume(tokensRequested);
-                return new CheckResult(allowed, bucket.getAvailableTokens());
+                long resetTime = System.currentTimeMillis() + (long) refillPeriod * 60 * 1000;
+                return new CheckResult(allowed, bucket.getAvailableTokens(), resetTime);
             } catch (Exception e) {
                 log.error("Local rate limit error for key {}: {}", key, e.getMessage());
                 return new CheckResult(true, limitCapacity); // Fail open
