@@ -102,6 +102,7 @@ services:
       - SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true
       - SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true
       - EMAIL_FROM=${EMAIL_FROM:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     volumes:
       - uploads-data:/app/uploads
       - logs-data:/app/logs
@@ -167,13 +168,31 @@ services:
     image: prodrigestivill/postgres-backup-local
     container_name: car-selling-db-backup
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_DB=carselling
-      - POSTGRES_USER=$${DB_USERNAME:-car_user}
-      - POSTGRES_PASSWORD=$${DB_PASSWORD:-car_password}
+      - POSTGRES_USER=${DB_USERNAME:-car_user}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-car_password}
       - SCHEDULE=@daily
       - BACKUP_KEEP_DAYS=7
+    command: >
+      sh -c '
+      cat << "EOF" > /run_with_retry.sh
+      #!/bin/sh
+      /backup.sh
+      BACKUP_EXIT=$$?
+      while [ $$BACKUP_EXIT -ne 0 ]; do
+        echo "Backup failed. Retrying in 1 hour..."
+        sleep 3600
+        /backup.sh
+        BACKUP_EXIT=$$?
+      done
+      EOF
+      chmod +x /run_with_retry.sh
+      exec go-cron -s "$${SCHEDULE:-@daily}" -p 8080 -- /run_with_retry.sh
+      '
     volumes:
       - ./docker/backups:/backups
     networks:
