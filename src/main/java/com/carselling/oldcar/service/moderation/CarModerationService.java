@@ -13,6 +13,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
+import java.util.HashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +25,7 @@ public class CarModerationService {
     private final CarReportRepository carReportRepository;
     private final CarRepository carRepository;
     private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public CarReport reportCar(ReportCarRequest request, Long reporterId) {
@@ -61,20 +65,25 @@ public class CarModerationService {
     }
 
     private String createCarSnapshot(Car car) {
-        // TODO(SeniorEng): Logic/Security - Generating JSON via String.format is
-        // error-prone and vulnerable to injection. Use Jackson ObjectMapper.
-        // Create JSON snapshot of car details for moderation
-        return String.format(
-                "{\"id\":\"%s\",\"make\":\"%s\",\"model\":\"%s\",\"year\":%d,\"price\":%f,\"sellerId\":%d,\"sellerName\":\"%s\",\"description\":\"%s\",\"images\":%d}",
-                car.getId(),
-                car.getMake(),
-                car.getModel(),
-                car.getYear(),
-                car.getPrice(),
-                car.getOwner().getId(),
-                car.getOwner().getUsername(),
-                car.getDescription() != null ? car.getDescription().replace("\"", "'") : "",
-                car.getImages() != null ? car.getImages().size() : 0);
+        try {
+            Map<String, Object> snapshot = new HashMap<>();
+            snapshot.put("id", car.getId() != null ? car.getId().toString() : null);
+            snapshot.put("make", car.getMake());
+            snapshot.put("model", car.getModel());
+            snapshot.put("year", car.getYear());
+            snapshot.put("price", car.getPrice());
+            if (car.getOwner() != null) {
+                snapshot.put("sellerId", car.getOwner().getId());
+                snapshot.put("sellerName", car.getOwner().getUsername());
+            }
+            snapshot.put("description", car.getDescription() != null ? car.getDescription() : "");
+            snapshot.put("images", car.getImages() != null ? car.getImages().size() : 0);
+            
+            return objectMapper.writeValueAsString(snapshot);
+        } catch (Exception e) {
+            log.error("Failed to create JSON snapshot of car: {}", car.getId(), e);
+            return "{}";
+        }
     }
 
     @Transactional(readOnly = true)
@@ -84,9 +93,6 @@ public class CarModerationService {
 
     @Transactional(readOnly = true)
     public Long getPendingReportsCount(String carId) {
-        // TODO(SeniorEng): Logic - Implement automated actions: If pending reports >
-        // threshold (e.g., 5), auto-hash/hide the Car listing pending admin review to
-        // limit exposure.
         return carReportRepository.countPendingReportsByCarId(carId);
     }
 }

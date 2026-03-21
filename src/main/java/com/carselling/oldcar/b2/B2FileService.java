@@ -862,6 +862,8 @@ public class B2FileService {
                 .uploadUrl(uploadUrl.getUploadUrl())
 
                 .authorizationToken(uploadUrl.getAuthorizationToken())
+                .fileName(b2FileName) // Populating missing field
+                .fileUrl(publicUrl)   // Populating missing field
                 .build();
 
     }

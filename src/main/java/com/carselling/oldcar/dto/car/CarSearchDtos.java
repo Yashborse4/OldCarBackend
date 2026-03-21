@@ -75,6 +75,8 @@ public class CarSearchDtos {
         private String dealerId;
         private Boolean isPromoted;
         private Double distanceKm;
+        private String status;
+        private Boolean isAvailable;
 
         public static CarSearchHitDto fromDocument(VehicleSearchDocument doc) {
             return CarSearchHitDto.builder()
@@ -100,6 +102,8 @@ public class CarSearchDtos {
                             ? LocalDateTime.ofInstant(doc.getCreatedAt(), java.time.ZoneId.systemDefault())
                             : null)
                     .distanceKm(doc.getDistanceKm())
+                    .status(doc.getStatus())
+                    .isAvailable(doc.isAvailable())
                     .build();
         }
     }

@@ -67,6 +67,8 @@ public class VehicleSearchDocument {
     private boolean dealerVerified; // Dealer approved by admin
     private boolean carApproved; // Car approved by admin
     private boolean active; // Soft delete support
+    private String status;
+    private boolean isAvailable;
 
     /*
      * ============================================================

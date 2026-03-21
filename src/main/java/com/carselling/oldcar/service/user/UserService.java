@@ -149,6 +149,11 @@ public class UserService {
             user.setShowroomImageUrl(request.getShowroomImageUrl());
             updated = true;
         }
+        
+        if (request.getOnboardingCompleted() != null) {
+            user.setOnboardingCompleted(request.getOnboardingCompleted());
+            updated = true;
+        }
 
         if (updated) {
             user = userRepository.save(user);
@@ -298,12 +303,10 @@ public class UserService {
      * Get user statistics for admin dashboard
      */
     @Transactional(readOnly = true)
+    @org.springframework.cache.annotation.Cacheable(value = "userStatistics", key = "'global'")
     public UserStatistics getUserStatistics() {
         log.info("Getting user statistics for admin dashboard");
 
-        // TODO(SeniorEng): Performance - Real-time COUNT() queries on large tables
-        // cause performance degradation. Migrate admin statistics to a scheduled
-        // aggregation job, Materialized Views, or a Redis cache.
         long totalUsers = userRepository.count();
         // Assuming there are methods to count active, dealer, admin, etc.
         // If not, we might need to add them to UserRepository or use example queries

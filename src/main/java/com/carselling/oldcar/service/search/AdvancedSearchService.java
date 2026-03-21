@@ -329,6 +329,8 @@ public class AdvancedSearchService {
                 .category(car.getCategory())
                 .numberOfOwners(car.getNumberOfOwners())
                 .usage(car.getUsage())
+                .status(car.getStatus() != null ? car.getStatus().name() : null)
+                .isAvailable(Boolean.TRUE.equals(car.getIsAvailable()))
                 .build();
 
         // Removed methods: buildSearchableText, calculateSearchBoost, setSuggest as

@@ -1,6 +1,5 @@
 package com.carselling.oldcar.config;
 
-import com.carselling.oldcar.service.InMemoryCacheService;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import lombok.extern.slf4j.Slf4j;
@@ -97,7 +96,12 @@ public class RateLimitingConfig {
         if (useRedis) {
             try {
                 // Test connection
-                rateLimitRedisTemplate.getConnectionFactory().getConnection().ping();
+                if (rateLimitRedisTemplate.getConnectionFactory() != null) {
+                    rateLimitRedisTemplate.getConnectionFactory().getConnection().ping();
+                } else {
+                    log.warn("Redis Connection Factory is null, falling back to local Bucket4j");
+                    useRedis = false;
+                }
                 log.info(
                         "Redis is available. Using GLOBAL REST-based token bucket for Rate Limiting (NGINX cluster safe).");
                 return new RedisRateLimitService(roleLimits, capacity, refillPeriodMinutes, rateLimitRedisTemplate,
