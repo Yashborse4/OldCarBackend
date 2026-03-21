@@ -1,7 +1,6 @@
 package com.carselling.oldcar.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthComponent;
 import org.springframework.boot.actuate.health.HealthEndpoint;
 import org.springframework.boot.actuate.health.Status;
@@ -57,9 +56,9 @@ public class SystemHealthMonitor {
 
     private Double getCpuUsage() {
         try {
-            MetricsEndpoint.MetricDescriptor cpuMetric = metricsEndpoint.metric("system.cpu.usage", Collections.emptyList());
-            if (cpuMetric != null && cpuMetric.getMeasurements() != null && !cpuMetric.getMeasurements().isEmpty()) {
-                return cpuMetric.getMeasurements().get(0).getValue();
+            var cpuMeter = metricsEndpoint.metric("system.cpu.usage", Collections.emptyList());
+            if (cpuMeter != null && cpuMeter.getMeasurements() != null && !cpuMeter.getMeasurements().isEmpty()) {
+                return cpuMeter.getMeasurements().get(0).getValue();
             }
         } catch (Exception e) {
             log.trace("Metric system.cpu.usage not available", e);
