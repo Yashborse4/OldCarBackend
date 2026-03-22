@@ -304,6 +304,18 @@ public class AuthServiceImpl implements AuthService {
         String phoneNumber = (String) payload.get("phone_number");
         Boolean emailVerified = payload.getEmailVerified();
 
+        // Supplement with data from request if missing in payload
+        if ((name == null || name.isEmpty()) && request.getName() != null) {
+            name = request.getName();
+        }
+        if ((phoneNumber == null || phoneNumber.isEmpty()) && request.getPhoneNumber() != null) {
+            phoneNumber = request.getPhoneNumber();
+        }
+        // If email is missing in payload (unlikely for Google), use from request
+        if ((email == null || email.isEmpty()) && request.getEmail() != null) {
+            email = request.getEmail();
+        }
+
         if (Boolean.FALSE.equals(emailVerified)) {
             log.warn("Google login rejected: Email not verified for {}", email);
             throw new AuthenticationFailedException("Google email not verified", AuthError.EMAIL_NOT_VERIFIED);
@@ -329,16 +341,24 @@ public class AuthServiceImpl implements AuthService {
                 String baseUsername = SecurityUtils.extractUsernameFromEmail(email);
                 String username = generateUniqueUsername(baseUsername);
 
+                // If this is the first user in the system, make them an ADMIN
+                Role role = Role.USER;
+                if (userRepository.count() == 0) {
+                    log.info("First user detected in system. Assigning ADMIN role to: {}", email);
+                    role = Role.ADMIN;
+                }
+
                 user = User.builder()
                         .username(username)
                         .email(email)
                         .googleId(googleId)
-                        .firstName(givenName)
+                        .firstName(givenName != null ? givenName : (name != null ? name : null))
                         .lastName(familyName)
                         .phoneNumber(phoneNumber)
                         .password(passwordEncoder.encode(generateRandomPassword(16)))
-                        .role(Role.USER)
+                        .role(role)
                         .authProvider(AuthProvider.GOOGLE)
+                        .dealerStatus(role == Role.DEALER ? DealerStatus.UNVERIFIED : null)
                         .isActive(true)
                         .isEmailVerified(true)
                         .emailVerifiedAt(LocalDateTime.now())
@@ -364,8 +384,8 @@ public class AuthServiceImpl implements AuthService {
             user.setGoogleId(googleId);
             updated = true;
         }
-        if (user.getFirstName() == null && givenName != null) {
-            user.setFirstName(givenName);
+        if (user.getFirstName() == null && (givenName != null || name != null)) {
+            user.setFirstName(givenName != null ? givenName : name);
             updated = true;
         }
         if (user.getLastName() == null && familyName != null) {

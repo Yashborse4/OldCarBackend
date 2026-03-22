@@ -16,5 +16,9 @@ public class GoogleLoginRequest {
     @NotBlank(message = "Google ID Token is required")
     private String idToken;
 
+    private String email;
+    private String name;
+    private String phoneNumber;
+
     private DeviceInfo deviceInfo;
 }
