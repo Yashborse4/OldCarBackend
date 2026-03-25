@@ -156,6 +156,7 @@ public class UserAnalyticsEvent {
         CAR_WHATSAPP_CLICK,
         CAR_COMPARE_ADD,
         CAR_TEST_DRIVE_REQUEST,
+        CAR_CALLBACK_REQUEST,
 
         // Navigation
         SCREEN_VIEW,

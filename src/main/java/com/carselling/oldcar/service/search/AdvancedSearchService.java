@@ -72,52 +72,6 @@ public class AdvancedSearchService {
         return new PageImpl<>(hitDtos, pageable, totalEstimate > 0 ? totalEstimate : hitDtos.size());
     }
 
-    private boolean matches(String expected, String actual) {
-        if (expected == null || expected.isBlank()) {
-            return true;
-        }
-        if (actual == null) {
-            return false;
-        }
-        return actual.equalsIgnoreCase(expected.trim());
-    }
-
-    private boolean matchesAny(List<String> expected, String actual) {
-        if (expected == null || expected.isEmpty()) {
-            return true;
-        }
-        if (actual == null) {
-            return false;
-        }
-        return expected.stream().anyMatch(e -> e != null && e.trim().equalsIgnoreCase(actual.trim()));
-    }
-
-    private boolean inRange(Integer min, Integer max, Integer value) {
-        if (value == null) {
-            return true;
-        }
-        if (min != null && value < min) {
-            return false;
-        }
-        if (max != null && value > max) {
-            return false;
-        }
-        return true;
-    }
-
-    private boolean inRange(BigDecimal min, BigDecimal max, BigDecimal value) {
-        if (value == null) {
-            return true;
-        }
-        if (min != null && value.compareTo(min) < 0) {
-            return false;
-        }
-        if (max != null && value.compareTo(max) > 0) {
-            return false;
-        }
-        return true;
-    }
-
     @Transactional(readOnly = true)
     public List<VehicleSearchDocument> suggest(String prefix, int limit) {
         if (prefix == null || prefix.isBlank()) {

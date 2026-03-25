@@ -151,4 +151,14 @@ public interface CarInteractionEventRepository extends JpaRepository<CarInteract
         @Query("SELECT e.user.id, e.car.id, COUNT(e) FROM CarInteractionEvent e WHERE e.car.id IN :carIds AND e.eventType = 'CAR_VIEW' AND e.user IS NOT NULL GROUP BY e.user.id, e.car.id ORDER BY COUNT(e) DESC")
         org.springframework.data.domain.Slice<Object[]> getUserViewCountsForCars(@Param("carIds") List<Long> carIds,
                         Pageable pageable);
+
+    /**
+     * Find all interactions between a user and a list of cars (ordered by time)
+     */
+    List<CarInteractionEvent> findByUserIdAndCarIdInOrderByCreatedAtDesc(Long userId, List<Long> carIds);
+
+    /**
+     * Find all interactions between a user and a specific car (ordered by time)
+     */
+    List<CarInteractionEvent> findByUserIdAndCarIdOrderByCreatedAtDesc(Long userId, Long carId);
 }

@@ -24,8 +24,18 @@ public class TokenValidationResponse {
         private Long userId;
         private String username;
         private String email;
+        private String firstName;
+        private String lastName;
         private String role;
         private String location;
+        private String dealerName;
+        private String showroomName;
+        private String address;
+        private String city;
+        private Double latitude;
+        private Double longitude;
+        private String phoneNumber;
+        private String profileImageUrl;
 
         /**
          * Whether the user's email has been verified.

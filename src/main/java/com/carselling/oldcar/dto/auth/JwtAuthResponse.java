@@ -22,6 +22,8 @@ public class JwtAuthResponse {
     private Long userId;
     private String username;
     private String email;
+    private String firstName;
+    private String lastName;
     private String role;
     private String location;
     private String address;

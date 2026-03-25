@@ -48,11 +48,7 @@ import java.util.concurrent.ThreadLocalRandom;
 @Slf4j
 public class RedisConfig implements CachingConfigurer {
 
-    private final ObjectMapper objectMapper;
 
-    public RedisConfig(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
 
     /**
      * Dedicated ObjectMapper for Redis serialization with polymorphic typing.
@@ -188,7 +184,6 @@ public class RedisConfig implements CachingConfigurer {
             redisConfig.setPassword(redisPassword);
         }
 
-        @SuppressWarnings("unchecked")
         GenericObjectPoolConfig<io.lettuce.core.api.StatefulConnection<?, ?>> poolConfig = new GenericObjectPoolConfig<>();
         poolConfig.setMaxTotal(poolMaxTotal);
         poolConfig.setMaxIdle(poolMaxIdle);
@@ -424,7 +419,7 @@ public class RedisConfig implements CachingConfigurer {
     private void testRedisConnectionFactory(RedisConnectionFactory connectionFactory) {
         try {
             if (connectionFactory instanceof LettuceConnectionFactory) {
-                LettuceConnectionFactory lettuceFactory = (LettuceConnectionFactory) connectionFactory;
+                // LettuceConnectionFactory lettuceFactory = (LettuceConnectionFactory) connectionFactory;
                 // lettuceFactory.validateConnection(); // Skipped during startup for resilience
                 log.debug("Redis connection factory initialized (ping-on-demand enabled)");
             }

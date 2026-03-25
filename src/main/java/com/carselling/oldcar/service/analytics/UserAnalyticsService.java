@@ -11,6 +11,8 @@ import com.carselling.oldcar.repository.CarInteractionEventRepository;
 import com.carselling.oldcar.repository.UserAnalyticsEventRepository;
 import com.carselling.oldcar.repository.UserSessionRepository;
 import com.carselling.oldcar.repository.CarRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -40,6 +42,8 @@ public class UserAnalyticsService {
     private final com.carselling.oldcar.repository.ChatParticipantRepository chatParticipantRepository;
     private final com.carselling.oldcar.service.car.CarService carService;
     private final com.carselling.oldcar.repository.UserRepository userRepository;
+    private final com.carselling.oldcar.service.car.CarInteractionEventService carInteractionEventService;
+    private final ObjectMapper objectMapper;
     // Rate limiting: track events per session per minute
     // TODO: [PRODUCTION-READY & CONCURRENCY] In-memory rate limiting will allow N
     // times the capacity
@@ -151,6 +155,21 @@ public class UserAnalyticsService {
                 }
                 if (event.getEventType() == EventType.SCREEN_VIEW && event.getScreenName() != null) {
                     screensViewed.add(event.getScreenName());
+                }
+
+                // Bridge to CarInteractionEvent for duration tracking
+                if (event.getEventType() == EventType.CAR_VIEW_DURATION && event.getTargetId() != null) {
+                    try {
+                        Long carId = Long.parseLong(event.getTargetId());
+                        String metadata = event.getMetadata() != null ? objectMapper.writeValueAsString(event.getMetadata()) : null;
+                        carInteractionEventService.trackEvent(
+                            carId, userId, 
+                            com.carselling.oldcar.model.CarInteractionEvent.EventType.CAR_VIEW_DURATION,
+                            sessionId, batch.getDeviceType(), null, null, metadata
+                        );
+                    } catch (Exception e) {
+                        log.warn("Failed to bridge CAR_VIEW_DURATION event: {}", e.getMessage());
+                    }
                 }
             }
         }
@@ -342,9 +361,9 @@ public class UserAnalyticsService {
                 case CALL_CLICK -> callInquiries = count;
                 case WHATSAPP_CLICK -> whatsappInquiries = count;
                 case CONTACT_CLICK -> contactClicks = count;
-                case TEST_DRIVE_REQUEST -> contactClicks += count;
-                case COMPARE_ADD, IMAGE_VIEW, UNSAVE -> {
-                } // Ignore these for now
+                case CALLBACK_REQUEST -> { /* count if needed */ }
+                case CAR_VIEW_DURATION -> { /* count if needed */ }
+                case UNSAVE, IMAGE_VIEW, COMPARE_ADD, TEST_DRIVE_REQUEST -> { /* ignore in this summary */ }
             }
         }
 
@@ -494,6 +513,8 @@ public class UserAnalyticsService {
             verificationReminder = "Reminder: Your dealer verification is pending. Please complete verification to list cars publicly and gain buyer trust.";
         }
 
+        boolean phoneNumberMissing = dealer == null || dealer.getPhoneNumber() == null || dealer.getPhoneNumber().trim().isEmpty();
+
         return com.carselling.oldcar.dto.car.DealerDashboardResponse.builder()
                 .totalViews(totalViews)
                 .totalUniqueVisitors(totalUniqueVisitors)
@@ -504,6 +525,7 @@ public class UserAnalyticsService {
                 .totalSaves(totalSaves)
                 .conversionRate(Math.round(conversionRate * 10.0) / 10.0)
                 .verificationReminder(verificationReminder)
+                .phoneNumberMissing(phoneNumberMissing)
                 .build();
     }
 
@@ -753,5 +775,120 @@ public class UserAnalyticsService {
 
         int deletedSessions = sessionRepository.deleteOldSessions(cutoffDate);
         log.info("Deleted {} sessions older than {} days", deletedSessions, RETENTION_DAYS);
+    }
+
+    /**
+     * Get activity timeline for a specific lead (user) across dealer's cars.
+     */
+    @Transactional(readOnly = true)
+    public List<com.carselling.oldcar.dto.analytics.LeadTimelineDto> getLeadTimeline(Long dealerId, Long leadUserId, Long carId) {
+        List<Long> dealerCarIds = carRepository.findCarIdsByOwnerId(dealerId);
+        if (dealerCarIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Fetch interactions between this user and dealer's cars
+        List<com.carselling.oldcar.model.CarInteractionEvent> events;
+        if (carId != null) {
+            events = carEventRepository.findByUserIdAndCarIdOrderByCreatedAtDesc(leadUserId, carId);
+        } else {
+            events = carEventRepository.findByUserIdAndCarIdInOrderByCreatedAtDesc(leadUserId, dealerCarIds);
+        }
+
+        return events.stream().map(event -> {
+            String icon = "eye-outline";
+            String color = "#64748B"; // Slate
+
+            switch (event.getEventType()) {
+                case CAR_VIEW -> { icon = "eye-outline"; color = "#3B82F6"; } // Blue
+                case CAR_VIEW_DURATION -> { icon = "time-outline"; color = "#6366F1"; } // Indigo
+                case CONTACT_CLICK -> { icon = "call-outline"; color = "#10B981"; } // Emerald
+                case COMPARE_ADD -> { icon = "git-compare-outline"; color = "#94A3B8"; } // Slate
+                case CHAT_OPEN -> { icon = "chatbubble-outline"; color = "#8B5CF6"; } // Violet
+                case CALL_CLICK -> { icon = "call"; color = "#10B981"; } // Emerald
+                case WHATSAPP_CLICK -> { icon = "logo-whatsapp"; color = "#25D366"; } // green
+                case SHARE -> { icon = "share-social-outline"; color = "#F59E0B"; } // Amber
+                case SAVE -> { icon = "heart"; color = "#EF4444"; } // Red
+                case UNSAVE -> { icon = "heart-dislike-outline"; color = "#94A3B8"; } // Slate
+                case TEST_DRIVE_REQUEST -> { icon = "car-outline"; color = "#06B6D4"; } // Cyan
+                case CALLBACK_REQUEST -> { icon = "phone-portrait-outline"; color = "#EC4899"; } // Pink
+                case IMAGE_VIEW -> { icon = "images-outline"; color = "#64748B"; } // Slate
+            }
+
+            return com.carselling.oldcar.dto.analytics.LeadTimelineDto.builder()
+                    .eventType(event.getEventType().name())
+                    .displayName(event.getEventType().getDisplayName())
+                    .timestamp(event.getCreatedAt())
+                    .metadata(event.getMetadata())
+                    .carId(event.getCar().getId())
+                    .carTitle(event.getCar().getMake() + " " + event.getCar().getModel())
+                    .description(generateEventDescription(event))
+                    .icon(icon)
+                    .color(color)
+                    .actionDurationSeconds(getDurationFromMetadata(event))
+                    .durationText(formatDuration(getDurationFromMetadata(event)))
+                    .build();
+        }).toList();
+    }
+
+    /**
+     * Track a car interaction event from internal services (e.g., WishlistService)
+     */
+    @Async("analyticsTaskExecutor")
+    @Transactional
+    public void trackCarInteraction(Long userId, Long carId, com.carselling.oldcar.model.CarInteractionEvent.EventType eventType, String metadata) {
+        carRepository.findById(carId).ifPresent(car -> {
+            com.carselling.oldcar.model.CarInteractionEvent event = com.carselling.oldcar.model.CarInteractionEvent.builder()
+                    .car(car)
+                    .user(userId != null ? userRepository.findById(userId).orElse(null) : null)
+                    .eventType(eventType)
+                    .metadata(metadata)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            carEventRepository.save(event);
+            log.debug("Tracked internal car interaction: {} for car {} by user {}", eventType, carId, userId);
+        });
+    }
+
+    private String generateEventDescription(com.carselling.oldcar.model.CarInteractionEvent event) {
+        return switch (event.getEventType()) {
+            case CAR_VIEW -> "Viewed the car details";
+            case CONTACT_CLICK -> "Clicked to contact you";
+            case CHAT_OPEN -> "Started a chat conversation";
+            case CALL_CLICK -> "Attempted to call you";
+            case WHATSAPP_CLICK -> "Clicked WhatsApp button";
+            case SHARE -> "Shared the listing";
+            case SAVE -> "Saved the car to wishlist";
+            case UNSAVE -> "Removed from wishlist";
+            case TEST_DRIVE_REQUEST -> "Requested a test drive";
+            case CALLBACK_REQUEST -> "Requested a callback: " + event.getMetadata();
+            case CAR_VIEW_DURATION -> "Viewed the car details for " + formatDuration(getDurationFromMetadata(event));
+            default -> event.getEventType().getDisplayName();
+        };
+    }
+
+    private Integer getDurationFromMetadata(com.carselling.oldcar.model.CarInteractionEvent event) {
+        if (event.getMetadata() == null) return null;
+        try {
+            Map<String, Object> map = objectMapper.readValue(event.getMetadata(), new TypeReference<Map<String, Object>>() {});
+            Object duration = map.get("durationSeconds");
+            if (duration instanceof Number) {
+                return ((Number) duration).intValue();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse duration from metadata: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private String formatDuration(Integer seconds) {
+        if (seconds == null || seconds <= 0) return "a moment";
+        int minutes = seconds / 60;
+        int remainingSeconds = seconds % 60;
+        if (minutes > 0) {
+            return String.format("%dm %ds", minutes, remainingSeconds);
+        } else {
+            return String.format("%ds", remainingSeconds);
+        }
     }
 }

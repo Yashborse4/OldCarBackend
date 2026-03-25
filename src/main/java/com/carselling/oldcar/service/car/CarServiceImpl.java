@@ -298,8 +298,8 @@ public class CarServiceImpl implements CarService {
 
         if (owner.getRole() == Role.USER) {
             long activeCount = carRepository.countActiveCarsByOwnerId(currentUserId);
-            if (activeCount >= 3) {
-                throw new BusinessException("Standard users can only have a maximum of 3 active car listings.");
+            if (activeCount >= 2) {
+                throw new BusinessException("Standard users can only have a maximum of 2 active car listings.");
             }
         }
 

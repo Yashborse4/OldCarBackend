@@ -41,4 +41,7 @@ public class DealerDashboardResponse {
 
     /** Verification reminder message for unverified dealers. Null if verified. */
     private String verificationReminder;
+
+    /** Flag indicating if the dealer's phone number is missing or invalid. */
+    private boolean phoneNumberMissing;
 }

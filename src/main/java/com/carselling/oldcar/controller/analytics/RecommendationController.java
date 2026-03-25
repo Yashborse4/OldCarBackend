@@ -3,7 +3,6 @@ package com.carselling.oldcar.controller.analytics;
 import com.carselling.oldcar.dto.common.ApiResponse;
 import com.carselling.oldcar.dto.user.UserPreferenceDto;
 import com.carselling.oldcar.dto.vehicle.VehicleRecommendationDto;
-import com.carselling.oldcar.security.UserPrincipal;
 import com.carselling.oldcar.service.analytics.RecommendationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -75,9 +74,6 @@ public class RecommendationController {
     @PostMapping("/guest")
     @RateLimit(capacity = 5, refill = 1, refillPeriod = 60, priority = "BACKGROUND")
     @Operation(summary = "Get guest feed", description = "Get recommendations based on explicit guest preferences")
-    // TODO(SeniorEng): Security - Guest endpoint lacks rate limiting. Add
-    // @RateLimit or Bot protection to prevent abuse by scrapers fetching raw
-    // recommendation data.
     public ResponseEntity<ApiResponse<List<VehicleRecommendationDto>>> getGuestRecommendations(
             @RequestBody UserPreferenceDto guestPreferences,
             @RequestParam(value = "city", required = false) String city) {

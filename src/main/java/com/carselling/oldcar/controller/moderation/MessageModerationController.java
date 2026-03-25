@@ -14,7 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
+import com.carselling.oldcar.annotation.RateLimit;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -39,8 +39,7 @@ public class MessageModerationController {
             @ApiResponse(responseCode = "404", description = "Message not found"),
             @ApiResponse(responseCode = "409", description = "Already reported this message")
     })
-    // TODO(SeniorEng): Security - Prevent a single user from spam reporting the
-    // same message or multiple messages rapidly.
+    @RateLimit(capacity = 5, refill = 1, refillPeriod = 1)
     public ResponseEntity<com.carselling.oldcar.dto.common.ApiResponse<MessageReportResponse>> reportMessage(
             @Valid @RequestBody ReportMessageRequest request,
             @AuthenticationPrincipal com.carselling.oldcar.security.UserPrincipal currentUser) {

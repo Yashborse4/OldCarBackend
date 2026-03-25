@@ -7,7 +7,6 @@ import com.carselling.oldcar.dto.chat.RedisChatMessage;
 import com.carselling.oldcar.dto.chat.TypingIndicatorDto;
 import com.carselling.oldcar.dto.chat.UnreadCountResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
@@ -69,7 +68,7 @@ public class RedisMessageSubscriber {
 
                 case "UNREAD_COUNT":
                     // payload is Map with "userId" and "count"
-                    Map<String, Object> unreadData = (Map<String, Object>) payload;
+                    Map<String, Object> unreadData = objectMapper.convertValue(payload, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
                     Long userId = Long.valueOf(unreadData.get("userId").toString());
                     UnreadCountResponse countResponse = objectMapper.convertValue(unreadData.get("unreadCount"), UnreadCountResponse.class);
                     

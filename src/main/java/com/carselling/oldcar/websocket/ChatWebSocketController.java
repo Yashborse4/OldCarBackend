@@ -15,8 +15,6 @@ import org.springframework.stereotype.Controller;
 import org.springframework.security.core.Authentication;
 import com.carselling.oldcar.security.UserPrincipal;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * WebSocket Controller for handling real-time chat messages via STOMP protocol

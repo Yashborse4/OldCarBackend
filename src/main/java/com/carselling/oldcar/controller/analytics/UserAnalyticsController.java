@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -228,6 +229,27 @@ public class UserAnalyticsController {
             log.warn("Failed to map mobile event: {}", eventData, e);
             return null;
         }
+    }
+
+    /**
+     * Get activity timeline for a specific lead
+     * GET /api/analytics/dealer/leads/{userId}/timeline
+     */
+    @GetMapping("/dealer/leads/{userId}/timeline")
+    @PreAuthorize("hasAnyRole('DEALER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<List<com.carselling.oldcar.dto.analytics.LeadTimelineDto>>> getLeadTimeline(
+            @PathVariable Long userId,
+            @RequestParam(required = false) Long carId,
+            Authentication authentication) {
+
+        Long dealerId = getUserId(authentication);
+        log.info("Dealer {} fetching timeline for lead {}", dealerId, userId);
+
+        List<com.carselling.oldcar.dto.analytics.LeadTimelineDto> timeline = analyticsService.getLeadTimeline(dealerId, userId, carId);
+
+        return ResponseEntity.ok(ApiResponse.success(
+                "Lead timeline retrieved",
+                timeline));
     }
 
     /**

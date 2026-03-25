@@ -2,10 +2,7 @@ package com.carselling.oldcar.model;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.BatchSize;
@@ -32,15 +29,19 @@ import java.util.List;
         @Index(name = "idx_car_retry", columnList = "status, next_retry_at")
 }, uniqueConstraints = @UniqueConstraint(columnNames = { "owner_id", "idempotency_key" }))
 @SQLRestriction("status <> 'DELETED'")
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @EntityListeners(com.carselling.oldcar.model.listener.CarAuditListener.class)
 public class Car {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
     private Long id;
 
     @NotBlank(message = "Make is required")

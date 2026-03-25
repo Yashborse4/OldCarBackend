@@ -16,8 +16,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.carselling.oldcar.util.SecurityUtils;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.stream.Collectors;
 
 /**
@@ -33,24 +36,57 @@ public class WishlistService {
     private final CarRepository carRepository;
     private final CarMapper carMapper;
     private final AuthService authService;
+    private final com.carselling.oldcar.service.analytics.UserAnalyticsService analyticsService;
 
     /**
      * Toggle a car in the user's wishlist
      */
     public boolean toggleWishlist(Long carId) {
-        User currentUser = authService.getCurrentUser();
+        User userFromAuth = authService.getCurrentUser();
+        Long currentUserId = userFromAuth.getId();
+
+        log.info("Wishlist toggle request for carId: {} by userId: {}", carId, currentUserId);
+
+        // Fetch fresh user and car to ensure consistent state and avoid stale collections
+        User currentUser = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUserId));
+        
         Car car = carRepository.findById(carId)
                 .orElseThrow(() -> new ResourceNotFoundException("Car", "id", carId));
 
-        boolean removed = currentUser.getFavoriteCars().remove(car);
+        Set<Car> favoriteCars = currentUser.getFavoriteCars();
+        if (favoriteCars == null) {
+            favoriteCars = new HashSet<>();
+            currentUser.setFavoriteCars(favoriteCars);
+        }
+
+        boolean removed = favoriteCars.remove(car);
         if (!removed) {
-            currentUser.getFavoriteCars().add(car);
-            log.info("Car {} added to wishlist for user {}", carId, currentUser.getUsername());
+            favoriteCars.add(car);
+            log.info("Car {} added to wishlist for user {}. New wishlist size: {}", 
+                    carId, currentUserId, favoriteCars.size());
             userRepository.save(currentUser);
+            
+            // Track analytics event for dealer timeline
+            analyticsService.trackCarInteraction(
+                    currentUserId,
+                    carId,
+                    com.carselling.oldcar.model.CarInteractionEvent.EventType.SAVE,
+                    null
+            );
             return true;
         } else {
-            log.info("Car {} removed from wishlist for user {}", carId, currentUser.getUsername());
+            log.info("Car {} removed from wishlist for user {}. New wishlist size: {}", 
+                    carId, currentUserId, favoriteCars.size());
             userRepository.save(currentUser);
+
+            // Track analytics event
+            analyticsService.trackCarInteraction(
+                    currentUserId,
+                    carId,
+                    com.carselling.oldcar.model.CarInteractionEvent.EventType.UNSAVE,
+                    null
+            );
             return false;
         }
     }

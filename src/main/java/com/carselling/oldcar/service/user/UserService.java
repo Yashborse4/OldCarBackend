@@ -157,6 +157,7 @@ public class UserService {
 
         if (updated) {
             user = userRepository.save(user);
+            authService.evictUserCache(user); // Critical: Ensure cache is consistent with DB
             log.info("User profile updated successfully for user: {}", user.getUsername());
         } else {
             log.info("No changes detected for user profile: {}", user.getUsername());

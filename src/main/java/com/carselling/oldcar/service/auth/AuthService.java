@@ -45,4 +45,6 @@ public interface AuthService {
     boolean hasRole(Role role);
 
     boolean isOwner(Long userId);
+    
+    void evictUserCache(User user);
 }

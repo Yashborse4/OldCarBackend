@@ -75,7 +75,9 @@ public class CarInteractionEvent {
         WHATSAPP_CLICK("WhatsApp Button Clicked"),
         IMAGE_VIEW("Image Gallery Viewed"),
         COMPARE_ADD("Added to Compare"),
-        TEST_DRIVE_REQUEST("Test Drive Requested");
+        TEST_DRIVE_REQUEST("Test Drive Requested"),
+        CALLBACK_REQUEST("Callback Requested"),
+        CAR_VIEW_DURATION("Car View Duration");
 
         private final String displayName;
 

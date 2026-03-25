@@ -16,16 +16,12 @@ import com.carselling.oldcar.repository.RefreshTokenRepository;
 import com.carselling.oldcar.security.jwt.JwtTokenProvider;
 import com.carselling.oldcar.util.SecurityUtils;
 import com.carselling.oldcar.model.OtpPurpose;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Map;
@@ -49,13 +45,13 @@ public class AuthServiceImpl implements AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final CacheManager cacheManager;
 
-    public AuthServiceImpl(UserRepository userRepository, 
-                           RefreshTokenRepository refreshTokenRepository, 
-                           OtpService otpService, 
-                           GoogleAuthService googleAuthService,
-                           PasswordEncoder passwordEncoder, 
-                           JwtTokenProvider jwtTokenProvider,
-                           CacheManager cacheManager) {
+    public AuthServiceImpl(UserRepository userRepository,
+            RefreshTokenRepository refreshTokenRepository,
+            OtpService otpService,
+            GoogleAuthService googleAuthService,
+            PasswordEncoder passwordEncoder,
+            JwtTokenProvider jwtTokenProvider,
+            CacheManager cacheManager) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.otpService = otpService;
@@ -167,7 +163,8 @@ public class AuthServiceImpl implements AuthService {
                 .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                 .verifiedDealer(Boolean.TRUE.equals(user.getDealerStatus() == DealerStatus.VERIFIED))
                 .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
-                .dealerStatusDisplayName(user.getDealerStatus() != null ? user.getDealerStatus().getDisplayName() : null)
+                .dealerStatusDisplayName(
+                        user.getDealerStatus() != null ? user.getDealerStatus().getDisplayName() : null)
                 .dealerStatusReason(user.getDealerStatusReason())
                 .onboardingCompleted(user.getOnboardingCompleted() != null ? user.getOnboardingCompleted() : false)
                 .expiresAt(null)
@@ -270,7 +267,7 @@ public class AuthServiceImpl implements AuthService {
 
         // Update last login time and device info
         updateLoginStats(user, request.getDeviceInfo());
-        
+
         // Evict cache after updating stats
         evictUserCache(user);
 
@@ -288,8 +285,8 @@ public class AuthServiceImpl implements AuthService {
             throw new InvalidInputException("Google login request or token cannot be null");
         }
 
-        com.google.api.client.googleapis.auth.oauth2.GoogleIdToken.Payload payload = 
-            googleAuthService.verifyToken(request.getIdToken());
+        com.google.api.client.googleapis.auth.oauth2.GoogleIdToken.Payload payload = googleAuthService
+                .verifyToken(request.getIdToken());
 
         if (payload == null) {
             throw new AuthenticationFailedException("Invalid Google ID Token", AuthError.TOKEN_INVALID);
@@ -337,7 +334,7 @@ public class AuthServiceImpl implements AuthService {
                 user.setGoogleId(googleId); // Link googleId
             } else {
                 log.info("Creating new user for Google email: {}", email);
-                
+
                 String baseUsername = SecurityUtils.extractUsernameFromEmail(email);
                 String username = generateUniqueUsername(baseUsername);
 
@@ -369,7 +366,7 @@ public class AuthServiceImpl implements AuthService {
                         .updatedAt(LocalDateTime.now())
                         .onboardingCompleted(true)
                         .build();
-                
+
                 user = userRepository.save(user);
             }
         }
@@ -454,10 +451,10 @@ public class AuthServiceImpl implements AuthService {
 
         // Generate tokens for auto-login
         JwtAuthResponse response = generateAuthResponse(user);
-        
+
         // Evict cache as user's verification state changed
         evictUserCache(user);
-        
+
         return response;
     }
 
@@ -506,7 +503,7 @@ public class AuthServiceImpl implements AuthService {
             user.setAuthProvider(AuthProvider.PHONE);
             userRepository.save(user);
         }
-        
+
         // Evict cache
         evictUserCache(user);
 
@@ -534,7 +531,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Transactional
     protected JwtAuthResponse generateAuthResponse(User user) {
-        // Evict cache to ensure that any session-linked data in Redis is synchronized 
+        // Evict cache to ensure that any session-linked data in Redis is synchronized
         // with the new token generation event.
         evictUserCache(user);
 
@@ -569,6 +566,8 @@ public class AuthServiceImpl implements AuthService {
                 .userId(user.getId())
                 .username(user.getUsername())
                 .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
                 .role(user.getRole().name())
                 .location(user.getLocation())
                 .address(user.getAddress())
@@ -580,7 +579,8 @@ public class AuthServiceImpl implements AuthService {
                 .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                 .verifiedDealer(user.getDealerStatus() == DealerStatus.VERIFIED)
                 .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
-                .dealerStatusDisplayName(user.getDealerStatus() != null ? user.getDealerStatus().getDisplayName() : null)
+                .dealerStatusDisplayName(
+                        user.getDealerStatus() != null ? user.getDealerStatus().getDisplayName() : null)
                 .dealerStatusReason(user.getDealerStatusReason())
                 .onboardingCompleted(user.getOnboardingCompleted() != null ? user.getOnboardingCompleted() : false)
                 .verificationReminder(
@@ -615,8 +615,8 @@ public class AuthServiceImpl implements AuthService {
         // 1. Validate against DB
         Optional<RefreshToken> tokenOptional = refreshTokenRepository.findByToken(incomingToken);
         if (tokenOptional.isEmpty()) {
-            log.warn("Refresh token refresh failed: Token not found in database. Token hash: {}...", 
-                     incomingToken.substring(0, Math.min(10, incomingToken.length())));
+            log.warn("Refresh token refresh failed: Token not found in database. Token hash: {}...",
+                    incomingToken.substring(0, Math.min(10, incomingToken.length())));
             throw new AuthenticationFailedException("Refresh token not found in database", AuthError.TOKEN_INVALID);
         }
         RefreshToken storedToken = tokenOptional.get();
@@ -625,18 +625,20 @@ public class AuthServiceImpl implements AuthService {
         if (storedToken.isRevoked()) {
             LocalDateTime revokedAt = storedToken.getRevokedAt();
             if (revokedAt != null && revokedAt.isAfter(LocalDateTime.now().minusSeconds(30))) {
-                log.info("Concurrent refresh request: allowing recently rotated token for user: {}", 
-                         storedToken.getUser().getUsername());
+                log.info("Concurrent refresh request: allowing recently rotated token for user: {}",
+                        storedToken.getUser().getUsername());
             } else {
                 // Security Alert: Attempt to use revoked token outside grace period.
                 refreshTokenRepository.deleteByUser(storedToken.getUser());
-                throw new AuthenticationFailedException("Refresh token was revoked (outside grace period)", AuthError.TOKEN_INVALID);
+                throw new AuthenticationFailedException("Refresh token was revoked (outside grace period)",
+                        AuthError.TOKEN_INVALID);
             }
         }
 
         // 3. Check Expiry
         if (storedToken.getExpiryDate().isBefore(LocalDateTime.now())) {
-            log.warn("Refresh token expired for user: {}. Expiry: {}", storedToken.getUser().getUsername(), storedToken.getExpiryDate());
+            log.warn("Refresh token expired for user: {}. Expiry: {}", storedToken.getUser().getUsername(),
+                    storedToken.getExpiryDate());
             refreshTokenRepository.delete(storedToken); // cleanup
             throw new AuthenticationFailedException("Refresh token expired", AuthError.TOKEN_INVALID);
         }
@@ -656,12 +658,12 @@ public class AuthServiceImpl implements AuthService {
 
         // Generate new Pair
         User user = storedToken.getUser();
-        
+
         // Force cache eviction before returning new tokens, ensuring any subsequent
         // requests based on the user principal will reload fresh data from DB
         // rather than using potentially corrupted cached entry.
         evictUserCache(user);
-        
+
         return generateAuthResponse(user);
     }
 
@@ -692,12 +694,23 @@ public class AuthServiceImpl implements AuthService {
                     .userId(user.getId())
                     .username(user.getUsername())
                     .email(user.getEmail())
+                    .firstName(user.getFirstName())
+                    .lastName(user.getLastName())
                     .role(user.getRole().name())
                     .location(user.getLocation())
+                    .dealerName(user.getDealerName())
+                    .showroomName(user.getShowroomName())
+                    .address(user.getAddress())
+                    .city(user.getCity())
+                    .latitude(user.getLatitude())
+                    .longitude(user.getLongitude())
+                    .phoneNumber(user.getPhoneNumber())
+                    .profileImageUrl(user.getProfileImageUrl())
                     .emailVerified(Boolean.TRUE.equals(user.getIsEmailVerified()))
                     .verifiedDealer(user.getDealerStatus() == DealerStatus.VERIFIED)
                     .dealerStatus(user.getDealerStatus() != null ? user.getDealerStatus().name() : null)
-                    .dealerStatusDisplayName(user.getDealerStatus() != null ? user.getDealerStatus().getDisplayName() : null)
+                    .dealerStatusDisplayName(
+                            user.getDealerStatus() != null ? user.getDealerStatus().getDisplayName() : null)
                     .dealerStatusReason(user.getDealerStatusReason())
                     .onboardingCompleted(Boolean.TRUE.equals(user.getOnboardingCompleted()))
                     .build();
@@ -862,7 +875,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         userRepository.save(user);
-        
+
         // Evict cache after failed login attempt/lock
         evictUserCache(user);
     }
@@ -919,25 +932,27 @@ public class AuthServiceImpl implements AuthService {
     /**
      * Evict user from all relevant caches to ensure Redis consistency
      */
-    private void evictUserCache(User user) {
-        if (user == null) return;
-        
+    @Override
+    public void evictUserCache(User user) {
+        if (user == null)
+            return;
+
         try {
             log.debug("Evicting user {} from caches", user.getUsername());
-            
+
             // Evict from users_v4 (keyed by username/email)
             Cache userCache = cacheManager.getCache("users_v4");
             if (userCache != null) {
                 userCache.evict(user.getEmail());
                 userCache.evict(user.getUsername());
             }
-            
+
             // Evict from usersById_v4 (keyed by ID)
             Cache userByIdCache = cacheManager.getCache("usersById_v4");
             if (userByIdCache != null && user.getId() != null) {
                 userByIdCache.evict(user.getId());
             }
-            
+
             log.debug("Successfully evicted user {} from caches", user.getUsername());
         } catch (Exception e) {
             log.error("Failed to evict user {} from cache: {}", user.getUsername(), e.getMessage());

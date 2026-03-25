@@ -96,7 +96,7 @@ public class RateLimitingConfig {
         if (useRedis) {
             try {
                 // Test connection
-                if (rateLimitRedisTemplate.getConnectionFactory() != null) {
+                if (rateLimitRedisTemplate != null && rateLimitRedisTemplate.getConnectionFactory() != null) {
                     rateLimitRedisTemplate.getConnectionFactory().getConnection().ping();
                 } else {
                     log.warn("Redis Connection Factory is null, falling back to local Bucket4j");
