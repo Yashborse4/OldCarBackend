@@ -25,7 +25,7 @@ public class EnquiryService {
     private final UserRepository userRepository;
 
     @Transactional
-    public Enquiry createEnquiry(Long userId, Long carId, Enquiry.EnquiryType type, String message, String preferredTimeSlot, LocalDateTime scheduledTime) {
+    public Enquiry createEnquiry(Long userId, Long carId, Enquiry.EnquiryType type, String message, String preferredTimeSlot, LocalDateTime scheduledTime, String contactNumber) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         Car car = carRepository.findById(carId)
@@ -39,6 +39,7 @@ public class EnquiryService {
                 .message(message)
                 .preferredTimeSlot(preferredTimeSlot)
                 .scheduledTime(scheduledTime)
+                .contactNumber(contactNumber)
                 .build();
 
         log.info("Creating enquiry of type {} for car {} by user {}", type, carId, userId);

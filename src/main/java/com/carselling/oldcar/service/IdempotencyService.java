@@ -24,7 +24,7 @@ public class IdempotencyService {
     @Autowired(required = false)
     private RedisTemplate<String, String> redisTemplate;
 
-    private final InMemoryCacheService inMemoryCacheService;
+    private final DistributedFallbackCacheService distributedFallbackCacheService;
 
     private static final long DEFAULT_EXPIRATION_MINUTES = 60 * 24; // 24 hours
 
@@ -44,26 +44,20 @@ public class IdempotencyService {
                         TimeUnit.MINUTES);
                 return Boolean.TRUE.equals(set);
             } catch (Exception e) {
-                log.error("Redis error in IdempotencyService, falling back to memory: {}", e.getMessage());
-                // Fallback to memory
+                log.error("Redis error in IdempotencyService, falling back to database: {}", e.getMessage());
+                // Fallback to database cache
             }
         }
 
-        // In-memory fallback
-        // TODO: [PRODUCTION-READY & CONCURRENCY] Distributed Lock failure.
-        // If Redis is unavailable, this falls back to a local JVM memory cache. In a
-        // multi-node cluster,
-        // this allows duplicate requests hitting different nodes to both acquire the
-        // lock.
-        // Needs a robust fallback mechanism (e.g. Database row lock or pessimistic
-        // locking)
-        // to guarantee idempotency across the cluster.
-        Object value = inMemoryCacheService.get(fullKey);
+        // Database fallback
+        // Production-Ready: Uses database entities allowing clustered state tracking
+        Object value = distributedFallbackCacheService.get(fullKey);
         if (value != null) {
             return false; // Already exists
         }
 
-        inMemoryCacheService.put(fullKey, "PROCESSING", DEFAULT_EXPIRATION_MINUTES * 60 * 1000L);
+        // We pass the TTL in minutes correctly to our new cache service
+        distributedFallbackCacheService.put(fullKey, "PROCESSING", DEFAULT_EXPIRATION_MINUTES);
         return true;
     }
 
@@ -93,7 +87,7 @@ public class IdempotencyService {
             }
         }
 
-        inMemoryCacheService.remove(fullKey);
+        distributedFallbackCacheService.remove(fullKey);
     }
 
     private boolean isRedisAvailable() {

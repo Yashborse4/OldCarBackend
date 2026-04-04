@@ -109,6 +109,11 @@ public class UserService {
             updated = true;
         }
 
+        if (StringUtils.hasText(request.getPhoneNumber()) && !request.getPhoneNumber().equals(user.getPhoneNumber())) {
+            user.setPhoneNumber(request.getPhoneNumber());
+            updated = true;
+        }
+
         if (StringUtils.hasText(request.getLocation()) && !request.getLocation().equals(user.getLocation())) {
             user.setLocation(request.getLocation());
             updated = true;

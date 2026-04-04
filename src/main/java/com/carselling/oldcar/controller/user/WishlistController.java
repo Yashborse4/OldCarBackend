@@ -12,8 +12,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-
 /**
  * Controller for user wishlist management
  */
@@ -28,9 +26,6 @@ public class WishlistController {
 
     @PostMapping("/{carId}")
     @Operation(summary = "Toggle car in wishlist", description = "Adds or removes a car from the current user's wishlist")
-    // TODO(SeniorEng): Optimization - Wishlist toggles are highly frequent.
-    // Consider debouncing or buffering these writes in Redis before syncing to the
-    // database asynchronously.
     public ResponseEntity<ApiResponse<Boolean>> toggleWishlist(@PathVariable Long carId) {
         boolean inWishlist = wishlistService.toggleWishlist(carId);
         String message = inWishlist ? "Car added to wishlist" : "Car removed from wishlist";

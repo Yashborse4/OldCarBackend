@@ -55,6 +55,9 @@ public class Enquiry {
     @Column(name = "preferred_time_slot", length = 50)
     private String preferredTimeSlot; // e.g., "MORNING", "AFTER_6PM"
 
+    @Column(name = "contact_number", length = 15)
+    private String contactNumber;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

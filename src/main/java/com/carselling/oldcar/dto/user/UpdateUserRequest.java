@@ -8,13 +8,17 @@ import lombok.NoArgsConstructor;
 
 /**
  * Update User Request DTO for profile updates
- * Note: Email and phone number are NOT editable for security reasons
+ * Note: Email is NOT editable for security reasons
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class UpdateUserRequest {
+
+    @Size(min = 10, max = 15, message = "Phone number must be between 10 and 15 digits")
+    private String phoneNumber;
+
 
     @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
     private String username;

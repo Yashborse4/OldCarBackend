@@ -1,10 +1,8 @@
 package com.carselling.oldcar.service.analytics;
 
 import com.carselling.oldcar.dto.user.UserPreferenceDto;
-import com.carselling.oldcar.dto.car.CarResponse;
 import com.carselling.oldcar.dto.vehicle.VehicleRecommendationDto;
 import com.carselling.oldcar.dto.vehicle.VehicleSummaryDto;
-import java.util.ArrayList;
 import java.util.List;
 import com.carselling.oldcar.model.Car;
 import com.carselling.oldcar.model.UserAnalyticsEvent;

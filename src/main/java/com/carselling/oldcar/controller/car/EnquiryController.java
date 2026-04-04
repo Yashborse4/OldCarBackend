@@ -39,7 +39,8 @@ public class EnquiryController {
                 request.getType(),
                 request.getMessage(),
                 request.getPreferredTimeSlot(),
-                request.getScheduledTime()
+                request.getScheduledTime(),
+                request.getContactNumber()
         );
         
         return ResponseEntity.ok(ApiResponse.success("Enquiry submitted successfully", enquiry));

@@ -35,7 +35,6 @@ class CarInteractionEventServiceTest {
         private UserRepository userRepository;
 
 
-
         @InjectMocks
         private CarInteractionEventService eventService;
 

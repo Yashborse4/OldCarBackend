@@ -44,7 +44,7 @@ public class ViewCountService {
      * // bypassing this dedup map and inflating the view count. Use a Redis keyed
      * EXPIRATION SET for dedup.
      */
-    private final Map<Long, Long> lastIncrementTimestamps = new ConcurrentHashMap<>();
+    private final Map<String, Long> lastIncrementTimestamps = new ConcurrentHashMap<>();
 
     /**
      * Asynchronously increment the view count for a car using a single
@@ -67,15 +67,20 @@ public class ViewCountService {
             }
 
             long now = System.currentTimeMillis();
-            Long lastIncrement = lastIncrementTimestamps.get(carId);
+            
+            // If currentUserId is null (guest), we skip deduplication to avoid globally locking guest views
+            if (currentUserId != null) {
+                String dedupKey = carId + "-" + currentUserId;
+                Long lastIncrement = lastIncrementTimestamps.get(dedupKey);
 
-            if (lastIncrement != null && (now - lastIncrement) < DEDUP_WINDOW_MS) {
-                log.debug("Skipping duplicate view count increment for car {}", carId);
-                return;
+                if (lastIncrement != null && (now - lastIncrement) < DEDUP_WINDOW_MS) {
+                    log.debug("Skipping duplicate view count increment for car {} by user {}", carId, currentUserId);
+                    return;
+                }
+                lastIncrementTimestamps.put(dedupKey, now);
             }
 
             carRepository.incrementViewCount(carId);
-            lastIncrementTimestamps.put(carId, now);
 
             log.debug("Incremented view count for car {}", carId);
 

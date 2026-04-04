@@ -1,0 +1,20 @@
+ M src/main/java/com/carselling/oldcar/controller/car/EnquiryController.java
+ M src/main/java/com/carselling/oldcar/controller/user/WishlistController.java
+ M src/main/java/com/carselling/oldcar/dto/car/EnquiryRequestDto.java
+ M src/main/java/com/carselling/oldcar/dto/user/UpdateUserRequest.java
+ M src/main/java/com/carselling/oldcar/model/Enquiry.java
+ M src/main/java/com/carselling/oldcar/model/TemporaryFile.java
+ M src/main/java/com/carselling/oldcar/service/IdempotencyService.java
+ D src/main/java/com/carselling/oldcar/service/InMemoryCacheService.java
+ M src/main/java/com/carselling/oldcar/service/analytics/RecommendationService.java
+ M src/main/java/com/carselling/oldcar/service/car/EnquiryService.java
+ M src/main/java/com/carselling/oldcar/service/file/ViewCountService.java
+ M src/main/java/com/carselling/oldcar/service/media/MediaServiceImpl.java
+ M src/main/java/com/carselling/oldcar/service/user/UserService.java
+ M src/main/java/com/carselling/oldcar/service/user/WishlistService.java
+ M src/test/java/com/carselling/oldcar/service/CarInteractionEventServiceTest.java
+?? sell_status.txt
+?? src/main/java/com/carselling/oldcar/model/DistributedCacheEntry.java
+?? src/main/java/com/carselling/oldcar/repository/DistributedCacheRepository.java
+?? src/main/java/com/carselling/oldcar/service/DistributedFallbackCacheService.java
+?? src/main/java/com/carselling/oldcar/service/user/AsyncWishlistWorker.java

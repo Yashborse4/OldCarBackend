@@ -1,12 +1,8 @@
 package com.carselling.oldcar.service.user;
 
 import com.carselling.oldcar.dto.car.CarResponse;
-import com.carselling.oldcar.exception.ResourceNotFoundException;
 import com.carselling.oldcar.mapper.CarMapper;
-import com.carselling.oldcar.model.Car;
 import com.carselling.oldcar.model.User;
-import com.carselling.oldcar.repository.CarRepository;
-import com.carselling.oldcar.repository.UserRepository;
 import com.carselling.oldcar.service.auth.AuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,12 +11,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.carselling.oldcar.util.SecurityUtils;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-import java.util.HashSet;
 import java.util.stream.Collectors;
 
 /**
@@ -32,11 +24,10 @@ import java.util.stream.Collectors;
 @Transactional
 public class WishlistService {
 
-    private final UserRepository userRepository;
-    private final CarRepository carRepository;
     private final CarMapper carMapper;
     private final AuthService authService;
-    private final com.carselling.oldcar.service.analytics.UserAnalyticsService analyticsService;
+
+    private final AsyncWishlistWorker asyncWishlistWorker;
 
     /**
      * Toggle a car in the user's wishlist
@@ -47,48 +38,14 @@ public class WishlistService {
 
         log.info("Wishlist toggle request for carId: {} by userId: {}", carId, currentUserId);
 
-        // Fetch fresh user and car to ensure consistent state and avoid stale collections
-        User currentUser = userRepository.findById(currentUserId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUserId));
-        
-        Car car = carRepository.findById(carId)
-                .orElseThrow(() -> new ResourceNotFoundException("Car", "id", carId));
+        // Calculate expected state synchronously from in-memory / cache
+        boolean currentlyInWishlist = isInWishlist(carId);
+        boolean isAdding = !currentlyInWishlist;
 
-        Set<Car> favoriteCars = currentUser.getFavoriteCars();
-        if (favoriteCars == null) {
-            favoriteCars = new HashSet<>();
-            currentUser.setFavoriteCars(favoriteCars);
-        }
+        // Dispatch background worker instead of blocking the HTTP thread with a database lock
+        asyncWishlistWorker.processWishlistToggle(currentUserId, carId, isAdding);
 
-        boolean removed = favoriteCars.remove(car);
-        if (!removed) {
-            favoriteCars.add(car);
-            log.info("Car {} added to wishlist for user {}. New wishlist size: {}", 
-                    carId, currentUserId, favoriteCars.size());
-            userRepository.save(currentUser);
-            
-            // Track analytics event for dealer timeline
-            analyticsService.trackCarInteraction(
-                    currentUserId,
-                    carId,
-                    com.carselling.oldcar.model.CarInteractionEvent.EventType.SAVE,
-                    null
-            );
-            return true;
-        } else {
-            log.info("Car {} removed from wishlist for user {}. New wishlist size: {}", 
-                    carId, currentUserId, favoriteCars.size());
-            userRepository.save(currentUser);
-
-            // Track analytics event
-            analyticsService.trackCarInteraction(
-                    currentUserId,
-                    carId,
-                    com.carselling.oldcar.model.CarInteractionEvent.EventType.UNSAVE,
-                    null
-            );
-            return false;
-        }
+        return isAdding;
     }
 
     /**
