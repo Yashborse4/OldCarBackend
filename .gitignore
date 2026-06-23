@@ -30,6 +30,7 @@ bin/
 .vscode/
 .cursor/
 .windsurf/
+.agents/
 *.swp
 *.swo
 *~
